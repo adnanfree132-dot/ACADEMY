@@ -24,9 +24,19 @@ import { RegisterStudentModal } from './components/RegisterStudentModal';
 import { CreateBatchModal } from './components/CreateBatchModal';
 import { RecordFeeModal } from './components/RecordFeeModal';
 
+import { 
+  INITIAL_STUDENTS, 
+  INITIAL_TEACHERS, 
+  INITIAL_BATCHES, 
+  INITIAL_TRANSACTIONS, 
+  INITIAL_LEADS, 
+  INITIAL_ANNOUNCEMENTS, 
+  INITIAL_SUBJECTS 
+} from './mockData';
+
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'));
-  const [isAppLoading, setIsAppLoading] = useState<boolean>(!!localStorage.getItem('token'));
+  const [isAppLoading, setIsAppLoading] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,15 +47,15 @@ export function App() {
   const [isMobileAddBatchOpen, setIsMobileAddBatchOpen] = useState(false);
   const [isMobileRecordFeeOpen, setIsMobileRecordFeeOpen] = useState(false);
 
-  // Main State (Connected to Express API Backend)
+  // Main State (Connected to Express API Backend with rich baseline datasets)
   const [dashboardStats, setDashboardStats] = useState<any>(null);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [transactions, setTransactions] = useState<FeeTransaction[]>([]);
-  const [leads, setLeads] = useState<CRMLead[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
+  const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
+  const [batches, setBatches] = useState<Batch[]>(INITIAL_BATCHES);
+  const [transactions, setTransactions] = useState<FeeTransaction[]>(INITIAL_TRANSACTIONS);
+  const [leads, setLeads] = useState<CRMLead[]>(INITIAL_LEADS);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
+  const [subjects, setSubjects] = useState<Subject[]>(INITIAL_SUBJECTS);
 
   // Sync with Backend API
   const refreshDataFromBackend = async () => {
@@ -68,7 +78,7 @@ export function App() {
       ]);
 
       const backendSubjects = (await api.getSubjects().catch(() => [])) as any[];
-      if (Array.isArray(backendSubjects)) {
+      if (Array.isArray(backendSubjects) && backendSubjects.length > 0) {
         setSubjects(backendSubjects.map((s: any) => ({
           id: s.id,
           name: s.name,
@@ -80,13 +90,9 @@ export function App() {
         setDashboardStats(stats.overview);
       }
 
-      if (Array.isArray(backendStudents)) {
+      if (Array.isArray(backendStudents) && backendStudents.length > 0) {
         setStudents(backendStudents.map((s: any, idx: number) => {
           const totalFee = s.feePlan?.monthly_amount || 10000;
-          // Varied mock due balances for demo/seed data: 
-          // idx 0, 3, 6 => Paid ($0)
-          // idx 1, 4, 7 => Pending 1 Month ($10,000)
-          // idx 2, 5 => Defaulter 2+ Months ($25,000)
           let dueBalance = totalFee;
           if (idx % 3 === 0) {
             dueBalance = 0;
@@ -124,7 +130,7 @@ export function App() {
         }));
       }
 
-      if (Array.isArray(backendTeachers)) {
+      if (Array.isArray(backendTeachers) && backendTeachers.length > 0) {
         setTeachers(backendTeachers.map((t: any) => ({
           id: t.id,
           name: t.user?.full_name || 'Unknown',
@@ -136,7 +142,7 @@ export function App() {
         })));
       }
 
-      if (Array.isArray(backendBatches)) {
+      if (Array.isArray(backendBatches) && backendBatches.length > 0) {
         setBatches(backendBatches.map((b: any) => ({
           id: b.id,
           name: b.name || 'Default Batch',
@@ -149,7 +155,7 @@ export function App() {
         })));
       }
       
-      if (Array.isArray(backendAnn)) {
+      if (Array.isArray(backendAnn) && backendAnn.length > 0) {
         setAnnouncements(backendAnn.map((a: any) => ({
           id: a.id,
           title: a.title,
@@ -159,7 +165,7 @@ export function App() {
         })));
       }
       
-      if (Array.isArray(backendInq)) {
+      if (Array.isArray(backendInq) && backendInq.length > 0) {
         setLeads(backendInq.map((i: any) => ({
           id: i.id,
           studentName: i.student_name || i.name,
