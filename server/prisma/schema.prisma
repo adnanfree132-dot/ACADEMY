@@ -1,0 +1,359 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  username              String?   @unique
+  role                  String    // admin, teacher, student, parent
+  full_name             String
+  email                 String?   @unique
+  phone                 String?   @unique
+  password_hash         String
+  must_change_password  Boolean   @default(true)
+  failed_attempts       Int       @default(0)
+  locked_until          DateTime?
+  is_active             Boolean   @default(true)
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  refreshTokens  RefreshToken[]
+  loginLogs      LoginLog[]
+  teachers       Teacher[]
+  students       Student[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash String
+  expires_at DateTime
+  revoked_at DateTime?
+}
+
+model LoginLog {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ip         String?
+  user_agent String?
+  created_at DateTime @default(now())
+}
+
+model Class {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  is_active Boolean  @default(true)
+
+  batches       Batch[]
+  students      Student[]
+  feeStructures FeeStructure[]
+}
+
+model Subject {
+  id   String @id @default(uuid())
+  name String
+  code String @unique
+
+  batchSubjects BatchSubject[]
+  homeworks     Homework[]
+  studyMaterials StudyMaterial[]
+  tests         Test[]
+}
+
+model Teacher {
+  id            String   @id @default(uuid())
+  user_id       String   @unique
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  qualification String?
+  custom_fields Json?
+  joined_on     DateTime @default(now())
+
+  batches       Batch[]
+  batchSubjects BatchSubject[]
+  homeworks     Homework[]
+  studyMaterials StudyMaterial[]
+}
+
+model Batch {
+  id         String   @id @default(uuid())
+  class_id   String
+  class      Class    @relation(fields: [class_id], references: [id])
+  name       String
+  teacher_id String?
+  teacher    Teacher? @relation(fields: [teacher_id], references: [id])
+  days       String   @default("MON,WED,FRI")
+  start_time String
+  end_time   String
+  capacity   Int      @default(30)
+  is_active  Boolean  @default(true)
+
+  enrollments    Enrollment[]
+  batchSubjects  BatchSubject[]
+  attendances    Attendance[]
+  homeworks      Homework[]
+  studyMaterials StudyMaterial[]
+  tests          Test[]
+  feeStructures  FeeStructure[]
+}
+
+model BatchSubject {
+  batch_id   String
+  batch      Batch   @relation(fields: [batch_id], references: [id])
+  subject_id String
+  subject    Subject @relation(fields: [subject_id], references: [id])
+  teacher_id String
+  teacher    Teacher @relation(fields: [teacher_id], references: [id])
+
+  @@id([batch_id, subject_id])
+}
+
+model Student {
+  id           String   @id @default(uuid())
+  user_id      String?  @unique
+  user         User?    @relation(fields: [user_id], references: [id])
+  admission_no String   @unique
+  full_name    String
+  phone        String
+  email        String?
+  dob          String?
+  gender       String   @default("Male")
+  address      String?
+  photo_url    String?
+  custom_fields Json?
+  admitted_on  DateTime @default(now())
+  status       String   @default("active") // active, left, suspended, completed
+  class_id     String?
+  class        Class?   @relation(fields: [class_id], references: [id])
+  created_at   DateTime @default(now())
+
+  enrollments  Enrollment[]
+  attendances  Attendance[]
+  leaves       Leave[]
+  testMarks    TestMark[]
+  feeInvoices  FeeInvoice[]
+  feePayments  FeePayment[]
+  feePlan      StudentFeePlan?
+}
+
+model Enrollment {
+  id          String   @id @default(uuid())
+  student_id  String
+  student     Student  @relation(fields: [student_id], references: [id])
+  batch_id    String
+  batch       Batch    @relation(fields: [batch_id], references: [id])
+  enrolled_on DateTime @default(now())
+  status      String   @default("active") // active, removed
+
+  @@unique([student_id, batch_id])
+}
+
+model Attendance {
+  id         String   @id @default(uuid())
+  batch_id   String
+  batch      Batch    @relation(fields: [batch_id], references: [id])
+  student_id String
+  student    Student  @relation(fields: [student_id], references: [id])
+  date       String
+  status     String   // present, absent, late, leave
+  remark     String?
+  marked_by  String
+
+  @@unique([batch_id, student_id, date])
+}
+
+model Leave {
+  id           String    @id @default(uuid())
+  student_id   String
+  student      Student   @relation(fields: [student_id], references: [id])
+  requester_id String
+  from_date    String
+  to_date      String
+  reason       String
+  status       String    @default("pending") // pending, approved, rejected
+  decided_by   String?
+  decided_at   DateTime?
+}
+
+model Homework {
+  id             String   @id @default(uuid())
+  batch_id       String
+  batch          Batch    @relation(fields: [batch_id], references: [id])
+  subject_id     String
+  subject        Subject  @relation(fields: [subject_id], references: [id])
+  teacher_id     String
+  teacher        Teacher  @relation(fields: [teacher_id], references: [id])
+  title          String
+  description    String
+  due_date       String
+  attachment_url String?
+  created_at     DateTime @default(now())
+}
+
+model StudyMaterial {
+  id         String   @id @default(uuid())
+  batch_id   String
+  batch      Batch    @relation(fields: [batch_id], references: [id])
+  subject_id String
+  subject    Subject  @relation(fields: [subject_id], references: [id])
+  teacher_id String
+  teacher    Teacher  @relation(fields: [teacher_id], references: [id])
+  title      String
+  file_url   String
+  created_at DateTime @default(now())
+}
+
+model Test {
+  id           String   @id @default(uuid())
+  batch_id     String
+  batch        Batch    @relation(fields: [batch_id], references: [id])
+  subject_id   String
+  subject      Subject  @relation(fields: [subject_id], references: [id])
+  title        String
+  exam_date    String
+  max_marks    Float
+  pass_marks   Float
+  is_published Boolean  @default(false)
+
+  testMarks TestMark[]
+}
+
+model TestMark {
+  test_id    String
+  test       Test    @relation(fields: [test_id], references: [id])
+  student_id String
+  student    Student @relation(fields: [student_id], references: [id])
+  marks      Float
+  remark     String?
+
+  @@id([test_id, student_id])
+}
+
+model FeeStructure {
+  id        String   @id @default(uuid())
+  class_id  String?
+  class     Class?   @relation(fields: [class_id], references: [id])
+  batch_id  String?
+  batch     Batch?   @relation(fields: [batch_id], references: [id])
+  fee_type  String   // admission, tuition, exam, material, misc
+  amount    Float
+  frequency String   // one_time, monthly
+}
+
+model StudentFeePlan {
+  student_id     String  @id
+  student        Student @relation(fields: [student_id], references: [id])
+  monthly_amount Float
+  discount       Float   @default(0)
+  due_day        Int     @default(5)
+  notes          String?
+}
+
+model FeeInvoice {
+  id         String   @id @default(uuid())
+  student_id String
+  student    Student  @relation(fields: [student_id], references: [id])
+  period     String   // YYYY-MM
+  amount     Float
+  discount   Float    @default(0)
+  net_amount Float
+  due_date   String
+  status     String   @default("unpaid") // unpaid, partial, paid
+
+  feePayments FeePayment[]
+
+  @@unique([student_id, period])
+}
+
+model FeePayment {
+  id         String      @id @default(uuid())
+  invoice_id String?
+  invoice    FeeInvoice? @relation(fields: [invoice_id], references: [id])
+  student_id String
+  student    Student     @relation(fields: [student_id], references: [id])
+  amount     Float
+  method     String      // cash, upi, bank, card, cheque
+  receipt_no String      @unique
+  note       String?
+  paid_at    DateTime    @default(now())
+  recorded_by String
+}
+
+model Announcement {
+  id         String   @id @default(uuid())
+  title      String
+  body       String
+  audience   String   // all, students, parents, teachers, batch
+  batch_id   String?
+  created_by String
+  created_at DateTime @default(now())
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  type       String
+  title      String
+  body       String
+  ref_type   String?
+  ref_id     String?
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+}
+
+model Inquiry {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String
+  class_interest String
+  source        String   @default("walk_in")
+  status        String   @default("new") // new, contacted, interested, demo, admitted, not_interested
+  follow_up_on  String?
+  notes         String?
+  created_at    DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  action     String
+  entity     String
+  entity_id  String
+  changes    String?  // JSON string
+  created_at DateTime @default(now())
+}
+
+model AppSetting {
+  key   String @id
+  value String // JSON string
+}
+
+model WhatsAppTemplate {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  name       String
+  body       String
+  is_enabled Boolean  @default(true)
+  updated_at DateTime @updatedAt
+}
+
+model WhatsAppLog {
+  id            String   @id @default(uuid())
+  student_id    String?
+  phone         String
+  template_code String
+  body_snapshot String
+  status        String   @default("sent") // sent, delivered, failed, manual_opened
+  created_at    DateTime @default(now())
+}
