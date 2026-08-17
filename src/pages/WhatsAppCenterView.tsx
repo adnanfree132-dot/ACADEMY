@@ -97,22 +97,26 @@ export const WhatsAppCenterView: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid #E2E8F0', paddingBottom: 10 }}>
+      {/* Module Tabs */}
+      <div className="mobile-filter-scroll-bar" style={{ display: 'flex', gap: 8, borderBottom: '1px solid #E2E8F0', paddingBottom: 10, overflowX: 'auto' }}>
         <button 
           className={`btn-secondary btn-sm ${activeTab === 'templates' ? 'btn-primary' : ''}`}
           onClick={() => setActiveTab('templates')}
+          style={{ whiteSpace: 'nowrap' }}
         >
           <FileText size={16} /> Notification Templates ({templates.length})
         </button>
         <button 
           className={`btn-secondary btn-sm ${activeTab === 'logs' ? 'btn-primary' : ''}`}
           onClick={() => setActiveTab('logs')}
+          style={{ whiteSpace: 'nowrap' }}
         >
           <MessageSquare size={16} /> Dispatch Logs ({logs.length})
         </button>
         <button 
           className={`btn-secondary btn-sm ${activeTab === 'settings' ? 'btn-primary' : ''}`}
           onClick={() => setActiveTab('settings')}
+          style={{ whiteSpace: 'nowrap' }}
         >
           <Settings size={16} /> API Integration Settings
         </button>
@@ -120,25 +124,25 @@ export const WhatsAppCenterView: React.FC = () => {
 
       {/* Tab 1: Templates Manager */}
       {activeTab === 'templates' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        <div className="whatsapp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {templates.map(tmpl => (
-            <div key={tmpl.code} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span className="badge badge-primary">{tmpl.code}</span>
+            <div key={tmpl.code} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="badge badge-primary" style={{ fontSize: 11 }}>{tmpl.code}</span>
                 <button className="btn-secondary btn-sm" onClick={() => setEditingTemplate(tmpl)}>
-                  <Edit2 size={14} /> Edit
+                  <Edit2 size={13} /> Edit
                 </button>
               </div>
 
               <div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{tmpl.name}</h3>
-                <p style={{ fontSize: 13, color: '#475569', marginTop: 6, background: '#F8FAFC', padding: 12, borderRadius: 8, fontFamily: 'monospace' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>{tmpl.name}</h3>
+                <p style={{ fontSize: 12.5, color: '#475569', marginTop: 8, background: '#F8FAFC', padding: 10, borderRadius: 8, fontFamily: 'monospace', wordBreak: 'break-word' }}>
                   {tmpl.body}
                 </p>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                <button className="btn-secondary btn-sm" onClick={() => handleTestSend(tmpl)}>
+                <button className="btn-secondary btn-sm" onClick={() => handleTestSend(tmpl)} style={{ width: '100%', justifyContent: 'center' }}>
                   <Send size={14} /> Test Send (wa.me)
                 </button>
               </div>

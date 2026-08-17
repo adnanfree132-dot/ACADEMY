@@ -188,7 +188,7 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
             {customFieldDefs.length > 0 && (
               <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: '#D97706', letterSpacing: '0.05em' }}>ADDITIONAL ATTRIBUTES</div>
-                <div style={{ display: 'grid', gridTemplateColumns: customFieldDefs.length > 1 ? '1fr 1fr' : '1fr', gap: 12 }}>
+                <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: customFieldDefs.length > 1 ? '1fr 1fr' : '1fr', gap: 12 }}>
                   {customFieldDefs.map(field => (
                     <div key={field.id} className="form-group">
                       <label className="form-label" style={{ fontSize: 12 }}>{field.label}</label>

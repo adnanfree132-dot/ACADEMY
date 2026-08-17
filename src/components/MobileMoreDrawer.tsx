@@ -46,6 +46,7 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
     {
       title: 'ACADEMICS',
       items: [
+        { id: 'subjects', label: 'Course Subjects', icon: BookOpen, color: '#3B82F6' },
         { id: 'exams', label: 'Exams & Results', icon: Award, color: '#F59E0B' },
         { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
         { id: 'timetable', label: 'Timetable Schedules', icon: Calendar, color: '#EC4899' },

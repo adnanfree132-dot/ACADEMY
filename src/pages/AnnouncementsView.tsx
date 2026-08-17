@@ -23,20 +23,23 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Header */}
+      <div className="directory-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Notice Board & Announcements</h2>
-          <p style={{ fontSize: 13, color: '#64748B' }}>Publish notices to students, parents, and teaching staff</p>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>Publish notices to students, parents, and teaching staff</p>
         </div>
-        <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={18} /> Post Announcement
-        </button>
+        <div className="header-action-bar">
+          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Plus size={16} /> Post Announcement
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {announcements.map(notice => (
-          <div key={notice.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div key={notice.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {notice.urgent && <span className="badge badge-red"><AlertCircle size={12} /> Urgent Notice</span>}
                 <span className="badge badge-blue">Audience: {notice.targetAudience}</span>
@@ -44,49 +47,71 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
               <span style={{ fontSize: 12, color: '#94A3B8' }}>Posted on {notice.date}</span>
             </div>
 
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{notice.title}</h3>
-            <p style={{ fontSize: 14, color: '#475569', lineHeight: 1.6 }}>{notice.content}</p>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{notice.title}</h3>
+            <p style={{ fontSize: 13.5, color: '#475569', lineHeight: 1.6 }}>{notice.content}</p>
 
             <div style={{ fontSize: 12, color: '#94A3B8', borderTop: '1px solid #F1F5F9', paddingTop: 8 }}>
-              Author: <strong>{notice.author}</strong>
+              Author: <strong>{notice.author || 'Administration'}</strong>
             </div>
           </div>
         ))}
       </div>
-      {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-container" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800 }}>Post Announcement</h2>
-              <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label className="form-label">Title</label>
-                <input className="form-input" required value={title} onChange={e => setTitle(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Content</label>
-                <textarea className="form-input" required rows={4} value={content} onChange={e => setContent(e.target.value)} />
-              </div>
 
-              <div className="form-group">
-                <label className="form-label">Audience</label>
-                <CustomSelect
-                  value={targetAudience}
-                  onChange={setTargetAudience}
-                  options={[
-                    { value: 'All', label: 'All' },
-                    { value: 'Teachers', label: 'Teachers' },
-                    { value: 'Students', label: 'Students' },
-                    { value: 'Parents', label: 'Parents' }
-                  ]}
-                />
+      {/* Floating Island Announcement Modal */}
+      {isModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            {/* Island 1: Floating Header */}
+            <div style={{ background: '#0F172A', color: '#FFFFFF', padding: '16px 20px', borderRadius: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="badge badge-emerald">Notice</span>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>Post Announcement</h3>
               </div>
-              <button type="submit" className="btn-primary w-full" style={{ marginTop: 16, height: 44, justifyContent: 'center' }}>
-                Publish Announcement
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFFFFF', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <X size={16} />
               </button>
-            </form>
+            </div>
+
+            {/* Island 2: Form Card */}
+            <div style={{ background: '#FFFFFF', borderRadius: 16, border: '1px solid #E2E8F0', padding: 20, boxShadow: '0 10px 25px -5px rgba(15,23,42,0.12)' }}>
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Notice Title *</label>
+                  <input className="form-input" required placeholder="e.g. Academy Winter Break Schedule" value={title} onChange={e => setTitle(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Content Details *</label>
+                  <textarea className="form-input" required rows={4} placeholder="Type announcement message..." value={content} onChange={e => setContent(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Target Audience</label>
+                  <CustomSelect
+                    value={targetAudience}
+                    onChange={setTargetAudience}
+                    options={[
+                      { value: 'All', label: '📢 All (Everyone)' },
+                      { value: 'Teachers', label: '👨‍🏫 Teachers Only' },
+                      { value: 'Students', label: '🎓 Students Only' },
+                      { value: 'Parents', label: '👨‍👩‍👧 Parents Only' }
+                    ]}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)} style={{ borderRadius: 9999 }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" style={{ borderRadius: 9999 }}>
+                    ✓ Publish Announcement
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

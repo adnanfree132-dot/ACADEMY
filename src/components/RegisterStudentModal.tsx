@@ -262,7 +262,7 @@ export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Student Full Name *</label>
                   <div className="input-with-icon">
@@ -284,7 +284,7 @@ export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
             <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#7C3AED', letterSpacing: '0.05em' }}>PARENT / GUARDIAN CONTACT</div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Parent / Guardian Name *</label>
                   <div className="input-with-icon">
@@ -314,7 +314,7 @@ export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
             <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', letterSpacing: '0.05em' }}>ACADEMIC & FEE CONFIGURATION</div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Assign Batch Section *</label>
                   <select className="form-select" value={batchSelect} onChange={e => setBatchSelect(e.target.value)} required>
@@ -347,7 +347,7 @@ export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
             {customFieldDefs.length > 0 && (
               <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: '#D97706', letterSpacing: '0.05em' }}>ADDITIONAL ATTRIBUTES</div>
-                <div style={{ display: 'grid', gridTemplateColumns: customFieldDefs.length > 1 ? '1fr 1fr' : '1fr', gap: 12 }}>
+                <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: customFieldDefs.length > 1 ? '1fr 1fr' : '1fr', gap: 12 }}>
                   {customFieldDefs.map(field => (
                     <div key={field.id} className="form-group">
                       <label className="form-label" style={{ fontSize: 12 }}>{field.label} {field.required && '*'}</label>

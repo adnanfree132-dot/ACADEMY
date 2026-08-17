@@ -435,7 +435,7 @@ export const HomeworkView: React.FC = () => {
       </div>
 
       {homeworkList.length > 0 || materialsList.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        <div className="card-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {homeworkList.map((item, index) => (
             <div key={index} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -690,10 +690,10 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* 2-Column Master-Detail Settings Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr', gap: 16, alignItems: 'start' }}>
-        {/* Left Vertical Sub-Navigation Menu (Compact & Proportioned) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Master-Detail Settings Layout */}
+      <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: '210px 1fr', gap: 16, alignItems: 'start' }}>
+        {/* Navigation Menu (Horizontal scrollable on mobile, vertical on desktop) */}
+        <div className="mobile-filter-scroll-bar" style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
           <button
             type="button"
             onClick={() => setSubTab('branding')}
@@ -710,7 +710,8 @@ export const SettingsView: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'space-between',
               boxShadow: subTab === 'branding' ? '0 4px 12px -2px rgba(15,23,42,0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -745,7 +746,8 @@ export const SettingsView: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'space-between',
               boxShadow: subTab === 'assets' ? '0 4px 12px -2px rgba(15,23,42,0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -780,7 +782,8 @@ export const SettingsView: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'space-between',
               boxShadow: subTab === 'idcard' ? '0 4px 12px -2px rgba(15,23,42,0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -815,7 +818,8 @@ export const SettingsView: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'space-between',
               boxShadow: subTab === 'customizer' ? '0 4px 12px -2px rgba(15,23,42,0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -836,14 +840,14 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Right Active Settings Configuration Panel */}
-        <div className="card" style={{ padding: 24, borderRadius: 16 }}>
+        <div className="card" style={{ padding: 20, borderRadius: 16 }}>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         
         {/* SUB-SECTION 1: BRANDING & OPERATING MODE */}
         {subTab === 'branding' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Academy Name</label>
                 <input className="form-input" value={academyName} onChange={e => setAcademyName(e.target.value)} />
@@ -863,7 +867,7 @@ export const SettingsView: React.FC = () => {
                 Choose how your academy structures student groupings across the system (Sidebar, Directory, Filters & ID Cards).
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div 
                   onClick={() => setAcademyModeState('CLASS')}
                   style={{
@@ -906,7 +910,7 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Campus Address</label>
                 <input className="form-input" value={academyAddress} onChange={e => setAcademyAddress(e.target.value)} />
@@ -917,7 +921,7 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Academic Session</label>
                 <input className="form-input" value={academicSession} onChange={e => setAcademicSession(e.target.value)} />
@@ -937,7 +941,7 @@ export const SettingsView: React.FC = () => {
 
         {/* SUB-SECTION 2: LOGO & SIGNATURE ASSETS */}
         {subTab === 'assets' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, background: '#F8FAFC', padding: 18, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+          <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, background: '#F8FAFC', padding: 18, borderRadius: 12, border: '1px solid #E2E8F0' }}>
             <div>
               <label className="form-label" style={{ fontWeight: 700 }}>Academy Logo Image</label>
               {logoUrl && (
@@ -969,7 +973,7 @@ export const SettingsView: React.FC = () => {
               <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, display: 'block' }}>🎨 ID Card Theme Colors</label>
               <p style={{ fontSize: 11, color: '#64748B', marginBottom: 14 }}>Choose your academy's brand colors. These will apply to Student ID Cards, badges, and accents.</p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 <div>
                   <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Primary Color (Accent)</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>

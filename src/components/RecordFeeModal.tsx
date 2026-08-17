@@ -145,7 +145,7 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label" style={{ fontSize: 12 }}>Amount Paid ($) *</label>
                 <div className="input-with-icon">

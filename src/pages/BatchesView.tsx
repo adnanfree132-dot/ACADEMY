@@ -180,21 +180,22 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
 
       <div className="card-grid-3">
         {batches.map(batch => (
-          <div key={batch.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: '0 2px 8px rgba(15,23,42,0.04)' }} onClick={() => openBatchDetail(batch)}>
+          <div key={batch.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: '0 2px 8px rgba(15,23,42,0.04)', padding: 16 }} onClick={() => openBatchDetail(batch)}>
+            {/* Card Top Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="badge badge-blue">{batch.code || batch.classLevel || 'Class'}</span>
-              <div className="table-action-group" onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="badge badge-blue">{batch.code || batch.classLevel || 'Class'}</span>
                 <span className="badge badge-green">Active</span>
+              </div>
+              
+              {/* Desktop Direct Icons */}
+              <div className="table-action-group desktop-only" onClick={e => e.stopPropagation()}>
                 <button
                   type="button"
                   className="table-icon-btn"
                   title="Assign Substitute / Schedule Cover"
                   onClick={() => setSubstituteBatch(batch)}
-                  style={{
-                    border: '1px solid #FDE68A',
-                    background: '#FEF3C7',
-                    color: '#D97706'
-                  }}
+                  style={{ border: '1px solid #FDE68A', background: '#FEF3C7', color: '#D97706' }}
                 >
                   <UserCheck size={13} />
                 </button>
@@ -203,25 +204,16 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   className="table-icon-btn"
                   title="Split Class Section"
                   onClick={() => setSplitBatchState(batch)}
-                  style={{
-                    border: '1px solid #CBD5E1',
-                    background: '#F8FAFC',
-                    color: '#334155'
-                  }}
+                  style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#334155' }}
                 >
                   <GitBranch size={13} />
                 </button>
-
                 <button
                   type="button"
                   className="table-icon-btn"
                   title="Track Syllabus Progress & Class Diary"
                   onClick={() => setSyllabusBatchState(batch)}
-                  style={{
-                    border: '1px solid #BFDBFE',
-                    background: '#EFF6FF',
-                    color: '#2563EB'
-                  }}
+                  style={{ border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#2563EB' }}
                 >
                   <BookOpen size={13} />
                 </button>
@@ -230,25 +222,16 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   className="table-icon-btn"
                   title="Manage Subjects"
                   onClick={() => openManageSubjects(batch)}
-                  style={{
-                    border: '1px solid #BBF7D0',
-                    background: '#F0FDF4',
-                    color: '#16A34A'
-                  }}
+                  style={{ border: '1px solid #BBF7D0', background: '#F0FDF4', color: '#16A34A' }}
                 >
                   <Tag size={13} />
                 </button>
-
                 <button
                   type="button"
                   className="table-icon-btn"
                   title="Edit Class"
                   onClick={() => openEditModal(batch)}
-                  style={{
-                    border: '1px solid #CBD5E1',
-                    background: '#F8FAFC',
-                    color: '#475569'
-                  }}
+                  style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569' }}
                 >
                   <Pencil size={13} />
                 </button>
@@ -261,11 +244,31 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                       if (onDeleteBatch) onDeleteBatch(batch.id);
                     }
                   }}
-                  style={{
-                    border: '1px solid #FECACA',
-                    background: '#FEF2F2',
-                    color: '#DC2626'
+                  style={{ border: '1px solid #FECACA', background: '#FEF2F2', color: '#DC2626' }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+
+              {/* Mobile Quick Edit/Delete */}
+              <div className="mobile-only" style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="table-icon-btn"
+                  onClick={() => openEditModal(batch)}
+                  style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569' }}
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="table-icon-btn"
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete ${batch.name}?`)) {
+                      if (onDeleteBatch) onDeleteBatch(batch.id);
+                    }
                   }}
+                  style={{ border: '1px solid #FECACA', background: '#FEF2F2', color: '#DC2626' }}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -273,13 +276,13 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
             </div>
 
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{batch.name}</h3>
-              <p style={{ fontSize: 13, color: '#64748B' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>{batch.name}</h3>
+              <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
                 Instructor: {batch.instructor || batch.teacherName || 'Unassigned'}
               </p>
             </div>
 
-            <div style={{ fontSize: 13, color: '#475569', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12.5, color: '#475569', display: 'flex', flexDirection: 'column', gap: 6, background: '#F8FAFC', padding: '10px 12px', borderRadius: 8 }}>
               {batch.room ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <MapPin size={14} color="#64748B" /> Room: {batch.room}
@@ -295,6 +298,34 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Users size={14} color="#64748B" /> {batch.studentsCount || 0} Enrolled Students
               </div>
+            </div>
+
+            {/* Mobile Quick Action Buttons Bar */}
+            <div className="mobile-only" style={{ display: 'flex', gap: 6, borderTop: '1px solid #F1F5F9', paddingTop: 10 }} onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => openManageSubjects(batch)}
+                style={{ flex: 1, justifyContent: 'center', fontSize: 11.5, padding: '7px 8px' }}
+              >
+                <Tag size={12} color="#16A34A" /> Subjects
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setSyllabusBatchState(batch)}
+                style={{ flex: 1, justifyContent: 'center', fontSize: 11.5, padding: '7px 8px' }}
+              >
+                <BookOpen size={12} color="#2563EB" /> Syllabus
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setSubstituteBatch(batch)}
+                style={{ flex: 1, justifyContent: 'center', fontSize: 11.5, padding: '7px 8px' }}
+              >
+                <UserCheck size={12} color="#D97706" /> Cover
+              </button>
             </div>
 
             {/* Click hint */}

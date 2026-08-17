@@ -52,3 +52,6 @@ Thumbs.db
 *.sqlite-journal
 *.db
 *.db-journal
+
+# Test & Audit Artifacts
+mobile_audit_screenshots/

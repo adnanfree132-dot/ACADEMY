@@ -83,44 +83,39 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="directory-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Subject Catalog</h2>
-          <p style={{ fontSize: 13, color: '#64748B' }}>Manage academic subjects, assign them to classes, and link to teachers</p>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>Manage academic subjects, assign them to classes, and link to teachers</p>
         </div>
-        <button className="btn-primary" onClick={openAdd}>
-          <Plus size={18} /> Add Subject
-        </button>
+        <div className="header-action-bar">
+          <button className="btn-primary" onClick={openAdd}>
+            <Plus size={16} /> Add Subject
+          </button>
+        </div>
       </div>
 
-      {/* Search Bar */}
-      <div style={{ position: 'relative', maxWidth: 400 }}>
-        <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-        <input
-          className="form-input"
-          placeholder="Search subjects by name or code..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          style={{ paddingLeft: 40 }}
-        />
-      </div>
-
-      {/* Stats Row */}
-      <div style={{ display: 'flex', gap: 12 }}>
-        <div className="card" style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <BookOpen size={18} color="#3B82F6" />
-          </div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{subjects.length}</div>
-            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Total Subjects</div>
-          </div>
+      {/* Search Bar & Stats */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 400 }}>
+          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+          <input
+            className="form-input"
+            placeholder="Search subjects by name or code..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={{ paddingLeft: 40 }}
+          />
+        </div>
+        <div className="card" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, width: 'auto' }}>
+          <BookOpen size={16} color="#3B82F6" />
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{subjects.length} Total Subjects</span>
         </div>
       </div>
 
       {/* Subjects Grid */}
       {filteredSubjects.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        <div className="subjects-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
           {filteredSubjects.map((subject, index) => {
             const color = colors[index % colors.length];
             return (
@@ -132,7 +127,8 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
                   flexDirection: 'column',
                   gap: 12,
                   borderLeft: `4px solid ${color.border}`,
-                  background: '#FFFFFF'
+                  background: '#FFFFFF',
+                  padding: 16
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -156,29 +152,31 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: 6, borderTop: '1px solid #F1F5F9', paddingTop: 10 }}>
+                <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #F1F5F9', paddingTop: 10 }}>
                   <button
                     type="button"
                     onClick={() => openEdit(subject)}
                     style={{
-                      padding: '4px 10px', borderRadius: 6, border: '1px solid #CBD5E1',
-                      background: '#F8FAFC', color: '#334155', fontWeight: 700, fontSize: 11,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                      flex: 1,
+                      padding: '8px 12px', borderRadius: 8, border: '1px solid #CBD5E1',
+                      background: '#F8FAFC', color: '#334155', fontWeight: 700, fontSize: 12,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
                     }}
                   >
-                    <Pencil size={11} /> Edit
+                    <Pencil size={12} /> Edit
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleDeleteSubject(subject)}
                     style={{
-                      padding: '4px 10px', borderRadius: 6, border: '1px solid #FECACA',
-                      background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 11,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                      flex: 1,
+                      padding: '8px 12px', borderRadius: 8, border: '1px solid #FECACA',
+                      background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 12,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
                     }}
                   >
-                    <Trash2 size={11} /> Delete
+                    <Trash2 size={12} /> Delete
                   </button>
                 </div>
               </div>
