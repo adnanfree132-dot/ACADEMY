@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Bell, X, User, Settings, LogOut } from 'lucide-react';
+import { Plus, Search, Bell, X, User, Settings, LogOut, UserPlus, CreditCard, UserSquare2, GraduationCap } from 'lucide-react';
 import { Student } from '../types';
 
 interface HeaderProps {
@@ -126,42 +126,49 @@ export const Header: React.FC<HeaderProps> = ({
               <button 
                 onClick={() => triggerAction('student')}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
+                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span style={{ background: '#DBEAFE', color: '#1D4ED8', padding: '4px 8px', borderRadius: 6, fontSize: 12 }}>🎓</span>
-                Register Student
+                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserPlus size={14} color="#475569" />
+                </div>
+                <span>Register Student</span>
               </button>
 
               <button 
                 onClick={() => triggerAction('fee')}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F0FDF4'}
+                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span style={{ background: '#DCFCE7', color: '#15803D', padding: '4px 8px', borderRadius: 6, fontSize: 12 }}>💳</span>
-                Record Fee Deposit
+                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CreditCard size={14} color="#475569" />
+                </div>
+                <span>Record Fee Deposit</span>
               </button>
 
               <button 
                 onClick={() => triggerAction('teacher')}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
+                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span style={{ background: '#EFF6FF', color: '#2563EB', padding: '4px 8px', borderRadius: 6, fontSize: 12 }}>👨‍🏫</span>
-
-                Add Teacher / Staff
+                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserSquare2 size={14} color="#475569" />
+                </div>
+                <span>Add Teacher / Staff</span>
               </button>
 
               <button 
                 onClick={() => triggerAction('batch')}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#FEF3C7'}
+                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span style={{ background: '#FEF3C7', color: '#B45309', padding: '4px 8px', borderRadius: 6, fontSize: 12 }}>📚</span>
-                Create Class / Batch
+                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GraduationCap size={14} color="#475569" />
+                </div>
+                <span>Create Class / Batch</span>
               </button>
             </div>
           )}

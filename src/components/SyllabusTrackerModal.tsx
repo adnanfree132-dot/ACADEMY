@@ -190,10 +190,14 @@ export const SyllabusTrackerModal: React.FC<SyllabusTrackerModalProps> = ({
                 fontWeight: 700,
                 fontSize: 12,
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6
               }}
             >
-              📚 Syllabus Topics ({progressPct}%)
+              <BookOpen size={13} /> Syllabus Topics ({progressPct}%)
             </button>
             <button
               type="button"
@@ -208,10 +212,14 @@ export const SyllabusTrackerModal: React.FC<SyllabusTrackerModalProps> = ({
                 fontWeight: 700,
                 fontSize: 12,
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6
               }}
             >
-              📖 Class Diary ({diaries.length})
+              <FileText size={13} /> Class Diary ({diaries.length})
             </button>
           </div>
 
@@ -320,11 +328,15 @@ export const SyllabusTrackerModal: React.FC<SyllabusTrackerModalProps> = ({
                   diaries.map(d => (
                     <div key={d.id} style={{ background: '#FFFFFF', padding: 12, borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', fontWeight: 600, marginBottom: 2 }}>
-                        <span>🗓️ {d.date} — {d.teacherName}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Calendar size={12} color="#64748B" /> {d.date} — {d.teacherName}</span>
                       </div>
-                      <div style={{ fontWeight: 700, color: '#0F172A' }}>📖 Taught: {d.topicTaught}</div>
+                      <div style={{ fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <BookOpen size={12} color="#475569" /> Taught: {d.topicTaught}
+                      </div>
                       {d.homeworkAssigned && d.homeworkAssigned !== 'None' && (
-                        <div style={{ color: '#2563EB', marginTop: 2, fontWeight: 600 }}>📝 Homework: {d.homeworkAssigned}</div>
+                        <div style={{ color: '#2563EB', marginTop: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <FileText size={12} color="#2563EB" /> Homework: {d.homeworkAssigned}
+                        </div>
                       )}
                     </div>
                   ))

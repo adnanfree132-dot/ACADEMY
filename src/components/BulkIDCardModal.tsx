@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, GraduationCap } from 'lucide-react';
+import { X, Printer, GraduationCap, Info } from 'lucide-react';
 import { Student } from '../types';
 import { api } from '../api/apiClient';
 
@@ -302,8 +302,8 @@ export const BulkIDCardModal: React.FC<BulkIDCardModalProps> = ({ isOpen, studen
         }}>
           
           <div className="print-hide" style={{ background: '#EFF6FF', color: '#1E40AF', padding: '10px 16px', borderRadius: 10, fontSize: 12, marginBottom: 20, border: '1px solid #BFDBFE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>
-              ℹ️ Standard CR80 Card Dimensions: <strong>2.125" × 3.375" (54mm × 85.6mm)</strong>. Arranged for exact A4 paper printing.
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Info size={14} color="#1E40AF" /> Standard CR80 Card Dimensions: <strong>2.125" × 3.375" (54mm × 85.6mm)</strong>. Arranged for exact A4 paper printing.
             </span>
             <span style={{ fontWeight: 700 }}>
               {layoutMode === 'dual' ? '3 Student Pairs per A4' : layoutMode === 'front-only' ? '8 Front Cards per A4' : '8 Back Cards per A4'}
@@ -397,7 +397,7 @@ export const BulkIDCardModal: React.FC<BulkIDCardModalProps> = ({ isOpen, studen
               boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
             }}
           >
-            🖨️ Print All Cards
+            <Printer size={15} color="#FFFFFF" /> Print All Cards
           </button>
         </div>
       </div>

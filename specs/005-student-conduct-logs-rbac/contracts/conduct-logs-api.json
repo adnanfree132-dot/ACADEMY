@@ -1,0 +1,263 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Academy Pro OS - Student Conduct Logs & RBAC API",
+    "version": "1.0.0",
+    "description": "API contracts for Student Conduct & Behavior Logs with multi-role permissions."
+  },
+  "paths": {
+    "/api/v1/students/{studentId}/conduct-logs": {
+      "get": {
+        "summary": "Get conduct logs for a student",
+        "description": "Returns active conduct logs. Admins and teachers receive all logs (or batch-scoped logs); Students and Parents receive only non-confidential logs.",
+        "parameters": [
+          {
+            "name": "studentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of conduct logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ConductLog" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "summary": "Create a new conduct log for a student",
+        "description": "Allows Super Admins or Teachers assigned to the student's batch to record a new conduct remark.",
+        "parameters": [
+          {
+            "name": "studentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateConductLogRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Conduct log created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/ConductLog" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/conduct-logs/{id}": {
+      "put": {
+        "summary": "Update an existing conduct log",
+        "description": "Allows Super Admins or the original Authoring Teacher to update remark details.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateConductLogRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conduct log updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/ConductLog" }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Soft delete a conduct log",
+        "description": "Allows Super Admins or the original Authoring Teacher to soft delete a log entry.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conduct log soft-deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string" },
+                        "is_deleted": { "type": "boolean", "example": true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConductLog": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "student_id": { "type": "string", "format": "uuid" },
+          "batch_id": { "type": "string", "format": "uuid", "nullable": true },
+          "author_id": { "type": "string", "format": "uuid" },
+          "author_name": { "type": "string", "example": "Sarah Jenkins" },
+          "author_role": { "type": "string", "example": "teacher" },
+          "category": { "type": "string", "enum": ["commendation", "infraction", "academic", "attendance", "general"] },
+          "severity": { "type": "string", "enum": ["positive", "neutral", "warning", "critical"] },
+          "title": { "type": "string", "nullable": true, "example": "Chapter 3 High Performance" },
+          "remark": { "type": "string", "example": "Demonstrated exceptional mastery in algebra problem solving." },
+          "is_confidential": { "type": "boolean", "example": false },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "student_id", "author_id", "author_name", "author_role", "category", "severity", "remark", "is_confidential", "created_at"]
+      },
+      "CreateConductLogRequest": {
+        "type": "object",
+        "properties": {
+          "batch_id": { "type": "string", "format": "uuid" },
+          "category": { "type": "string", "enum": ["commendation", "infraction", "academic", "attendance", "general"], "default": "general" },
+          "severity": { "type": "string", "enum": ["positive", "neutral", "warning", "critical"], "default": "neutral" },
+          "title": { "type": "string", "maxLength": 120 },
+          "remark": { "type": "string", "minLength": 3, "maxLength": 2000 },
+          "is_confidential": { "type": "boolean", "default": false }
+        },
+        "required": ["remark"]
+      },
+      "UpdateConductLogRequest": {
+        "type": "object",
+        "properties": {
+          "category": { "type": "string", "enum": ["commendation", "infraction", "academic", "attendance", "general"] },
+          "severity": { "type": "string", "enum": ["positive", "neutral", "warning", "critical"] },
+          "title": { "type": "string", "maxLength": 120 },
+          "remark": { "type": "string", "minLength": 3, "maxLength": 2000 },
+          "is_confidential": { "type": "boolean" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Validation error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "example": false },
+                "error": { "type": "string", "example": "Remark must be at least 3 characters" }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid token",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "example": false },
+                "error": { "type": "string", "example": "Unauthenticated" }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Insufficient permissions to edit or delete log",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "example": false },
+                "error": { "type": "string", "example": "Forbidden: Only authoring teacher or admin can modify this log" }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "example": false },
+                "error": { "type": "string", "example": "Conduct log not found" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

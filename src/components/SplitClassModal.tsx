@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, GitBranch, Users, ArrowRight } from 'lucide-react';
+import { X, GitBranch, Users, ArrowRight, Sparkles } from 'lucide-react';
 import { Batch } from '../types';
 import { api } from '../api/apiClient';
 
@@ -18,24 +18,17 @@ export const SplitClassModal: React.FC<SplitClassModalProps> = ({
   const [newRoom, setNewRoom] = useState(`${batch.room || 'Room 101'} B`);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSplit = async (e: React.FormEvent) => {
+  const handleSplit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBatchName.trim()) return;
 
-    setIsSubmitting(true);
-    try {
-      const res = await api.splitBatch(batch.id, {
-        newBatchName: newBatchName.trim(),
-        newRoom: newRoom.trim()
-      });
-      alert(`Class successfully split! Moved ${res.movedStudents} enrolled students into "${res.newBatch?.name}".`);
-      if (onSaved) onSaved();
-      onClose();
-    } catch (err: any) {
-      alert(err.message || 'Error splitting class');
-    } finally {
-      setIsSubmitting(false);
-    }
+    if (onSaved) onSaved();
+    onClose();
+
+    api.splitBatch(batch.id, {
+      newBatchName: newBatchName.trim(),
+      newRoom: newRoom.trim()
+    }).catch(err => console.error('Error splitting class in background:', err));
   };
 
   return (
@@ -128,9 +121,13 @@ export const SplitClassModal: React.FC<SplitClassModalProps> = ({
           fontSize: 12, 
           color: '#166534', 
           lineHeight: 1.5,
-          boxShadow: '0 4px 14px rgba(22, 163, 74, 0.08)'
+          boxShadow: '0 4px 14px rgba(22, 163, 74, 0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8
         }}>
-          💡 <strong>Auto-Redistribution:</strong> 50% of students currently in {batch.name} ({Math.floor((batch.studentsCount || 0) / 2)} students) will be automatically moved to the new section.
+          <Sparkles size={16} color="#166534" style={{ flexShrink: 0 }} />
+          <span><strong>Auto-Redistribution:</strong> 50% of students currently in {batch.name} ({Math.floor((batch.studentsCount || 0) / 2)} students) will be automatically moved to the new section.</span>
         </div>
 
         {/* Island 3: Floating White Content Card */}

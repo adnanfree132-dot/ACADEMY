@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CRMLead } from '../types';
-import { UserPlus, Plus, Phone, Filter, X, MessageSquare, ExternalLink, Calendar, CheckCircle, Clock } from 'lucide-react';
+import { UserPlus, Plus, Phone, Filter, X, MessageSquare, ExternalLink, Calendar, CheckCircle, Clock, Users, Globe, Target, MapPin } from 'lucide-react';
+import { ModernSelect } from '../components/ModernSelect';
 
 interface CrmViewProps {
   leads: CRMLead[];
@@ -28,11 +29,11 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'converted':
-        return <span className="badge badge-green">✓ Converted</span>;
+        return <span className="badge badge-green">Converted</span>;
       case 'contacted':
-        return <span className="badge badge-blue">💬 Contacted</span>;
+        return <span className="badge badge-blue">Contacted</span>;
       default:
-        return <span className="badge badge-amber">⚡ New Lead</span>;
+        return <span className="badge badge-amber">New Lead</span>;
     }
   };
 
@@ -74,9 +75,9 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, background: '#F8FAFC', padding: '10px 12px', borderRadius: 8, fontSize: 12 }}>
-              <span className="badge badge-gray">🎯 {lead.targetClass}</span>
-              <span className="badge badge-gray">📍 {lead.source}</span>
-              {lead.date && <span className="badge badge-gray">📅 {lead.date}</span>}
+              <span className="badge badge-gray" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Target size={11} color="#64748B" /> {lead.targetClass}</span>
+              <span className="badge badge-gray" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={11} color="#64748B" /> {lead.source}</span>
+              {lead.date && <span className="badge badge-gray" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Calendar size={11} color="#64748B" /> {lead.date}</span>}
             </div>
 
             {/* Quick Contact & Action Buttons */}
@@ -101,7 +102,7 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
                     cursor: 'pointer'
                   }}
                 >
-                  <Phone size={14} color="#059669" /> Contact {lead.phone}
+                  <Phone size={14} color="#475569" /> Contact {lead.phone}
                 </button>
 
                 {/* Dual Option Contact Popover */}
@@ -125,7 +126,7 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
                     }}
                   >
                     <a
-                      href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=Hello%20${encodeURIComponent(lead.studentName)},%20regarding%20your%20inquiry%20at%20AcademiaPro:`}
+                      href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${lead.parentName || 'Parent'}, regarding your inquiry for ${lead.studentName}...`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setActiveContactLeadId(null)}
@@ -142,7 +143,7 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
                         textDecoration: 'none'
                       }}
                     >
-                      <MessageSquare size={15} color="#16A34A" /> 💬 WhatsApp Chat
+                      <MessageSquare size={15} color="#16A34A" /> WhatsApp Chat
                     </a>
                     <a
                       href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`}
@@ -160,7 +161,7 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
                         textDecoration: 'none'
                       }}
                     >
-                      <Phone size={15} color="#2563EB" /> 📞 Mobile Call
+                      <Phone size={15} color="#2563EB" /> Mobile Call
                     </a>
                   </div>
                 )}
@@ -267,12 +268,17 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead }) => {
                   </div>
                   <div className="form-group">
                     <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Inquiry Source</label>
-                    <select className="form-select" value={source} onChange={e => setSource(e.target.value)}>
-                      <option value="Walk-in">Walk-in</option>
-                      <option value="Facebook">Facebook / Social</option>
-                      <option value="Referral">Friend / Referral</option>
-                      <option value="Website">Website / Google</option>
-                    </select>
+                    <ModernSelect
+                      value={source}
+                      onChange={setSource}
+                      options={[
+                        { value: 'Walk-in', label: 'Walk-in', icon: <UserPlus size={14} color="#475569" /> },
+                        { value: 'Facebook', label: 'Facebook / Social', icon: <Globe size={14} color="#475569" /> },
+                        { value: 'Referral', label: 'Friend / Referral', icon: <Users size={14} color="#475569" /> },
+                        { value: 'Website', label: 'Website / Google', icon: <Globe size={14} color="#475569" /> }
+                      ]}
+                      zIndex={1200}
+                    />
                   </div>
                 </div>
 

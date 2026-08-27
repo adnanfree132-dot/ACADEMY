@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, UserPlus, CreditCard, BookOpen, Calendar, CheckCircle2, User, Phone, Mail, DollarSign, GraduationCap } from 'lucide-react';
+import { X, UserPlus, CreditCard, BookOpen, Calendar, CheckCircle2, User, Phone, Mail, DollarSign, GraduationCap, Building2, FileText } from 'lucide-react';
 import { Student, FeeTransaction, Batch, Announcement, Teacher } from '../types';
 import { CredentialSlipModal, CredentialData } from './CredentialSlipModal';
+import { ModernSelect } from './ModernSelect';
+import { ModernDatePicker } from './ModernDatePicker';
 
 interface CreateModalProps {
   isOpen: boolean;
@@ -86,12 +88,10 @@ export const CreateModal: React.FC<CreateModalProps> = ({
     setCredentialSlipData({
       admissionNo: admNo,
       studentName,
-      studentUsername: stuUser,
-      studentPassword: stuPass,
       parentName,
       parentPhone: phone,
-      parentUsername: parUser,
-      parentPassword: parPass
+      parentUsername: phone,
+      parentPassword: '123456'
     });
 
     setStudentName('');
@@ -397,21 +397,29 @@ export const CreateModal: React.FC<CreateModalProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Gender</label>
-                  <select className="form-select" value={gender} onChange={e => setGender(e.target.value as any)}>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
+                  <ModernSelect
+                    value={gender}
+                    onChange={v => setGender(v as any)}
+                    options={[
+                      { value: 'Male', label: 'Male', icon: <User size={14} color="#475569" /> },
+                      { value: 'Female', label: 'Female', icon: <User size={14} color="#475569" /> }
+                    ]}
+                    zIndex={1200}
+                  />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Assigned Batch Section</label>
-                  <select className="form-select" value={batchSelect} onChange={e => setBatchSelect(e.target.value)}>
-                    {batches.length > 0 ? (
-                      batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)
+                  <ModernSelect
+                    value={batchSelect}
+                    onChange={setBatchSelect}
+                    options={batches.length > 0 ? (
+                      batches.map(b => ({ value: b.name, label: b.name }))
                     ) : (
-                      <option value="Grade 10 - Sec A">Grade 10 - Sec A</option>
+                      [{ value: 'Grade 10 - Sec A', label: 'Grade 10 - Sec A' }]
                     )}
-                  </select>
+                    zIndex={1200}
+                  />
                 </div>
               </div>
 
@@ -431,15 +439,10 @@ export const CreateModal: React.FC<CreateModalProps> = ({
 
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>First Payment Due Date</label>
-                  <div className="input-with-icon">
-                    <Calendar size={15} className="input-icon" />
-                    <input 
-                      className="form-input" 
-                      type="date" 
-                      value={dueDate} 
-                      onChange={e => setDueDate(e.target.value)} 
-                    />
-                  </div>
+                  <ModernDatePicker
+                    value={dueDate}
+                    onChange={setDueDate}
+                  />
                 </div>
               </div>
             </form>
@@ -450,17 +453,19 @@ export const CreateModal: React.FC<CreateModalProps> = ({
             <form id="quick-create-form" onSubmit={handlePaymentSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
                 <label className="form-label" style={{ fontSize: 12 }}>Select Student Account</label>
-                <select className="form-select" value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}>
-                  {students.length > 0 ? (
-                    students.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.regNo} - {s.name} (Balance Due: ${s.dueBalance})
-                      </option>
-                    ))
+                <ModernSelect
+                  value={selectedStudentId}
+                  onChange={setSelectedStudentId}
+                  options={students.length > 0 ? (
+                    students.map(s => ({
+                      value: s.id,
+                      label: `${s.regNo} - ${s.name} (Balance Due: $${s.dueBalance})`
+                    }))
                   ) : (
-                    <option value="stu-1">ACAD-2026-001 - Usman Tariq</option>
+                    [{ value: 'stu-1', label: 'ACAD-2026-001 - Usman Tariq' }]
                   )}
-                </select>
+                  zIndex={1200}
+                />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -480,12 +485,17 @@ export const CreateModal: React.FC<CreateModalProps> = ({
 
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Payment Method</label>
-                  <select className="form-select" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as any)}>
-                    <option value="Cash">Cash</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Card">Card</option>
-                  </select>
+                  <ModernSelect
+                    value={paymentMethod}
+                    onChange={v => setPaymentMethod(v as any)}
+                    options={[
+                      { value: 'Cash', label: 'Cash', icon: <DollarSign size={14} color="#475569" /> },
+                      { value: 'Bank Transfer', label: 'Bank Transfer', icon: <Building2 size={14} color="#475569" /> },
+                      { value: 'Cheque', label: 'Cheque', icon: <FileText size={14} color="#475569" /> },
+                      { value: 'Card', label: 'Card', icon: <CreditCard size={14} color="#475569" /> }
+                    ]}
+                    zIndex={1200}
+                  />
                 </div>
               </div>
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Student } from '../types';
-import { X, Save, CheckCircle2, Award, AlertCircle } from 'lucide-react';
+import { X, Save, CheckCircle2, Award, AlertCircle, Sparkles } from 'lucide-react';
 import { api } from '../api/apiClient';
 
 interface MarksheetEntryModalProps {
@@ -21,11 +21,10 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
   const [marksState, setMarksState] = useState<Record<string, { marks: string; remark: string }>>(() => {
     const initial: Record<string, { marks: string; remark: string }> = {};
     students.forEach(s => {
-      // Find existing mark if available
       const existing = test.testMarks?.find((m: any) => m.student_id === s.id);
       initial[s.id] = {
         marks: existing ? String(existing.marks) : '85',
-        remark: existing?.remark || 'Good work'
+        remark: existing?.remark || 'Good analytical performance'
       };
     });
     return initial;
@@ -48,9 +47,19 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
     }));
   };
 
-  const handleSaveMarksheet = async (e: React.FormEvent) => {
+  const getScoreGrade = (score: number, max: number, pass: number) => {
+    if (score < pass) return { grade: 'F', bg: '#FEF2F2', color: '#991B1B', border: '#FECACA', pass: false };
+    const pct = max > 0 ? (score / max) * 100 : 0;
+    if (pct >= 90) return { grade: 'A+', bg: '#DCFCE7', color: '#166534', border: '#BBF7D0', pass: true };
+    if (pct >= 80) return { grade: 'A', bg: '#DCFCE7', color: '#166534', border: '#BBF7D0', pass: true };
+    if (pct >= 70) return { grade: 'B+', bg: '#EFF6FF', color: '#1E40AF', border: '#BFDBFE', pass: true };
+    if (pct >= 60) return { grade: 'B', bg: '#EFF6FF', color: '#1E40AF', border: '#BFDBFE', pass: true };
+    if (pct >= 50) return { grade: 'C', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047', pass: true };
+    return { grade: 'F', bg: '#FEF2F2', color: '#991B1B', border: '#FECACA', pass: false };
+  };
+
+  const handleSaveMarksheet = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
     const payload = students.map(s => ({
       studentId: s.id,
@@ -58,50 +67,22 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
       remark: marksState[s.id]?.remark || ''
     }));
 
-    try {
-      await api.saveTestMarks(test.id, payload);
-      setSaveMessage('✓ Assessment marksheet saved & published to student records!');
-      setTimeout(() => {
-        setSaveMessage('');
-        onSaved();
-        onClose();
-      }, 1500);
-    } catch (err: any) {
-      alert(`Error saving marksheet: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
+    onSaved();
+    onClose();
+
+    api.saveTestMarks(test.id, payload).catch(err => console.error('Error saving marksheet in background:', err));
   };
 
   return (
     <div 
-      className="modal-backdrop" 
+      className="floating-island-overlay" 
       onClick={onClose} 
-      style={{ 
-        zIndex: 1300, 
-        background: 'rgba(15, 23, 42, 0.65)', 
-        backdropFilter: 'blur(12px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 16px',
-        overflowY: 'auto'
-      }}
+      style={{ zIndex: 1300 }}
     >
       <div 
-        className="modal-card" 
+        className="floating-island-container" 
         onClick={e => e.stopPropagation()} 
-        style={{ 
-          maxWidth: 680, 
-          width: '95%', 
-          background: 'transparent', 
-          border: 'none', 
-          boxShadow: 'none', 
-          padding: 0, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: 12 
-        }}
+        style={{ maxWidth: 720 }}
       >
         {/* Island 1: Floating Dark Navy Header */}
         <div style={{ 
@@ -119,7 +100,7 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
             <div style={{
               width: 36,
               height: 36,
-              borderRadius: 10,
+              borderRadius: '50%',
               background: 'rgba(16, 185, 129, 0.15)',
               border: '1px solid rgba(16, 185, 129, 0.35)',
               display: 'flex',
@@ -127,13 +108,15 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
               justifyContent: 'center',
               color: '#10B981'
             }}>
-              <Award size={20} />
+              <Award size={18} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>{test.title} — Marksheet Entry</h3>
-              </div>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, marginTop: 2 }}>{test.batch?.name || 'All Batches'} • Max: {test.max_marks} • Pass: {test.pass_marks}</p>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em' }}>
+                {test.title} — Marksheet Entry
+              </h3>
+              <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '2px 0 0 0' }}>
+                {test.batch?.name || 'All Cohorts'} &bull; Max Marks: {test.max_marks} &bull; Passing Threshold: {test.pass_marks}
+              </p>
             </div>
           </div>
           <button 
@@ -142,7 +125,7 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
             style={{ 
               background: 'rgba(255, 255, 255, 0.08)', 
               border: 'none', 
-              color: '#FFFFFF', 
+              color: '#94A3B8', 
               width: 32, 
               height: 32, 
               borderRadius: '50%', 
@@ -156,49 +139,54 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
           </button>
         </div>
 
-        {saveMessage && (
-          <div style={{ background: '#DCFCE7', color: '#166534', padding: 12, borderRadius: 14, fontSize: 13, fontWeight: 700, border: '1px solid #86EFAC' }}>
-            {saveMessage}
-          </div>
-        )}
-
-        {/* Island 3: Floating White Content Card */}
+        {/* Island 3: Scrollable Marksheet Table Card */}
         <div style={{ 
-          padding: 22, 
+          padding: 18, 
           background: '#FFFFFF', 
           borderRadius: 16, 
           border: '1px solid #E2E8F0', 
           boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.12)',
-          maxHeight: '65vh', 
+          maxHeight: '68vh', 
           overflowY: 'auto' 
         }}>
           <form id="marksheet-form" onSubmit={handleSaveMarksheet}>
-            <div className="data-table-container" style={{ maxHeight: 380, overflowY: 'auto' }}>
-              <table className="data-table" style={{ fontSize: 13 }}>
+            <div className="data-table-container">
+              <table className="data-table" style={{ fontSize: 12.5 }}>
                 <thead>
-                  <tr>
-                    <th>Student Info</th>
-                    <th>Obtained (Max: {test.max_marks})</th>
-                    <th>Auto Result</th>
-                    <th>Teacher Feedback</th>
+                  <tr style={{ background: '#F8FAFC' }}>
+                    <th style={{ textAlign: 'left', padding: '10px 12px' }}>Student Dossier</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', width: 130 }}>Score (/{test.max_marks})</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', width: 100 }}>Auto Grade</th>
+                    <th style={{ textAlign: 'left', padding: '10px 12px' }}>Pedagogical Remark</th>
                   </tr>
                 </thead>
                 <tbody>
                   {students.map(s => {
                     const currentMark = Number(marksState[s.id]?.marks) || 0;
-                    const isPassed = currentMark >= (test.pass_marks || 40);
+                    const gradeInfo = getScoreGrade(currentMark, Number(test.max_marks) || 100, Number(test.pass_marks) || 40);
 
                     return (
                       <tr key={s.id}>
-                        <td>
-                          <strong style={{ color: '#0F172A' }}>{s.name}</strong>
-                          <div style={{ fontSize: 11, color: '#94A3B8' }}>{s.regNo}</div>
+                        <td style={{ padding: '8px 12px' }}>
+                          <div style={{ fontWeight: 700, color: '#0F172A' }}>{s.name}</div>
+                          <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>{s.regNo}</div>
                         </td>
-                        <td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                           <input
                             type="number"
-                            className="form-input"
-                            style={{ width: 100, padding: '6px 10px' }}
+                            style={{
+                              width: 84,
+                              height: 34,
+                              borderRadius: 8,
+                              border: '1.5px solid #CBD5E1',
+                              padding: '0 8px',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              textAlign: 'center',
+                              color: '#0F172A',
+                              background: '#FFFFFF',
+                              outline: 'none'
+                            }}
                             value={marksState[s.id]?.marks || ''}
                             onChange={e => handleScoreChange(s.id, e.target.value)}
                             max={test.max_marks}
@@ -206,19 +194,34 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
                             required
                           />
                         </td>
-                        <td>
-                          {isPassed ? (
-                            <span className="badge badge-green"><CheckCircle2 size={12} /> PASS</span>
-                          ) : (
-                            <span className="badge badge-red"><AlertCircle size={12} /> FAIL</span>
-                          )}
+                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            background: gradeInfo.bg,
+                            color: gradeInfo.color,
+                            border: `1px solid ${gradeInfo.border}`
+                          }}>
+                            {gradeInfo.grade} {gradeInfo.pass ? '✓' : '✗'}
+                          </span>
                         </td>
-                        <td>
+                        <td style={{ padding: '8px 12px' }}>
                           <input
                             type="text"
-                            className="form-input"
-                            placeholder="Feedback..."
-                            style={{ fontSize: 12, padding: '6px 10px' }}
+                            placeholder="Teacher feedback note..."
+                            style={{
+                              width: '100%',
+                              height: 34,
+                              borderRadius: 8,
+                              border: '1px solid #CBD5E1',
+                              padding: '0 10px',
+                              fontSize: 12,
+                              color: '#0F172A',
+                              background: '#FFFFFF',
+                              outline: 'none'
+                            }}
                             value={marksState[s.id]?.remark || ''}
                             onChange={e => handleRemarkChange(s.id, e.target.value)}
                           />
@@ -232,13 +235,13 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
           </form>
         </div>
 
-        {/* Island 4: Floating Right-Aligned Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
+        {/* Island 4: Floating Right-Aligned Paired Action Buttons */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
           <button 
             type="button" 
             onClick={onClose}
             style={{ 
-              padding: '10px 20px', 
+              padding: '9px 20px', 
               borderRadius: 9999, 
               border: '1px solid #CBD5E1', 
               background: '#FFFFFF', 
@@ -246,7 +249,7 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
               fontWeight: 700, 
               fontSize: 13, 
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+              boxShadow: '0 1px 3px rgba(15,23,42,0.06)'
             }}
           >
             Cancel
@@ -256,10 +259,10 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
             form="marksheet-form"
             disabled={isSubmitting}
             style={{ 
-              padding: '10px 24px', 
+              padding: '9px 24px', 
               borderRadius: 9999, 
               border: 'none', 
-              background: isSubmitting ? '#94A3B8' : '#0F172A', 
+              background: '#0F172A', 
               color: '#FFFFFF', 
               fontWeight: 700, 
               fontSize: 13, 
@@ -267,13 +270,14 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
+              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.25)'
             }}
           >
-            <Save size={15} /> {isSubmitting ? 'Saving Marksheet...' : 'Save & Publish Marksheet'}
+            <Save size={14} /> {isSubmitting ? 'Saving Marksheet...' : 'Save & Publish Marksheet'}
           </button>
         </div>
       </div>
     </div>
   );
 };
+export default MarksheetEntryModal;

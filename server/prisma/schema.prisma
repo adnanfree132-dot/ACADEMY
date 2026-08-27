@@ -29,6 +29,16 @@ model User {
   students       Student[]
   auditLogs      AuditLog[]
   notifications  Notification[]
+  conductLogs    ConductLog[]
+  parentStudents ParentStudent[]
+  staffMember           StaffMember?
+  approvedLeaveRequests StaffLeaveRequest[]
+
+  // Inverse relations for Staff Attendance and Payroll
+  attendanceOverrides     StaffAttendance[]     @relation("StaffAttendanceOverrideBy")
+  approvedPayrollBatches  PayrollBatch[]        @relation("PayrollBatchApprovedBy")
+  createdPayrollBatches   PayrollBatch[]        @relation("PayrollBatchCreatedBy")
+  disbursedSalaryPayments StaffSalaryPayment[]  @relation("SalaryPaymentDisbursedBy")
 }
 
 model RefreshToken {
@@ -68,6 +78,7 @@ model Subject {
   homeworks     Homework[]
   studyMaterials StudyMaterial[]
   tests         Test[]
+  timetableSlots TimetableSlot[]
 }
 
 model Teacher {
@@ -82,20 +93,28 @@ model Teacher {
   batchSubjects BatchSubject[]
   homeworks     Homework[]
   studyMaterials StudyMaterial[]
+  staffMember   StaffMember?
+  timetableSlots TimetableSlot[]
 }
 
 model Batch {
-  id         String   @id @default(uuid())
-  class_id   String
-  class      Class    @relation(fields: [class_id], references: [id])
-  name       String
-  teacher_id String?
-  teacher    Teacher? @relation(fields: [teacher_id], references: [id])
-  days       String   @default("MON,WED,FRI")
-  start_time String
-  end_time   String
-  capacity   Int      @default(30)
-  is_active  Boolean  @default(true)
+  id                   String   @id @default(uuid())
+  class_id             String
+  class                Class    @relation(fields: [class_id], references: [id])
+  name                 String
+  section_name         String?
+  teacher_id           String?
+  teacher              Teacher? @relation(fields: [teacher_id], references: [id])
+  days                 String   @default("MON,WED,FRI")
+  start_time           String
+  end_time             String
+  capacity             Int      @default(30)
+  is_active            Boolean  @default(true)
+  course_type          String   @default("monthly") // monthly, fixed_course
+  total_fee            Float?
+  start_date           String?  // YYYY-MM-DD
+  end_date             String?  // YYYY-MM-DD
+  default_installments Int?     @default(1)
 
   enrollments    Enrollment[]
   batchSubjects  BatchSubject[]
@@ -104,6 +123,8 @@ model Batch {
   studyMaterials StudyMaterial[]
   tests          Test[]
   feeStructures  FeeStructure[]
+  conductLogs    ConductLog[]
+  timetableSlots TimetableSlot[]
 }
 
 model BatchSubject {
@@ -131,7 +152,12 @@ model Student {
   photo_url    String?
   custom_fields Json?
   admitted_on  DateTime @default(now())
-  status       String   @default("active") // active, left, suspended, completed
+  status       String   @default("active") // active, inactive, suspended, graduated, left
+  status_reason String?  // medical, financial, relocation, disciplinary, graduation, personal, other
+  status_remarks String? // detailed notes
+  status_updated_at DateTime @default(now())
+  leaving_date DateTime? // departure or graduation date
+  is_fee_paused Boolean  @default(false)
   class_id     String?
   class        Class?   @relation(fields: [class_id], references: [id])
   created_at   DateTime @default(now())
@@ -143,16 +169,24 @@ model Student {
   feeInvoices  FeeInvoice[]
   feePayments  FeePayment[]
   feePlan      StudentFeePlan?
+  conductLogs  ConductLog[]
+  parentStudents ParentStudent[]
+  statusHistory StudentStatusHistory[]
 }
 
 model Enrollment {
-  id          String   @id @default(uuid())
-  student_id  String
-  student     Student  @relation(fields: [student_id], references: [id])
-  batch_id    String
-  batch       Batch    @relation(fields: [batch_id], references: [id])
-  enrolled_on DateTime @default(now())
-  status      String   @default("active") // active, removed
+  id                      String   @id @default(uuid())
+  student_id              String
+  student                 Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  batch_id                String
+  batch                   Batch    @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  enrolled_on             DateTime @default(now())
+  status                  String   @default("active") // active, removed
+  is_extended_timeline    Boolean  @default(false)
+  individual_end_date     String?  // YYYY-MM-DD
+  custom_installment_count Int?
+
+  installmentSchedules    StudentInstallmentSchedule[]
 
   @@unique([student_id, batch_id])
 }
@@ -250,28 +284,61 @@ model FeeStructure {
 }
 
 model StudentFeePlan {
-  student_id     String  @id
-  student        Student @relation(fields: [student_id], references: [id])
-  monthly_amount Float
-  discount       Float   @default(0)
-  due_day        Int     @default(5)
-  notes          String?
+  student_id         String   @id
+  student            Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  monthly_amount     Float
+  discount           Float    @default(0)
+  scholarship_type   String   @default("none") // none, percentage, fixed
+  scholarship_value  Float    @default(0)
+  scholarship_reason String?  // merit, need_based, sibling, staff_child, special_grant, other
+  billing_anchor_day Int      @default(1)      // 1 to 31
+  billing_mode       String   @default("monthly_recurring") // monthly_recurring, course_installments
+  due_day            Int      @default(5)      // Grace period offset (5 days)
+  notes              String?
+}
+
+model StudentInstallmentSchedule {
+  id                 String      @id @default(uuid())
+  enrollment_id      String
+  enrollment         Enrollment  @relation(fields: [enrollment_id], references: [id], onDelete: Cascade)
+  installment_number Int
+  total_installments Int
+  amount             Float
+  due_date           String      // YYYY-MM-DD
+  fee_period_start   String      // YYYY-MM-DD
+  fee_period_end     String      // YYYY-MM-DD
+  invoice_id         String?     @unique
+  invoice            FeeInvoice? @relation(fields: [invoice_id], references: [id], onDelete: SetNull)
+  status             String      @default("scheduled") // scheduled, invoiced, paid, cancelled
+  created_at         DateTime    @default(now())
+  updated_at         DateTime    @updatedAt
+
+  @@index([enrollment_id])
+  @@index([due_date])
 }
 
 model FeeInvoice {
-  id         String   @id @default(uuid())
-  student_id String
-  student    Student  @relation(fields: [student_id], references: [id])
-  period     String   // YYYY-MM
-  amount     Float
-  discount   Float    @default(0)
-  net_amount Float
-  due_date   String
-  status     String   @default("unpaid") // unpaid, partial, paid
+  id                   String   @id @default(uuid())
+  student_id           String
+  student              Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  period               String   // YYYY-MM or unique cycle code
+  fee_period_start     String?  // YYYY-MM-DD
+  fee_period_end       String?  // YYYY-MM-DD
+  installment_number   Int?
+  total_installments   Int?
+  billing_anchor_day   Int?
+  amount               Float
+  discount             Float    @default(0)
+  net_amount           Float
+  due_date             String   // YYYY-MM-DD
+  status               String   @default("unpaid") // unpaid, partial, paid, overdue
 
-  feePayments FeePayment[]
+  feePayments          FeePayment[]
+  installmentSchedule  StudentInstallmentSchedule?
 
   @@unique([student_id, period])
+  @@index([student_id])
+  @@index([status])
 }
 
 model FeePayment {
@@ -357,3 +424,385 @@ model WhatsAppLog {
   status        String   @default("sent") // sent, delivered, failed, manual_opened
   created_at    DateTime @default(now())
 }
+
+model ConductLog {
+  id              String    @id @default(uuid())
+  student_id      String
+  student         Student   @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  batch_id        String?
+  batch           Batch?    @relation(fields: [batch_id], references: [id])
+  author_id       String
+  author          User      @relation(fields: [author_id], references: [id])
+  author_name     String
+  author_role     String    // admin, teacher
+  category        String    // commendation, infraction, academic, attendance, general
+  severity        String    @default("neutral") // positive, neutral, warning, critical
+  title           String?
+  remark          String
+  is_confidential Boolean   @default(false)
+  is_deleted      Boolean   @default(false)
+  deleted_at      DateTime?
+  deleted_by      String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@index([student_id])
+  @@index([batch_id])
+  @@index([author_id])
+  @@index([is_deleted])
+}
+
+model ParentStudent {
+  id           String   @id @default(uuid())
+  parent_id    String
+  parent       User     @relation(fields: [parent_id], references: [id], onDelete: Cascade)
+  student_id   String
+  student      Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  relationship String   @default("guardian") // father, mother, guardian
+  created_at   DateTime @default(now())
+
+  @@unique([parent_id, student_id])
+  @@index([parent_id])
+  @@index([student_id])
+}
+
+model StudentStatusHistory {
+  id                 String    @id @default(uuid())
+  student_id         String
+  student            Student   @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  previous_status    String    // active, inactive, suspended, graduated, left
+  new_status         String    // active, inactive, suspended, graduated, left
+  reason_category    String    // medical, financial, relocation, disciplinary, graduation, personal, other
+  remarks            String?
+  effective_date     DateTime  @default(now())
+  fee_action         String?   // pause_fees, continue_fees, waive_balance
+  changed_by_user_id String?
+  created_at         DateTime  @default(now())
+
+  @@index([student_id])
+  @@index([created_at])
+}
+
+// ==========================================
+// FEATURE 008: STAFF PORTAL & RBAC MODELS
+// ==========================================
+
+model StaffType {
+  id                 String          @id @default(uuid())
+  name               String          @unique // Faculty, Admin, Domestic Staff, Librarian, etc.
+  code               String          @unique // FAC, ADM, DOM, LIB, etc.
+  slug               String?         @unique // faculty, admin, domestic-staff, librarian
+  description        String?
+  icon_name          String          @default("UserCheck") // Lucide icon name
+  is_system          Boolean         @default(false)
+  is_system_default  Boolean         @default(false)
+  is_active          Boolean         @default(true)
+  base_permissions   Json?
+  created_at         DateTime        @default(now())
+  updated_at         DateTime        @updatedAt
+
+  staffMembers       StaffMember[]
+  defaultPermissions StaffPermission[]
+}
+
+model StaffMember {
+  id                  String               @id @default(uuid())
+  staff_id            String               @unique // e.g. FAC-2026-001, ADM-2026-002
+  user_id             String?              @unique
+  user                User?                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  teacher_id          String?              @unique
+  teacher             Teacher?             @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
+  staff_type_id       String
+  staffType           StaffType            @relation(fields: [staff_type_id], references: [id])
+  full_name           String
+  email               String?
+  phone               String
+  gender              String               @default("Male") // Male, Female, Other
+  role                String?              // faculty, admin, domestic, custom
+  designation         String               // Senior Physics Lecturer, Head Accountant, Security Guard
+  qualification       String?
+  joining_date        DateTime             @default(now())
+  status              String               @default("active") // active, probation, on_leave, suspended, resigned, terminated
+  status_remarks      String?
+  photo_url           String?
+  salary_type         String?              @default("monthly") // monthly, hourly, fixed
+  base_salary         Float?               @default(0)
+  hourly_rate         Float?               @default(0)
+  payment_method      String?              @default("bank_transfer") // bank_transfer, cash, cheque
+  bank_name           String?
+  account_number      String?
+  account_title       String?
+  emergency_name      String?
+  emergency_phone     String?
+  emergency_relation  String?
+  password_hash       String?
+  temp_password_plain String?
+  is_password_changed Boolean              @default(false)
+  custom_fields       Json?
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+
+  permissions         StaffPermission[]
+  attendances         StaffAttendance[]
+  leaveRequests       StaffLeaveRequest[]  @relation("StaffLeaveRequests")
+  substituteLeaves    StaffLeaveRequest[]  @relation("SubstituteTeacher")
+  documents           StaffDocument[]
+  salaryPayments      StaffSalaryPayment[]
+  salaryStructure     StaffSalaryStructure?
+
+  @@index([staff_type_id])
+  @@index([status])
+  @@index([staff_id])
+  @@index([phone])
+}
+
+model StaffPermission {
+  id                 String          @id @default(uuid())
+  staff_type_id      String?
+  staffType          StaffType?      @relation(fields: [staff_type_id], references: [id], onDelete: Cascade)
+  staff_member_id    String?
+  staffMember        StaffMember?    @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  module_key         String          // students, teachers, batches, subjects, attendance, fees, exams, homework, timetable, crm, announcements, whatsapp, settings, reports, staff_types, staff_portal, analytics
+  access_level       String          @default("hidden") // hidden, view_only, editable
+  is_global_scope    Boolean         @default(false)    // If true, bypasses batch/classroom scoping
+  created_at         DateTime        @default(now())
+  updated_at         DateTime        @updatedAt
+
+  @@unique([staff_type_id, module_key])
+  @@unique([staff_member_id, module_key])
+  @@index([module_key])
+  @@index([staff_type_id])
+  @@index([staff_member_id])
+}
+
+model CampusGeofence {
+  id                   String   @id @default(uuid())
+  campus_name          String   @default("Main Campus")
+  latitude             Float
+  longitude            Float
+  radius_meters        Float    @default(150)
+  shift_start_time     String   @default("08:00") // HH:mm (24-hour format)
+  shift_end_time       String   @default("16:00") // HH:mm (24-hour format)
+  grace_period_minutes Int      @default(15)      // 15-minute grace window for arrival
+  is_active            Boolean  @default(true)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  @@index([is_active])
+}
+
+model StaffAttendance {
+  id                  String       @id @default(uuid())
+  staff_member_id     String
+  staffMember         StaffMember  @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  date                String       // YYYY-MM-DD
+  check_in_time       String?      // HH:mm:ss
+  check_out_time      String?      // HH:mm:ss
+  status              String       @default("present") // present, late, absent, half_day, on_leave, on_duty, excused
+  notes               String?
+  marked_by           String?      // admin, biometric, self, system
+  location_verified   Boolean      @default(false)
+  check_in_lat        Float?
+  check_in_lng        Float?
+  check_out_lat       Float?
+  check_out_lng       Float?
+  distance_meters     Float?
+  device_info         String?
+  shift_status        String?      // present, late
+  total_hours         Float?       @default(0)
+  admin_override      Boolean      @default(false)
+  override_reason     String?
+  override_by_user_id String?
+  override_by         User?        @relation("StaffAttendanceOverrideBy", fields: [override_by_user_id], references: [id], onDelete: SetNull)
+  override_timestamp  DateTime?
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
+
+  @@unique([staff_member_id, date])
+  @@index([date])
+  @@index([status])
+  @@index([staff_member_id])
+  @@index([override_by_user_id])
+  @@index([location_verified])
+  @@index([admin_override])
+}
+
+model StaffSalaryStructure {
+  id                    String      @id @default(uuid())
+  staff_member_id       String      @unique
+  staffMember           StaffMember @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  base_salary           Float       @default(0)
+  house_rent_allowance  Float       @default(0)
+  medical_allowance     Float       @default(0)
+  conveyance_allowance  Float       @default(0)
+  special_allowance     Float       @default(0)
+  gross_salary          Float       @default(0)
+  tax_deduction         Float       @default(0)
+  provident_fund        Float       @default(0)
+  other_deductions      Float       @default(0)
+  total_deductions      Float       @default(0)
+  net_salary            Float       @default(0)
+  payment_frequency     String      @default("monthly") // monthly, weekly, bi_weekly
+  effective_from        String?     // YYYY-MM-DD
+  bank_name             String?
+  account_number        String?
+  account_title         String?
+  is_active             Boolean     @default(true)
+  created_at            DateTime    @default(now())
+  updated_at            DateTime    @updatedAt
+
+  @@index([staff_member_id])
+  @@index([is_active])
+}
+
+model PayrollBatch {
+  id                          String               @id @default(uuid())
+  batch_code                  String               @unique // e.g. PAY-2026-08
+  month                       Int                  // 1-12
+  year                        Int                  // 2026
+  period                      String               @unique // 2026-08
+  total_staff_count           Int                  @default(0)
+  total_gross_amount          Float                @default(0)
+  total_allowances            Float                @default(0)
+  total_deductions            Float                @default(0)
+  total_attendance_deductions Float                @default(0)
+  total_net_amount            Float                @default(0)
+  batch_status                String               @default("draft") // draft, generated, approved, partially_disbursed, disbursed, cancelled
+  notes                       String?
+  approved_by_user_id         String?
+  approved_by                 User?                @relation("PayrollBatchApprovedBy", fields: [approved_by_user_id], references: [id], onDelete: SetNull)
+  approved_at                 DateTime?
+  disbursed_at                DateTime?
+  created_by_user_id          String?
+  created_by                  User?                @relation("PayrollBatchCreatedBy", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  created_at                  DateTime             @default(now())
+  updated_at                  DateTime             @updatedAt
+
+  salaryPayments              StaffSalaryPayment[]
+
+  @@index([year, month])
+  @@index([batch_status])
+  @@index([period])
+  @@index([approved_by_user_id])
+  @@index([created_by_user_id])
+}
+
+model StaffLeaveRequest {
+  id                    String          @id @default(uuid())
+  staff_member_id       String
+  staffMember           StaffMember     @relation("StaffLeaveRequests", fields: [staff_member_id], references: [id], onDelete: Cascade)
+  leave_type            String          // casual, sick, maternity, emergency, annual, unpaid, other
+  start_date            String          // YYYY-MM-DD
+  end_date              String          // YYYY-MM-DD
+  total_days            Int             @default(1)
+  reason                String
+  status                String          @default("pending") // pending, approved, rejected
+  substitute_teacher_id String?
+  substituteTeacher     StaffMember?    @relation("SubstituteTeacher", fields: [substitute_teacher_id], references: [id], onDelete: SetNull)
+  approved_by_id        String?
+  approved_by           User?           @relation(fields: [approved_by_id], references: [id], onDelete: SetNull)
+  rejection_reason      String?
+  reviewer_remarks      String?
+  reviewed_by           String?
+  decided_at            DateTime?
+  created_at            DateTime        @default(now())
+  updated_at            DateTime        @updatedAt
+
+  @@index([staff_member_id])
+  @@index([status])
+  @@index([start_date])
+  @@index([substitute_teacher_id])
+}
+
+model StaffDocument {
+  id                 String          @id @default(uuid())
+  staff_member_id    String
+  staffMember        StaffMember     @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  title              String          // e.g. National CNIC Card, Master Degree in Physics, Employment Contract
+  document_type      String          // cnic, degree, certificate, contract, resume, id_proof, police_clearance, other
+  file_url           String
+  file_size          Int?
+  mime_type          String?
+  expiry_date        String?         // YYYY-MM-DD
+  uploaded_at        DateTime        @default(now())
+
+  @@index([staff_member_id])
+  @@index([document_type])
+}
+
+model StaffSalaryPayment {
+  id                          String        @id @default(uuid())
+  staff_member_id             String
+  staffMember                 StaffMember   @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  payslip_number              String?       @unique // e.g. SLIP-2026-08-FAC001
+  payroll_batch_id            String?
+  payrollBatch                PayrollBatch? @relation(fields: [payroll_batch_id], references: [id], onDelete: SetNull)
+  month                       Int?          // 1-12
+  year                        Int?          // 2026
+  month_period                String?       // YYYY-MM
+  payment_date                DateTime      @default(now())
+  amount                      Float         @default(0) // legacy net amount compatibility
+  base_pay                    Float?        @default(0)
+  allowances                  Float?        @default(0)
+  house_rent_allowance        Float?        @default(0)
+  medical_allowance           Float?        @default(0)
+  conveyance_allowance        Float?        @default(0)
+  special_allowance           Float?        @default(0)
+  working_days                Int?          @default(30)
+  present_days                Int?          @default(0)
+  absent_days                 Int?          @default(0)
+  half_days                   Int?          @default(0)
+  late_days                   Int?          @default(0)
+  excused_leaves              Int?          @default(0)
+  unexcused_absences          Float?        @default(0)
+  attendance_deduction_amount Float?        @default(0)
+  tax_deduction               Float?        @default(0)
+  provident_fund              Float?        @default(0)
+  other_deductions            Float?        @default(0)
+  deductions                  Float?        @default(0) // total deductions
+  net_payable                 Float?        @default(0) // final net pay
+  payment_method              String        @default("bank_transfer") // bank_transfer, cash, cheque
+  reference_no                String?
+  transaction_ref             String?
+  disbursed_by_user_id        String?
+  disbursed_by                User?         @relation("SalaryPaymentDisbursedBy", fields: [disbursed_by_user_id], references: [id], onDelete: SetNull)
+  bank_name                   String?
+  account_number              String?
+  account_title               String?
+  slip_url                    String?
+  notes                       String?
+  remarks                     String?
+  status                      String        @default("paid") // pending, paid, partial, cancelled
+  created_at                  DateTime      @default(now())
+  updated_at                  DateTime      @updatedAt
+
+  @@index([staff_member_id])
+  @@index([payroll_batch_id])
+  @@index([payment_date])
+  @@index([month_period])
+  @@index([status])
+  @@index([disbursed_by_user_id])
+  @@index([payslip_number])
+}
+
+model TimetableSlot {
+  id         String   @id @default(uuid())
+  day        String   // Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+  start_time String   // 09:00 AM
+  end_time   String   // 10:30 AM
+  room       String   // Room 101, Lab 2
+  batch_id   String
+  batch      Batch    @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  subject_id String?
+  subject    Subject? @relation(fields: [subject_id], references: [id], onDelete: SetNull)
+  teacher_id String?
+  teacher    Teacher? @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
+  topic      String?
+  created_at DateTime @default(now())
+
+  @@index([day, start_time, room])
+  @@index([day, start_time, teacher_id])
+  @@index([batch_id])
+}
+
+

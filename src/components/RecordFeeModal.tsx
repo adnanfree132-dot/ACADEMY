@@ -1,41 +1,92 @@
-import React, { useState } from 'react';
-import { X, CreditCard, DollarSign, User, FileText } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  X,
+  CreditCard,
+  User,
+  FileText,
+  Building2,
+  Calendar,
+  Award,
+  CheckCircle2,
+  Check
+} from 'lucide-react';
 import { FeeTransaction, Student } from '../types';
-import { CustomSelect } from './CustomSelect';
+import { ModernSelect } from './ModernSelect';
+import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
+
+const getOrdinal = (n: number) => {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
 
 interface RecordFeeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddPayment: (payment: Omit<FeeTransaction, 'id' | 'receiptNo'>) => void;
+  onAddPayment: (payment: Omit<FeeTransaction, 'id' | 'receiptNo'> & { invoiceId?: string }) => void;
   students: Student[];
+  preSelectedStudentId?: string;
+  preSelectedInvoiceId?: string;
+  preSelectedAmount?: number;
 }
 
 export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
   isOpen,
   onClose,
   onAddPayment,
-  students
+  students,
+  preSelectedStudentId,
+  preSelectedInvoiceId,
+  preSelectedAmount
 }) => {
-  const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
-  const [paymentAmount, setPaymentAmount] = useState('5000');
+  const [selectedStudentId, setSelectedStudentId] = useState(preSelectedStudentId || students[0]?.id || '');
+  const [paymentAmount, setPaymentAmount] = useState(preSelectedAmount !== undefined ? String(preSelectedAmount) : '5000');
+  const [waiverDiscount, setWaiverDiscount] = useState('0');
+  const [discountRemarks, setDiscountRemarks] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'Cheque' | 'Card'>('Cash');
   const [paymentNotes, setPaymentNotes] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (preSelectedStudentId) {
+        setSelectedStudentId(preSelectedStudentId);
+      }
+      setWaiverDiscount('0');
+      setDiscountRemarks('');
+      if (preSelectedAmount !== undefined) {
+        setPaymentAmount(String(preSelectedAmount));
+      } else {
+        const currentStudent = students.find(s => s.id === (preSelectedStudentId || selectedStudentId));
+        if (currentStudent?.dueBalance && currentStudent.dueBalance > 0) {
+          setPaymentAmount(String(currentStudent.dueBalance));
+        } else if (currentStudent?.baseMonthlyFee) {
+          setPaymentAmount(String(currentStudent.baseMonthlyFee));
+        }
+      }
+    }
+  }, [isOpen, preSelectedStudentId, preSelectedAmount, students]);
+
+  const selectedStudent = useMemo(() => {
+    return students.find(s => s.id === selectedStudentId) || students[0];
+  }, [students, selectedStudentId]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const studentObj = students.find(s => s.id === selectedStudentId) || students[0];
-    if (!studentObj) return;
+    if (!selectedStudent) return;
 
     onAddPayment({
-      studentId: studentObj.id,
-      studentName: studentObj.name,
-      regNo: studentObj.regNo,
-      amount: Number(paymentAmount),
+      studentId: selectedStudent.id,
+      studentName: selectedStudent.name,
+      regNo: selectedStudent.regNo,
+      amount: Number(paymentAmount) || 0,
+      discount: Number(waiverDiscount) || 0,
+      discountRemarks: discountRemarks || undefined,
       date: new Date().toISOString().split('T')[0],
       method: paymentMethod,
-      notes: paymentNotes
+      notes: paymentNotes,
+      invoiceId: preSelectedInvoiceId
     });
 
     onClose();
@@ -43,33 +94,14 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
 
   return (
     <div 
-      className="modal-backdrop" 
+      className="floating-island-overlay" 
       onClick={onClose} 
-      style={{ 
-        zIndex: 1300, 
-        background: 'rgba(15, 23, 42, 0.65)', 
-        backdropFilter: 'blur(12px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 16px',
-        overflowY: 'auto'
-      }}
+      style={{ zIndex: 1300 }}
     >
       <div 
-        className="modal-card" 
+        className="floating-island-container" 
         onClick={e => e.stopPropagation()} 
-        style={{ 
-          maxWidth: 520, 
-          width: '100%', 
-          background: 'transparent', 
-          border: 'none', 
-          boxShadow: 'none', 
-          padding: 0, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: 12 
-        }}
+        style={{ maxWidth: 540 }}
       >
         {/* Island 1: Floating Dark Navy Header */}
         <div style={{ 
@@ -85,8 +117,8 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               borderRadius: 10,
               background: 'rgba(16, 185, 129, 0.15)',
               border: '1px solid rgba(16, 185, 129, 0.35)',
@@ -98,8 +130,10 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
               <CreditCard size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>Record Fee Payment</h3>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, marginTop: 2 }}>Select student and enter paid tuition amount</p>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>Record Fee Collection</h3>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, marginTop: 2 }}>
+                Receive tuition payments and issue official receipts
+              </p>
             </div>
           </div>
           <button 
@@ -134,58 +168,147 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
         }}>
           <form id="record-fee-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-group">
-              <label className="form-label" style={{ fontSize: 12 }}>Select Student *</label>
-              <CustomSelect
+              <label className="form-label" style={{ fontSize: 12 }}>Select Enrolled Student *</label>
+              <ModernSelect
                 value={selectedStudentId}
-                onChange={val => setSelectedStudentId(val)}
+                onChange={val => {
+                  setSelectedStudentId(val);
+                  const st = students.find(s => s.id === val);
+                  if (st && st.dueBalance > 0) {
+                    setPaymentAmount(String(st.dueBalance));
+                  }
+                }}
                 options={students.map(s => ({
                   value: s.id,
-                  label: `${s.name} (${s.regNo}) — Due: $${s.dueBalance}`
+                  label: `${s.name} (${s.regNo}) — Due: PKR ${formatCurrency(s.dueBalance)}`
                 }))}
+                zIndex={1200}
               />
             </div>
 
+            {/* Selected Student Plan Summary */}
+            {selectedStudent && (
+              <div
+                style={{
+                  background: '#F8FAFC',
+                  borderRadius: 12,
+                  border: '1px solid #E2E8F0',
+                  padding: '12px 14px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 8,
+                  fontSize: 11
+                }}
+              >
+                <div>
+                  <span style={{ color: '#64748B' }}>Assigned Batch:</span>
+                  <div style={{ fontWeight: 700, color: '#0F172A' }}>{selectedStudent.gradeBatch}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#64748B' }}>Cycle Anchor:</span>
+                  <div style={{ fontWeight: 700, color: '#2563EB' }}>
+                    {getOrdinal(selectedStudent.billingAnchorDay || 1)} of Month
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: '#64748B' }}>Outstanding Dues:</span>
+                  <div style={{ fontWeight: 800, color: selectedStudent.dueBalance > 0 ? '#DC2626' : '#16A34A' }}>
+                    PKR {formatCurrency(selectedStudent.dueBalance)}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: 12 }}>Amount Paid ($) *</label>
-                <div className="input-with-icon">
-                  <DollarSign size={15} className="input-icon" />
+                <label className="form-label" style={{ fontSize: 12 }}>Collection Amount (PKR) *</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ 
+                    position: 'absolute', 
+                    left: 12, 
+                    fontSize: 11, 
+                    fontWeight: 800, 
+                    color: '#64748B', 
+                    pointerEvents: 'none' 
+                  }}>
+                    PKR
+                  </span>
                   <input 
-                    type="number" 
                     className="form-input" 
-                    value={paymentAmount}
-                    onChange={e => setPaymentAmount(e.target.value)}
-                    required
+                    type="number" 
+                    required 
+                    min="0.01"
+                    step="any"
+                    placeholder="e.g. 5000" 
+                    value={paymentAmount} 
+                    onChange={e => setPaymentAmount(e.target.value)} 
+                    style={{ paddingLeft: 46 }}
                   />
                 </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: 12 }}>Payment Method</label>
-                <CustomSelect
+                <label className="form-label" style={{ fontSize: 12 }}>Payment Method *</label>
+                <ModernSelect
                   value={paymentMethod}
                   onChange={val => setPaymentMethod(val as any)}
                   options={[
-                    { value: 'Cash', label: '💵 Cash' },
-                    { value: 'Bank Transfer', label: '🏦 Bank Transfer' },
-                    { value: 'Cheque', label: '📜 Cheque' },
-                    { value: 'Card', label: '💳 Card' }
+                    { value: 'Cash', label: 'Cash Payment' },
+                    { value: 'Bank Transfer', label: 'Bank Transfer (Online)' },
+                    { value: 'Cheque', label: 'Cheque Deposit' },
+                    { value: 'Card', label: 'Debit / Credit Card' }
                   ]}
+                  zIndex={1150}
+                />
+              </div>
+            </div>
+
+            <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 12 }}>Extra / Waiver Discount (PKR)</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ 
+                    position: 'absolute', 
+                    left: 12, 
+                    fontSize: 11, 
+                    fontWeight: 800, 
+                    color: '#64748B', 
+                    pointerEvents: 'none' 
+                  }}>
+                    PKR
+                  </span>
+                  <input 
+                    className="form-input" 
+                    type="number" 
+                    min="0"
+                    step="any"
+                    placeholder="0 (Optional)" 
+                    value={waiverDiscount} 
+                    onChange={e => setWaiverDiscount(e.target.value)} 
+                    style={{ paddingLeft: 46 }}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 12 }}>Discount Reason / Remarks</label>
+                <input 
+                  className="form-input" 
+                  placeholder="e.g. Special concession / Late fee waiver" 
+                  value={discountRemarks} 
+                  onChange={e => setDiscountRemarks(e.target.value)} 
                 />
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label" style={{ fontSize: 12 }}>Receipt Notes / Reference No</label>
-              <div className="input-with-icon">
-                <FileText size={15} className="input-icon" />
-                <input 
-                  className="form-input" 
-                  placeholder="Optional payment notes or transaction ID" 
-                  value={paymentNotes}
-                  onChange={e => setPaymentNotes(e.target.value)}
-                />
-              </div>
+              <label className="form-label" style={{ fontSize: 12 }}>Transaction Remarks / Notes</label>
+              <input 
+                className="form-input" 
+                placeholder="e.g. Monthly fee / Installment 1 / Online Ref #84930" 
+                value={paymentNotes} 
+                onChange={e => setPaymentNotes(e.target.value)} 
+              />
             </div>
           </form>
         </div>
@@ -194,15 +317,15 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
           <button 
             type="button" 
-            onClick={onClose} 
-            style={{ 
-              padding: '10px 20px', 
-              borderRadius: 9999, 
-              border: '1px solid #CBD5E1', 
-              background: '#FFFFFF', 
-              color: '#334155', 
-              fontWeight: 700, 
-              fontSize: 13, 
+            onClick={onClose}
+            style={{
+              padding: '10px 20px',
+              borderRadius: 9999,
+              border: '1px solid #CBD5E1',
+              background: '#FFFFFF',
+              color: '#334155',
+              fontWeight: 700,
+              fontSize: 13,
               cursor: 'pointer',
               boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
             }}
@@ -210,16 +333,16 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
             Cancel
           </button>
           <button 
-            type="submit" 
+            type="submit"
             form="record-fee-form"
-            style={{ 
-              padding: '10px 24px', 
-              borderRadius: 9999, 
-              border: 'none', 
-              background: '#0F172A', 
-              color: '#FFFFFF', 
-              fontWeight: 700, 
-              fontSize: 13, 
+            style={{
+              padding: '10px 24px',
+              borderRadius: 9999,
+              border: 'none',
+              background: '#0F172A',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: 13,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
@@ -227,10 +350,12 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
               boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
             }}
           >
-            ✓ Submit Payment Receipt
+            <CheckCircle2 size={16} color="#10B981" /> Confirm Payment
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+export default RecordFeeModal;

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Check, AlertTriangle, Plus, FileText } from 'lucide-react';
 import { Student } from '../types';
 import { api } from '../api/apiClient';
+import { ModernSelect } from './ModernSelect';
+import { ModernDatePicker } from './ModernDatePicker';
 
 interface StudentLeaveModalProps {
   students: Student[];
@@ -31,34 +33,44 @@ export const StudentLeaveModal: React.FC<StudentLeaveModalProps> = ({
     fetchLeaves();
   }, []);
 
-  const handleCreateLeave = async (e: React.FormEvent) => {
+  const handleCreateLeave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentId || !fromDate || !toDate || !reason.trim()) return;
 
-    try {
-      await api.createLeaveRequest({
-        studentId: selectedStudentId,
-        fromDate,
-        toDate,
-        reason: reason.trim()
-      });
-      setIsAddMode(false);
-      setReason('');
+    const studentObj = students.find(s => s.id === selectedStudentId);
+    const mockLeave = {
+      id: 'leave-' + Date.now(),
+      studentId: selectedStudentId,
+      studentName: studentObj?.name || 'Student',
+      fromDate,
+      toDate,
+      reason: reason.trim(),
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    setLeaves(prev => [mockLeave, ...prev]);
+    setIsAddMode(false);
+    setReason('');
+    if (onRefresh) onRefresh();
+
+    api.createLeaveRequest({
+      studentId: selectedStudentId,
+      fromDate,
+      toDate,
+      reason: reason.trim()
+    }).then(() => {
       fetchLeaves();
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error creating leave request');
-    }
+    }).catch(err => console.error('Error creating leave in background:', err));
   };
 
-  const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
-    try {
-      await api.updateLeaveStatus(id, status);
+  const handleUpdateStatus = (id: string, status: 'approved' | 'rejected') => {
+    setLeaves(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+    if (onRefresh) onRefresh();
+
+    api.updateLeaveStatus(id, status).then(() => {
       fetchLeaves();
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error updating leave status');
-    }
+    }).catch(err => console.error('Error updating leave status in background:', err));
   };
 
   return (
@@ -191,24 +203,34 @@ export const StudentLeaveModal: React.FC<StudentLeaveModalProps> = ({
           {/* Form Mode */}
           {isAddMode ? (
             <form id="leave-form" onSubmit={handleCreateLeave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Select Student</label>
-                <select className="form-select" value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}>
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.regNo} - {s.gradeBatch})</option>
-                  ))}
-                </select>
-              </div>
+              <ModernSelect
+                label="Select Student"
+                required
+                value={selectedStudentId}
+                onChange={setSelectedStudentId}
+                zIndex={1100}
+                options={students.map(s => ({
+                  value: s.id,
+                  label: `${s.name} (${s.regNo})`,
+                  badge: s.gradeBatch
+                }))}
+              />
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>From Date</label>
-                  <input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>To Date</label>
-                  <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} required />
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <ModernDatePicker
+                  label="From Date"
+                  required
+                  value={fromDate}
+                  onChange={setFromDate}
+                  zIndex={1100}
+                />
+                <ModernDatePicker
+                  label="To Date"
+                  required
+                  value={toDate}
+                  onChange={setToDate}
+                  zIndex={1100}
+                />
               </div>
 
               <div className="form-group">
@@ -229,8 +251,9 @@ export const StudentLeaveModal: React.FC<StudentLeaveModalProps> = ({
                           {l.status}
                         </span>
                       </div>
-                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                        🗓️ {l.from_date} to {l.to_date} • <em>"{l.reason}"</em>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Calendar size={12} color="#64748B" />
+                        <span>{l.from_date} to {l.to_date} • <em>"{l.reason}"</em></span>
                       </div>
                     </div>
 

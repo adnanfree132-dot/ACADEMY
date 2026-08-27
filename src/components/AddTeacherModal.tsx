@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, UserSquare2, User, Phone, Mail, GraduationCap, Sparkles } from 'lucide-react';
 import { Teacher } from '../types';
 import { CustomFieldDef } from './RegisterStudentModal';
-import { CustomSelect } from './CustomSelect';
+import { ModernSelect } from './ModernSelect';
 import { api } from '../api/apiClient';
 
 interface AddTeacherModalProps {
@@ -246,10 +246,11 @@ export const AddTeacherModal: React.FC<AddTeacherModalProps> = ({
                     <div key={field.id} className="form-group">
                       <label className="form-label" style={{ fontSize: 12 }}>{field.label}</label>
                       {field.type === 'select' ? (
-                        <CustomSelect
+                        <ModernSelect
                           value={customValues[field.id] || (field.options && field.options[0]) || ''}
                           onChange={val => setCustomValues(prev => ({ ...prev, [field.id]: val }))}
                           options={(field.options && field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).map(opt => ({ value: opt, label: opt }))}
+                          zIndex={1200}
                         />
                       ) : (
                         <input 

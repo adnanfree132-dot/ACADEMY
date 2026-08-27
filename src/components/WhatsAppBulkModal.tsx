@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageCircle, Send, CheckCircle2, FileText, User, ChevronRight, Sparkles } from 'lucide-react';
+import { X, MessageCircle, Send, CheckCircle2, FileText, User, ChevronRight, Sparkles, Edit3 } from 'lucide-react';
 import { Student } from '../types';
 import { DEFAULT_WHATSAPP_TEMPLATES, WhatsAppTemplate, fillTemplate, openWhatsAppLink } from '../utils/whatsappHelper';
 import { api } from '../api/apiClient';
@@ -202,8 +202,8 @@ export const WhatsAppBulkModal: React.FC<WhatsAppBulkModalProps> = ({ isOpen, st
                   cursor: 'pointer'
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: 12, color: selectedTemplateCode === 'CUSTOM' ? '#15803D' : '#0F172A' }}>
-                  ✍️ Custom Message
+                <div style={{ fontWeight: 700, fontSize: 12, color: selectedTemplateCode === 'CUSTOM' ? '#15803D' : '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Edit3 size={13} color={selectedTemplateCode === 'CUSTOM' ? '#15803D' : '#475569'} /> Custom Message
                 </div>
                 <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>Write your own text</div>
               </div>

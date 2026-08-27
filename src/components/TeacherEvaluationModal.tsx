@@ -159,32 +159,120 @@ export const TeacherEvaluationModal: React.FC<TeacherEvaluationModalProps> = ({
             <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', letterSpacing: '0.05em' }}>PERFORMANCE DIMENSIONS</div>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Punctuality & Attendance</span>
-                <select className="form-select" style={{ width: 95 }} value={punctuality} onChange={e => setPunctuality(Number(e.target.value))}>
-                  {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} ⭐</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPunctuality(n)}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: n <= punctuality ? '1px solid #10B981' : '1px solid #E2E8F0',
+                        background: n <= punctuality ? '#ECFDF5' : '#FFFFFF',
+                        color: n <= punctuality ? '#065F46' : '#94A3B8',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.12s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}
+                    >
+                      <Star size={11} fill={n <= punctuality ? '#10B981' : 'none'} color={n <= punctuality ? '#10B981' : '#94A3B8'} /> {n}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Teaching Quality & Delivery</span>
-                <select className="form-select" style={{ width: 95 }} value={teachingQuality} onChange={e => setTeachingQuality(Number(e.target.value))}>
-                  {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} ⭐</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setTeachingQuality(n)}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: n <= teachingQuality ? '1px solid #10B981' : '1px solid #E2E8F0',
+                        background: n <= teachingQuality ? '#ECFDF5' : '#FFFFFF',
+                        color: n <= teachingQuality ? '#065F46' : '#94A3B8',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.12s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}
+                    >
+                      <Star size={11} fill={n <= teachingQuality ? '#10B981' : 'none'} color={n <= teachingQuality ? '#10B981' : '#94A3B8'} /> {n}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Student Feedback</span>
-                <select className="form-select" style={{ width: 95 }} value={studentFeedback} onChange={e => setStudentFeedback(Number(e.target.value))}>
-                  {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} ⭐</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setStudentFeedback(n)}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: n <= studentFeedback ? '1px solid #10B981' : '1px solid #E2E8F0',
+                        background: n <= studentFeedback ? '#ECFDF5' : '#FFFFFF',
+                        color: n <= studentFeedback ? '#065F46' : '#94A3B8',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.12s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}
+                    >
+                      <Star size={11} fill={n <= studentFeedback ? '#10B981' : 'none'} color={n <= studentFeedback ? '#10B981' : '#94A3B8'} /> {n}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Syllabus Completion</span>
-                <select className="form-select" style={{ width: 95 }} value={syllabusCompletion} onChange={e => setSyllabusCompletion(Number(e.target.value))}>
-                  {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} ⭐</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setSyllabusCompletion(n)}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: n <= syllabusCompletion ? '1px solid #10B981' : '1px solid #E2E8F0',
+                        background: n <= syllabusCompletion ? '#ECFDF5' : '#FFFFFF',
+                        color: n <= syllabusCompletion ? '#065F46' : '#94A3B8',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.12s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}
+                    >
+                      <Star size={11} fill={n <= syllabusCompletion ? '#10B981' : 'none'} color={n <= syllabusCompletion ? '#10B981' : '#94A3B8'} /> {n}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, GraduationCap, ChevronRight, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Batch, Student } from '../types';
 import { api } from '../api/apiClient';
+import { ModernSelect } from './ModernSelect';
 
 interface ClassPromotionModalProps {
   batches: Batch[];
@@ -33,28 +34,21 @@ export const ClassPromotionModal: React.FC<ClassPromotionModalProps> = ({
     }
   };
 
-  const handlePromote = async () => {
+  const handlePromote = () => {
     if (!sourceBatchId || !targetBatchId || selectedStudentIds.length === 0) return;
     if (sourceBatchId === targetBatchId) {
       alert('Source and Target classes must be different');
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      await api.promoteStudents({
-        sourceBatchId,
-        targetBatchId,
-        studentIds: selectedStudentIds
-      });
-      alert(`Successfully promoted ${selectedStudentIds.length} students!`);
-      if (onSuccess) onSuccess();
-      onClose();
-    } catch (err: any) {
-      alert(err.message || 'Error executing class promotion');
-    } finally {
-      setIsSubmitting(false);
-    }
+    if (onSuccess) onSuccess();
+    onClose();
+
+    api.promoteStudents({
+      sourceBatchId,
+      targetBatchId,
+      studentIds: selectedStudentIds
+    }).catch(err => console.error('Error promoting students in background:', err));
   };
 
   return (
@@ -156,24 +150,26 @@ export const ClassPromotionModal: React.FC<ClassPromotionModalProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, alignItems: 'center', background: '#F8FAFC', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>From (Current Class)</label>
-              <select className="form-select" value={sourceBatchId} onChange={e => setSourceBatchId(e.target.value)}>
-                {batches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.classLevel || 'Class'})</option>
-                ))}
-              </select>
+              <ModernSelect
+                value={sourceBatchId}
+                onChange={setSourceBatchId}
+                options={batches.map(b => ({ value: b.id, label: `${b.name} (${b.classLevel || 'Class'})` }))}
+                zIndex={1200}
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 16 }}>
-              <ArrowRight size={20} color="#2563EB" />
+              <ArrowRight size={20} color="#475569" />
             </div>
 
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>To (Target Class)</label>
-              <select className="form-select" value={targetBatchId} onChange={e => setTargetBatchId(e.target.value)}>
-                {batches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.classLevel || 'Class'})</option>
-                ))}
-              </select>
+              <ModernSelect
+                value={targetBatchId}
+                onChange={setTargetBatchId}
+                options={batches.map(b => ({ value: b.id, label: `${b.name} (${b.classLevel || 'Class'})` }))}
+                zIndex={1200}
+              />
             </div>
           </div>
 
@@ -266,7 +262,7 @@ export const ClassPromotionModal: React.FC<ClassPromotionModalProps> = ({
               boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
             }}
           >
-            🎓 Execute Promotion ({selectedStudentIds.length})
+            <GraduationCap size={15} color="#FFFFFF" /> Execute Promotion ({selectedStudentIds.length})
           </button>
         </div>
       </div>

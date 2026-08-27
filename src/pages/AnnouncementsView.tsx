@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Announcement } from '../types';
-import { Bell, Plus, Calendar, AlertCircle, X } from 'lucide-react';
-import { CustomSelect } from '../components/CustomSelect';
+import { Bell, Plus, Calendar, AlertCircle, X, Megaphone, Users, GraduationCap, UserCheck } from 'lucide-react';
+import { ModernSelect } from '../components/ModernSelect';
 
 interface AnnouncementsViewProps {
   announcements: Announcement[];
@@ -90,15 +90,16 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
 
                 <div className="form-group">
                   <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Target Audience</label>
-                  <CustomSelect
+                  <ModernSelect
                     value={targetAudience}
                     onChange={setTargetAudience}
                     options={[
-                      { value: 'All', label: '📢 All (Everyone)' },
-                      { value: 'Teachers', label: '👨‍🏫 Teachers Only' },
-                      { value: 'Students', label: '🎓 Students Only' },
-                      { value: 'Parents', label: '👨‍👩‍👧 Parents Only' }
+                      { value: 'All', label: 'All (Everyone)', icon: <Megaphone size={14} color="#475569" /> },
+                      { value: 'Teachers', label: 'Teachers Only', icon: <Users size={14} color="#475569" /> },
+                      { value: 'Students', label: 'Students Only', icon: <GraduationCap size={14} color="#475569" /> },
+                      { value: 'Parents', label: 'Parents Only', icon: <UserCheck size={14} color="#475569" /> }
                     ]}
+                    zIndex={1200}
                   />
                 </div>
 

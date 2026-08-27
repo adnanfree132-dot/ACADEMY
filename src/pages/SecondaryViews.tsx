@@ -1,369 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Award, FileText, Calendar as CalendarIcon, Settings, Plus, Download, Clock, MapPin, CheckCircle2, User, BookOpen, X, Upload, Building2, Image as ImageIcon, Palette, Sliders, Sparkles, ShieldCheck, ChevronRight, GraduationCap, UserSquare2, Pencil, Trash2 } from 'lucide-react';
+import { Award, FileText, Calendar as CalendarIcon, Settings, Plus, Download, Clock, MapPin, CheckCircle2, User, BookOpen, X, Upload, Building2, Image as ImageIcon, Palette, Sliders, Sparkles, ShieldCheck, ChevronRight, GraduationCap, UserSquare2, Pencil, Trash2, CreditCard, Compass } from 'lucide-react';
 import { api } from '../api/apiClient';
 import { exportToCSV } from '../utils/csvExporter';
 import { compressAndResizeImage } from '../utils/imageResizer';
 import { MarksheetEntryModal } from '../components/MarksheetEntryModal';
-import { CustomSelect } from '../components/CustomSelect';
+import { ModernSelect } from '../components/ModernSelect';
 import { Student } from '../types';
+import { CampusGeofenceSettings } from '../components/CampusGeofenceSettings';
+
 
 /* ==========================================================================
    1. Academic Timetable & Weekly Calendar Grid
    ========================================================================== */
-export const TimetableView: React.FC = () => {
-  const [selectedDay, setSelectedDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('Monday');
-  const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
-  const [timetableSchedule, setTimetableSchedule] = useState<any[]>([
-    { id: 1, day: 'Monday', subject: 'Mathematics (Algebra)', batch: 'Grade 10 - Sec A', time: '09:00 AM - 10:30 AM', room: 'Room 101', teacher: 'Prof. Ahmed' },
-    { id: 2, day: 'Monday', subject: 'Physics (Mechanics)', batch: 'Grade 11 - Pre-Eng', time: '11:00 AM - 12:30 PM', room: 'Lab 2', teacher: 'Dr. Fatima' },
-    { id: 3, day: 'Tuesday', subject: 'Chemistry (Organic)', batch: 'Grade 10 - Sec B', time: '09:00 AM - 10:30 AM', room: 'Lab 1', teacher: 'Prof. Sarah' }
-  ]);
+export { TimetableView } from './TimetableView';
 
-  // Form State
-  const [formSubject, setFormSubject] = useState('');
-  const [formBatch, setFormBatch] = useState('Grade 10 - Sec A');
-  const [formTime, setFormTime] = useState('09:00 AM - 10:30 AM');
-  const [formRoom, setFormRoom] = useState('Room 101');
-  const [formTeacher, setFormTeacher] = useState('Assigned Faculty');
-
-  const filteredSchedule = timetableSchedule.filter(s => s.day === selectedDay);
-
-  const handleAddSlot = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formSubject.trim()) return;
-
-    const newSlot = {
-      id: Date.now(),
-      day: selectedDay,
-      subject: formSubject.trim(),
-      batch: formBatch.trim(),
-      time: formTime.trim(),
-      room: formRoom.trim(),
-      teacher: formTeacher.trim()
-    };
-
-    setTimetableSchedule([...timetableSchedule, newSlot]);
-    setIsAddSlotOpen(false);
-    setFormSubject('');
-  };
-
-  const handleDeleteSlot = (id: number) => {
-    setTimetableSchedule(timetableSchedule.filter(s => s.id !== id));
-  };
-
-  const handleExportCSV = () => {
-    exportToCSV(`Timetable_${selectedDay}`, filteredSchedule);
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="directory-header-container">
-        <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Academic Timetable & Schedule</h2>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 2, margin: 0 }}>Weekly class schedules, room allocations, and instructor timetables</p>
-        </div>
-        <div className="header-action-bar">
-          <button className="btn-secondary" onClick={handleExportCSV}>
-            <Download size={15} /> Export CSV
-          </button>
-          <button className="btn-primary" onClick={() => setIsAddSlotOpen(true)}>
-            <Plus size={16} /> Add Class Slot
-          </button>
-        </div>
-      </div>
-
-      {/* Days Tabs */}
-      <div className="mobile-filter-scroll-bar" style={{ display: 'flex', gap: 8, background: '#FFFFFF', padding: 8, borderRadius: 12, border: '1px solid #E2E8F0', overflowX: 'auto' }}>
-        {(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const).map(day => (
-          <button 
-            key={day}
-            className={`btn-secondary btn-sm ${selectedDay === day ? 'btn-primary' : ''}`}
-            onClick={() => setSelectedDay(day)}
-            style={{ flex: 1, justifyContent: 'center', whiteSpace: 'nowrap' }}
-          >
-            {day}
-          </button>
-        ))}
-      </div>
-
-      {/* Timetable Schedule Grid */}
-      {filteredSchedule.length > 0 ? (
-        <div className="card-grid-2">
-          {filteredSchedule.map((slot) => (
-            <div key={slot.id} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span className="badge badge-primary">{slot.batch}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={14} /> {slot.time}
-                  </span>
-                  <button
-                    onClick={() => handleDeleteSlot(slot.id)}
-                    style={{ background: 'transparent', border: 'none', color: '#DC2626', cursor: 'pointer', padding: 2 }}
-                    title="Remove Slot"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', margin: 0 }}>{slot.subject}</h3>
-              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#64748B', marginTop: 4 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={14} /> {slot.room}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><User size={14} /> {slot.teacher}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ textAlign: 'center', padding: 48, background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', color: '#94A3B8' }}>
-          <Clock size={40} color="#94A3B8" style={{ marginBottom: 8, display: 'block', margin: '0 auto 8px auto' }} />
-          <strong>No Classes Scheduled for {selectedDay}</strong>
-        </div>
-      )}
-
-      {/* Modal to Add Class Slot */}
-      {isAddSlotOpen && (
-        <div className="modal-backdrop" onClick={() => setIsAddSlotOpen(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800 }}>Add Class Schedule Slot</h3>
-              <button className="modal-close-btn" onClick={() => setIsAddSlotOpen(false)}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleAddSlot} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div className="form-group">
-                <label className="form-label">Subject & Topic</label>
-                <input className="form-input" placeholder="e.g. Physics (Mechanics)" value={formSubject} onChange={e => setFormSubject(e.target.value)} required />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Target Batch</label>
-                  <input className="form-input" value={formBatch} onChange={e => setFormBatch(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Time Duration</label>
-                  <input className="form-input" value={formTime} onChange={e => setFormTime(e.target.value)} required />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Room / Lab</label>
-                  <input className="form-input" value={formRoom} onChange={e => setFormRoom(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Teacher / Faculty</label>
-                  <input className="form-input" value={formTeacher} onChange={e => setFormTeacher(e.target.value)} required />
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn-secondary" onClick={() => setIsAddSlotOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">Add Slot</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 /* ==========================================================================
    2. Exams & Assessment Manager (Connected to Express API)
    ========================================================================== */
-export const ExamsManagementView: React.FC<{ students: Student[] }> = ({ students }) => {
-  const [examsList, setExamsList] = useState<any[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [maxMarks, setMaxMarks] = useState('100');
-  const [passMarks, setPassMarks] = useState('40');
-  const [selectedTestForMarks, setSelectedTestForMarks] = useState<any | null>(null);
+export { ExamsManagementView, ExamsManagementView as ExamsView } from './ExamsView';
 
-  const fetchTests = async () => {
-    try {
-      const data = await api.getTests();
-      setExamsList(data || []);
-    } catch (err) {
-      console.error('Error loading tests:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchTests();
-  }, []);
-
-  const handleCreateTest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    try {
-      await api.createTest({
-        title,
-        maxMarks: Number(maxMarks),
-        passMarks: Number(passMarks)
-      });
-      setIsModalOpen(false);
-      setTitle('');
-      fetchTests();
-    } catch (err) {
-      console.error('Error creating test:', err);
-    }
-  };
-
-  const handleExportCSV = () => {
-    exportToCSV('Assessment_Tests', examsList.map(t => ({
-      Title: t.title,
-      Batch: t.batch?.name || 'General Batch',
-      ExamDate: t.exam_date,
-      MaxMarks: t.max_marks,
-      PassMarks: t.pass_marks,
-      Status: t.is_published ? 'Published' : 'Draft'
-    })));
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="directory-header-container">
-        <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Exams & Results Portal</h2>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 2, margin: 0 }}>Monthly assessment marksheet entry and student report card generator</p>
-        </div>
-        <div className="header-action-bar">
-          <button className="btn-secondary" onClick={handleExportCSV}>
-            <Download size={15} /> Export CSV
-          </button>
-          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={16} /> Create Test
-          </button>
-        </div>
-      </div>
-
-      {/* Desktop Exams Table */}
-      <div className="data-table-container desktop-only">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Assessment Name</th>
-              <th>Batch</th>
-              <th>Date</th>
-              <th>Max Marks</th>
-              <th>Pass Marks</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {examsList.length > 0 ? (
-              examsList.map((exam, index) => (
-                <tr key={index}>
-                  <td><strong>{exam.title}</strong></td>
-                  <td>{exam.batch?.name || 'All'}</td>
-                  <td>{exam.exam_date}</td>
-                  <td>{exam.max_marks}</td>
-                  <td>{exam.pass_marks}</td>
-                  <td>{exam.is_published ? <span className="badge badge-green">Published</span> : <span className="badge badge-amber">Draft</span>}</td>
-                  <td>
-                    <button className="btn-secondary btn-sm" onClick={() => setSelectedTestForMarks(exam)}>Entry</button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24 }}>No tests found.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile Exams Touch Cards (< 768px) */}
-      <div className="mobile-card-roster mobile-only">
-        {examsList.length > 0 ? (
-          examsList.map((exam, index) => (
-            <div key={index} className="mobile-entity-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>{exam.title}</h3>
-                <span className="badge badge-gray">{exam.batch?.name || 'All Batches'}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B', background: '#F8FAFC', padding: '8px 10px', borderRadius: 8 }}>
-                <div>
-                  <span style={{ fontSize: 11, color: '#94A3B8' }}>Pass / Max</span>
-                  <div style={{ fontWeight: 700, color: '#0F172A' }}>{exam.pass_marks} / {exam.max_marks}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: 11, color: '#94A3B8' }}>Status</span>
-                  <div>
-                    {exam.is_published ? (
-                      <span className="badge badge-green">Published</span>
-                    ) : (
-                      <span className="badge badge-amber">Draft</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn-primary btn-sm"
-                  onClick={() => setSelectedTestForMarks(exam)}
-                  style={{ width: '100%', justifyContent: 'center', height: 34 }}
-                >
-                  Marksheet Entry
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div style={{ textAlign: 'center', padding: 32, background: '#FFFFFF', borderRadius: 12, color: '#94A3B8', border: '1px solid #E2E8F0' }}>
-            No Assessment Tests Recorded Yet
-          </div>
-        )}
-      </div>
-
-      {/* Modal to Enter Test Marksheet Scores */}
-      {selectedTestForMarks && (
-        <MarksheetEntryModal
-          test={selectedTestForMarks}
-          students={students}
-          onClose={() => setSelectedTestForMarks(null)}
-          onSaved={fetchTests}
-        />
-      )}
-
-      {/* Modal to Create Test */}
-      {isModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800 }}>Create Assessment Test</h3>
-              <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCreateTest} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div className="form-group">
-                <label className="form-label">Test Title</label>
-                <input className="form-input" placeholder="e.g. Monthly Physics Quiz #1" value={title} onChange={e => setTitle(e.target.value)} required />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Max Marks</label>
-                  <input className="form-input" type="number" value={maxMarks} onChange={e => setMaxMarks(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Pass Marks</label>
-                  <input className="form-input" type="number" value={passMarks} onChange={e => setPassMarks(e.target.value)} required />
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">Create Test</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export const ExamsView = ExamsManagementView;
 
 /* ==========================================================================
    3. Homework & Study Notes Manager (Connected to Express API)
@@ -450,9 +106,9 @@ export const HomeworkView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => alert(`Submission tracker for "${item.title}": 8 Submitted, 3 Pending, 1 Late.`)}
-                  style={{ fontSize: 11, color: '#7E22CE', background: '#F3E8FF', border: '1px solid #E9D5FF', borderRadius: 6, padding: '4px 8px', fontWeight: 700, cursor: 'pointer' }}
+                  style={{ fontSize: 11, color: '#0F172A', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 6, padding: '4px 8px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 >
-                  📝 Track Submissions
+                  <FileText size={12} color="#475569" /> Track Submissions
                 </button>
               </div>
             </div>
@@ -500,7 +156,7 @@ export const HomeworkView: React.FC = () => {
    4. Settings View (Connected to Express Settings API)
    ========================================================================== */
 export const SettingsView: React.FC = () => {
-  const [subTab, setSubTab] = useState<'branding' | 'assets' | 'idcard' | 'customizer'>('branding');
+  const [subTab, setSubTab] = useState<'branding' | 'assets' | 'idcard' | 'customizer' | 'geofence'>('branding');
   const [academyName, setAcademyName] = useState('AcademiaPro Management OS');
   const [academicSession, setAcademicSession] = useState('Session 2026-2027');
   const [currencySymbol, setCurrencySymbol] = useState('$');
@@ -837,6 +493,42 @@ export const SettingsView: React.FC = () => {
             </div>
             <ChevronRight size={14} color={subTab === 'customizer' ? '#FFFFFF' : '#94A3B8'} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('geofence')}
+            style={{
+              padding: '9px 12px',
+              borderRadius: 10,
+              border: subTab === 'geofence' ? 'none' : '1px solid #E2E8F0',
+              background: subTab === 'geofence' ? '#0F172A' : '#FFFFFF',
+              color: subTab === 'geofence' ? '#FFFFFF' : '#334155',
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: subTab === 'geofence' ? '0 4px 12px -2px rgba(15,23,42,0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ 
+                border: subTab === 'geofence' ? '1px solid rgba(255,255,255,0.25)' : '1px solid #CBD5E1', 
+                borderRadius: 6, 
+                padding: '3px 5px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Compass size={15} color={subTab === 'geofence' ? '#FFFFFF' : '#475569'} />
+              </div>
+              <span>GPS & Geofencing</span>
+            </div>
+            <ChevronRight size={14} color={subTab === 'geofence' ? '#FFFFFF' : '#94A3B8'} />
+          </button>
         </div>
 
         {/* Right Active Settings Configuration Panel */}
@@ -860,8 +552,8 @@ export const SettingsView: React.FC = () => {
 
             {/* Operating Mode */}
             <div style={{ background: '#F8FAFC', padding: 18, borderRadius: 12, border: '1px solid #E2E8F0' }}>
-              <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, display: 'block', color: '#0F172A' }}>
-                ⚙️ Academy Operating Mode
+              <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6, color: '#0F172A' }}>
+                <Sliders size={16} color="#475569" /> Academy Operating Mode
               </label>
               <p style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>
                 Choose how your academy structures student groupings across the system (Sidebar, Directory, Filters & ID Cards).
@@ -881,7 +573,10 @@ export const SettingsView: React.FC = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <input type="radio" name="academyMode" checked={academyMode === 'CLASS'} onChange={() => setAcademyModeState('CLASS')} />
-                    <strong style={{ fontSize: 13, color: academyMode === 'CLASS' ? '#1D4ED8' : '#0F172A' }}>📚 Regular Class System</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <BookOpen size={15} color={academyMode === 'CLASS' ? '#2563EB' : '#475569'} />
+                      <strong style={{ fontSize: 13, color: academyMode === 'CLASS' ? '#1D4ED8' : '#0F172A' }}>Regular Class System</strong>
+                    </div>
                   </div>
                   <p style={{ fontSize: 11, color: '#64748B', margin: 0, paddingLeft: 22 }}>
                     Uses terminology like <b>"9th Class"</b>, <b>"10th Class"</b>, <b>"Classes & Sections"</b>. Best for regular class-based academies.
@@ -901,7 +596,10 @@ export const SettingsView: React.FC = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <input type="radio" name="academyMode" checked={academyMode === 'BATCH'} onChange={() => setAcademyModeState('BATCH')} />
-                    <strong style={{ fontSize: 13, color: academyMode === 'BATCH' ? '#1D4ED8' : '#0F172A' }}>🎓 Batch System</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <GraduationCap size={15} color={academyMode === 'BATCH' ? '#2563EB' : '#475569'} />
+                      <strong style={{ fontSize: 13, color: academyMode === 'BATCH' ? '#1D4ED8' : '#0F172A' }}>Batch System</strong>
+                    </div>
                   </div>
                   <p style={{ fontSize: 11, color: '#64748B', margin: 0, paddingLeft: 22 }}>
                     Uses terminology like <b>"Morning Batch 2026"</b>, <b>"Batch A"</b>, <b>"Batches & Shifts"</b>. Best for batch & coaching academies.
@@ -970,7 +668,9 @@ export const SettingsView: React.FC = () => {
         {subTab === 'idcard' && (
           <>
             <div style={{ background: '#F8FAFC', padding: 18, borderRadius: 12, border: '1px solid #E2E8F0' }}>
-              <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, display: 'block' }}>🎨 ID Card Theme Colors</label>
+              <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: '#0F172A' }}>
+                <Palette size={16} color="#475569" /> ID Card Theme Colors
+              </label>
               <p style={{ fontSize: 11, color: '#64748B', marginBottom: 14 }}>Choose your academy's brand colors. These will apply to Student ID Cards, badges, and accents.</p>
 
               <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -1027,8 +727,8 @@ export const SettingsView: React.FC = () => {
 
             {/* ID Card Display Fields Configurator */}
             <div style={{ background: '#F8FAFC', padding: 18, borderRadius: 12, border: '1px solid #E2E8F0' }}>
-              <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, display: 'block', color: '#0F172A' }}>
-                💳 Printed ID Card Display Fields
+              <label className="form-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6, color: '#0F172A' }}>
+                <CreditCard size={16} color="#475569" /> Printed ID Card Display Fields
               </label>
               <p style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>
                 Choose which form fields and attributes appear on single & bulk printed Student ID Cards.
@@ -1164,9 +864,9 @@ export const SettingsView: React.FC = () => {
             {customizerTab === 'student' && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <GraduationCap size={16} color="#2563EB" />
-                    <span style={{ color: '#1D4ED8', fontSize: 12, fontWeight: 700 }}>
+                  <div style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <GraduationCap size={16} color="#475569" />
+                    <span style={{ color: '#0F172A', fontSize: 12, fontWeight: 700 }}>
                       Student Admission Profile
                     </span>
                   </div>
@@ -1186,7 +886,7 @@ export const SettingsView: React.FC = () => {
                       style={{ flex: 1 }} 
                     />
                     <div style={{ width: 140 }}>
-                      <CustomSelect 
+                      <ModernSelect 
                         value={newFieldType} 
                         onChange={val => setNewFieldType(val as any)} 
                         options={[
@@ -1195,6 +895,7 @@ export const SettingsView: React.FC = () => {
                           { value: 'date', label: 'Date' },
                           { value: 'time', label: 'Time' }
                         ]}
+                        zIndex={100}
                       />
                     </div>
                     <button 
@@ -1262,7 +963,7 @@ export const SettingsView: React.FC = () => {
                             setNewFieldType(field.type);
                             setNewFieldOptions(field.options ? field.options.join(', ') : '');
                           }}
-                          style={{ padding: '4px 9px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                          style={{ padding: '4px 9px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                           <Pencil size={11} /> Edit
                         </button>
@@ -1285,9 +986,9 @@ export const SettingsView: React.FC = () => {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <UserSquare2 size={16} color="#0F172A" />
+                    <UserSquare2 size={16} color="#475569" />
                     <span style={{ color: '#0F172A', fontSize: 12, fontWeight: 700 }}>
-                      Faculty Profile
+                      Teacher & Faculty Profile
                     </span>
                   </div>
                 </div>
@@ -1306,7 +1007,7 @@ export const SettingsView: React.FC = () => {
                       style={{ flex: 1 }} 
                     />
                     <div style={{ width: 140 }}>
-                      <CustomSelect 
+                      <ModernSelect 
                         value={newTeacherFieldType} 
                         onChange={val => setNewTeacherFieldType(val as any)} 
                         options={[
@@ -1315,6 +1016,7 @@ export const SettingsView: React.FC = () => {
                           { value: 'date', label: 'Date' },
                           { value: 'time', label: 'Time' }
                         ]}
+                        zIndex={100}
                       />
                     </div>
                     <button 
@@ -1382,7 +1084,7 @@ export const SettingsView: React.FC = () => {
                             setNewTeacherFieldType(field.type);
                             setNewTeacherFieldOptions(field.options ? field.options.join(', ') : '');
                           }}
-                          style={{ padding: '4px 9px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#334155', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                          style={{ padding: '4px 9px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                           <Pencil size={11} /> Edit
                         </button>
@@ -1405,9 +1107,9 @@ export const SettingsView: React.FC = () => {
             {customizerTab === 'class' && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Building2 size={16} color="#059669" />
-                    <span style={{ color: '#047857', fontSize: 12, fontWeight: 700 }}>
+                  <div style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Building2 size={16} color="#475569" />
+                    <span style={{ color: '#0F172A', fontSize: 12, fontWeight: 700 }}>
                       Academic Unit Config
                     </span>
                   </div>
@@ -1427,7 +1129,7 @@ export const SettingsView: React.FC = () => {
                       style={{ flex: 1 }} 
                     />
                     <div style={{ width: 140 }}>
-                      <CustomSelect 
+                      <ModernSelect 
                         value={newClassFieldType} 
                         onChange={val => setNewClassFieldType(val as any)} 
                         options={[
@@ -1436,6 +1138,7 @@ export const SettingsView: React.FC = () => {
                           { value: 'date', label: 'Date' },
                           { value: 'time', label: 'Time' }
                         ]}
+                        zIndex={100}
                       />
                     </div>
                     <button 
@@ -1503,7 +1206,7 @@ export const SettingsView: React.FC = () => {
                             setNewClassFieldType(field.type);
                             setNewClassFieldOptions(field.options ? field.options.join(', ') : '');
                           }}
-                          style={{ padding: '4px 9px', borderRadius: 6, border: '1px solid #A7F3D0', background: '#ECFDF5', color: '#047857', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                          style={{ padding: '4px 9px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                           <Pencil size={11} /> Edit
                         </button>
@@ -1523,14 +1226,21 @@ export const SettingsView: React.FC = () => {
           </div>
         )}
 
-        <button 
-          type="button"
-          className="btn-primary" 
-          onClick={e => handleSaveSettings(e)} 
-          style={{ alignSelf: 'flex-start', marginTop: 10, padding: '12px 24px', fontSize: 14, background: '#0F172A', color: '#FFF' }}
-        >
-          ✓ Save Configuration & Branding Assets
-        </button>
+        {/* SUB-SECTION 5: CAMPUS GPS & GEOFENCING */}
+        {subTab === 'geofence' && (
+          <CampusGeofenceSettings />
+        )}
+
+        {subTab !== 'geofence' && (
+          <button 
+            type="button"
+            className="btn-primary" 
+            onClick={e => handleSaveSettings(e)} 
+            style={{ alignSelf: 'flex-start', marginTop: 10, padding: '12px 24px', fontSize: 14, background: '#0F172A', color: '#FFF' }}
+          >
+            ✓ Save Configuration & Branding Assets
+          </button>
+        )}
       </div>
     </div>
   </div>

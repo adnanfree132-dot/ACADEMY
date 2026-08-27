@@ -1,17 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Subject } from '../types';
-import { BookOpen, Plus, Pencil, Trash2, X, Search, Code2, Tag } from 'lucide-react';
-import { api } from '../api/apiClient';
+import { BookOpen, Plus, Pencil, Trash2, X, Search, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface SubjectsViewProps {
   subjects: Subject[];
+  onAddSubject?: (subjectData: { name: string; code: string }) => void;
+  onEditSubject?: (subjectId: string, subjectData: { name: string; code: string }) => void;
+  onDeleteSubject?: (subjectId: string) => void;
   onRefresh?: () => void;
 }
 
-export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh }) => {
+export const SubjectsView: React.FC<SubjectsViewProps> = ({ 
+  subjects, 
+  onAddSubject, 
+  onEditSubject, 
+  onDeleteSubject,
+  onRefresh 
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [subjectToDelete, setSubjectToDelete] = useState<Subject | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -34,39 +43,43 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
     setFormCode(subject.code);
   };
 
-  const handleAddSubject = async (e: React.FormEvent) => {
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formCode.trim()) return;
 
-    try {
-      await api.createSubject({ name: formName.trim(), code: formCode.trim().toUpperCase() });
-      setIsAddModalOpen(false);
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error creating subject');
+    const data = {
+      name: formName.trim(),
+      code: formCode.trim().toUpperCase()
+    };
+
+    setIsAddModalOpen(false);
+    if (onAddSubject) {
+      onAddSubject(data);
     }
   };
 
-  const handleEditSubject = async (e: React.FormEvent) => {
+  const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSubject || !formName.trim() || !formCode.trim()) return;
 
-    try {
-      await api.updateSubject(editingSubject.id, { name: formName.trim(), code: formCode.trim().toUpperCase() });
-      setEditingSubject(null);
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error updating subject');
+    const targetId = editingSubject.id;
+    const data = {
+      name: formName.trim(),
+      code: formCode.trim().toUpperCase()
+    };
+
+    setEditingSubject(null);
+    if (onEditSubject) {
+      onEditSubject(targetId, data);
     }
   };
 
-  const handleDeleteSubject = async (subject: Subject) => {
-    if (!window.confirm(`Are you sure you want to delete "${subject.name}" (${subject.code})?`)) return;
-    try {
-      await api.deleteSubject(subject.id);
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error deleting subject');
+  const confirmDelete = () => {
+    if (!subjectToDelete) return;
+    const targetId = subjectToDelete.id;
+    setSubjectToDelete(null);
+    if (onDeleteSubject) {
+      onDeleteSubject(targetId);
     }
   };
 
@@ -108,7 +121,7 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
           />
         </div>
         <div className="card" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, width: 'auto' }}>
-          <BookOpen size={16} color="#3B82F6" />
+          <BookOpen size={16} color="#475569" />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{subjects.length} Total Subjects</span>
         </div>
       </div>
@@ -151,32 +164,44 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Actions (Standard Theme Buttons) */}
                 <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #F1F5F9', paddingTop: 10 }}>
                   <button
                     type="button"
+                    className="table-icon-btn"
                     onClick={() => openEdit(subject)}
                     style={{
                       flex: 1,
-                      padding: '8px 12px', borderRadius: 8, border: '1px solid #CBD5E1',
-                      background: '#F8FAFC', color: '#334155', fontWeight: 700, fontSize: 12,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 700
                     }}
                   >
-                    <Pencil size={12} /> Edit
+                    <Pencil size={13} color="#475569" /> Edit
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => handleDeleteSubject(subject)}
+                    className="table-icon-btn danger"
+                    onClick={() => setSubjectToDelete(subject)}
                     style={{
                       flex: 1,
-                      padding: '8px 12px', borderRadius: 8, border: '1px solid #FECACA',
-                      background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 12,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 700
                     }}
                   >
-                    <Trash2 size={12} /> Delete
+                    <Trash2 size={13} color="#DC2626" /> Delete
                   </button>
                 </div>
               </div>
@@ -193,73 +218,193 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ subjects, onRefresh 
         </div>
       )}
 
-      {/* Add Subject Modal */}
+      {/* Floating Island: Add Subject Modal */}
       {isAddModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsAddModalOpen(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>Add New Subject</h3>
-              <button className="modal-close-btn" onClick={() => setIsAddModalOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                <X size={18} />
+        <div className="floating-island-overlay" onClick={() => setIsAddModalOpen(false)}>
+          <div className="floating-island-container" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            {/* Island 1: Dark Navy Header */}
+            <div className="island-header-card">
+              <div className="island-header-left">
+                <span className="island-header-badge">
+                  <BookOpen size={12} color="#10B981" /> Subject Catalog
+                </span>
+                <h3 className="island-header-title">Add New Subject</h3>
+                <p className="island-header-sub">Create an academic subject for classes and study plans</p>
+              </div>
+              <button className="island-close-btn" onClick={() => setIsAddModalOpen(false)}>
+                <X size={15} color="#94A3B8" />
               </button>
             </div>
-            <form onSubmit={handleAddSubject} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Name</label>
-                <input className="form-input" placeholder="e.g. Mathematics" value={formName} onChange={e => setFormName(e.target.value)} required />
+
+            {/* Island 3: Form Content Card */}
+            <form onSubmit={handleAddSubmit} style={{ display: 'contents' }}>
+              <div className="island-form-card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Name</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. Mathematics, Organic Chemistry"
+                    value={formName}
+                    onChange={e => setFormName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Code</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. MATH-101, CHEM-201"
+                    value={formCode}
+                    onChange={e => setFormCode(e.target.value.toUpperCase())}
+                    required
+                    style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                  />
+                  <span style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Unique identifier code for marksheets & reports</span>
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Code</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. MATH-101"
-                  value={formCode}
-                  onChange={e => setFormCode(e.target.value.toUpperCase())}
-                  required
-                  style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                />
-                <span style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Unique identifier code for the subject</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn-secondary" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">✓ Create Subject</button>
+
+              {/* Island 4: Floating Action Pill Row */}
+              <div className="island-pill-row">
+                <button type="button" className="island-pill-btn island-pill-btn-cancel" onClick={() => setIsAddModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="island-pill-btn island-pill-btn-submit">
+                  <CheckCircle2 size={15} color="#10B981" /> Create Subject
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Edit Subject Modal */}
+      {/* Floating Island: Edit Subject Modal */}
       {editingSubject && (
-        <div className="modal-backdrop" onClick={() => setEditingSubject(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>Edit Subject</h3>
-              <button className="modal-close-btn" onClick={() => setEditingSubject(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                <X size={18} />
+        <div className="floating-island-overlay" onClick={() => setEditingSubject(null)}>
+          <div className="floating-island-container" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            {/* Island 1: Dark Navy Header */}
+            <div className="island-header-card">
+              <div className="island-header-left">
+                <span className="island-header-badge">
+                  <Pencil size={12} color="#10B981" /> Edit Subject
+                </span>
+                <h3 className="island-header-title">{editingSubject.name}</h3>
+                <p className="island-header-sub">Update subject title and catalog identifier code</p>
+              </div>
+              <button className="island-close-btn" onClick={() => setEditingSubject(null)}>
+                <X size={15} color="#94A3B8" />
               </button>
             </div>
-            <form onSubmit={handleEditSubject} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Name</label>
-                <input className="form-input" value={formName} onChange={e => setFormName(e.target.value)} required />
-              </div>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Code</label>
-                <input
-                  className="form-input"
-                  value={formCode}
-                  onChange={e => setFormCode(e.target.value.toUpperCase())}
-                  required
-                  style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn-secondary" onClick={() => setEditingSubject(null)}>Cancel</button>
-                <button type="submit" className="btn-primary">✓ Save Changes</button>
 
+            {/* Island 3: Form Content Card */}
+            <form onSubmit={handleEditSubmit} style={{ display: 'contents' }}>
+              <div className="island-form-card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Name</label>
+                  <input
+                    className="form-input"
+                    value={formName}
+                    onChange={e => setFormName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Subject Code</label>
+                  <input
+                    className="form-input"
+                    value={formCode}
+                    onChange={e => setFormCode(e.target.value.toUpperCase())}
+                    required
+                    style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                  />
+                </div>
+              </div>
+
+              {/* Island 4: Floating Action Pill Row */}
+              <div className="island-pill-row">
+                <button type="button" className="island-pill-btn island-pill-btn-cancel" onClick={() => setEditingSubject(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="island-pill-btn island-pill-btn-submit">
+                  <CheckCircle2 size={15} color="#10B981" /> Save Changes
+                </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Island: Custom Delete Confirmation Modal (Rule 5 & Rule 11) */}
+      {subjectToDelete && (
+        <div className="floating-island-overlay" onClick={() => setSubjectToDelete(null)} style={{ zIndex: 1300 }}>
+          <div className="floating-island-container" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            {/* Island 1: Dark Navy Danger Header */}
+            <div className="island-header-card" style={{ borderBottom: '2px solid rgba(239, 68, 68, 0.4)' }}>
+              <div className="island-header-left">
+                <span className="island-header-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#EF4444' }}>
+                  <AlertTriangle size={12} color="#EF4444" /> Delete Subject Confirmation
+                </span>
+                <h3 className="island-header-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Trash2 size={18} color="#EF4444" /> Delete Subject
+                </h3>
+                <p className="island-header-sub">
+                  Are you sure you want to delete <strong style={{ color: '#FFFFFF' }}>{subjectToDelete.name}</strong> ({subjectToDelete.code})?
+                </p>
+              </div>
+              <button className="island-close-btn" onClick={() => setSubjectToDelete(null)}>
+                <X size={15} color="#94A3B8" />
+              </button>
+            </div>
+
+            {/* Island 3: Warning Details Card */}
+            <div className="island-form-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+                padding: '12px 14px',
+                borderRadius: 12,
+                background: '#FEF2F2',
+                border: '1px solid #FECACA'
+              }}>
+                <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ fontSize: 12, color: '#991B1B', lineHeight: 1.5 }}>
+                  <strong>Important Notice:</strong> Deleting this subject will also remove its associated test marks, homework assignments, and batch mappings from the catalog.
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                borderRadius: 10,
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                fontSize: 13
+              }}>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Subject Code:</span>
+                <span style={{ color: '#0F172A', fontWeight: 800, fontFamily: 'monospace' }}>{subjectToDelete.code}</span>
+              </div>
+            </div>
+
+            {/* Island 4: Floating Action Pill Row */}
+            <div className="island-pill-row">
+              <button type="button" className="island-pill-btn island-pill-btn-cancel" onClick={() => setSubjectToDelete(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="island-pill-btn"
+                onClick={confirmDelete}
+                style={{
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  boxShadow: '0 4px 14px rgba(220,38,38,0.35)'
+                }}
+              >
+                <Trash2 size={14} color="#FFFFFF" /> Permanently Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

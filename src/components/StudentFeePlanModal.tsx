@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Award, Percent, Calendar } from 'lucide-react';
 import { Student } from '../types';
 import { api } from '../api/apiClient';
+import { ModernSelect } from './ModernSelect';
 
 interface StudentFeePlanModalProps {
   student: Student;
@@ -31,25 +32,17 @@ export const StudentFeePlanModal: React.FC<StudentFeePlanModalProps> = ({
     }).catch(() => {});
   }, [student]);
 
-  const handleSavePlan = async (e: React.FormEvent) => {
+  const handleSavePlan = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    if (onSaved) onSaved();
+    onClose();
 
-    try {
-      await api.saveStudentFeePlan(student.id, {
-        monthlyAmount: Number(monthlyAmount),
-        discount: Number(discount),
-        dueDay: Number(dueDay),
-        notes: notes.trim()
-      });
-      alert(`Fee plan & scholarship updated for ${student.name}!`);
-      if (onSaved) onSaved();
-      onClose();
-    } catch (err: any) {
-      alert(err.message || 'Error saving student fee plan');
-    } finally {
-      setIsSubmitting(false);
-    }
+    api.saveStudentFeePlan(student.id, {
+      monthlyAmount: Number(monthlyAmount),
+      discount: Number(discount),
+      dueDay: Number(dueDay),
+      notes: notes.trim()
+    }).catch(err => console.error('Error saving fee plan in background:', err));
   };
 
   const finalFee = Math.max(0, Number(monthlyAmount) - (Number(monthlyAmount) * (Number(discount) / 100)));
@@ -175,12 +168,17 @@ export const StudentFeePlanModal: React.FC<StudentFeePlanModalProps> = ({
 
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Monthly Due Date</label>
-              <select className="form-select" value={dueDay} onChange={e => setDueDay(e.target.value)}>
-                <option value="1">1st of every month</option>
-                <option value="5">5th of every month</option>
-                <option value="10">10th of every month</option>
-                <option value="15">15th of every month</option>
-              </select>
+              <ModernSelect
+                value={dueDay}
+                onChange={setDueDay}
+                options={[
+                  { value: '1', label: '1st of every month', icon: <Calendar size={14} color="#475569" /> },
+                  { value: '5', label: '5th of every month', icon: <Calendar size={14} color="#475569" /> },
+                  { value: '10', label: '10th of every month', icon: <Calendar size={14} color="#475569" /> },
+                  { value: '15', label: '15th of every month', icon: <Calendar size={14} color="#475569" /> }
+                ]}
+                zIndex={1200}
+              />
             </div>
 
             <div className="form-group">

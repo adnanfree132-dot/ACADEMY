@@ -1,14 +1,13 @@
 <!--
 Sync Impact Report:
-- Version change: 1.2.0 → 1.3.0 (MINOR: Added Clean Minimal Directory, Table Column Layout & Dual-Action Contact Standards to Principle IV)
+- Version change: 1.4.0 → 1.5.0 (MINOR: Added Unified Theme-Matching SVG Icon Styling requirement to Principle IV)
 - Modified Principles:
-  - Principle IV: Expanded "IV. Mandatory UI/UX Taste Standards & Taste Skill (NON-NEGOTIABLE)" with strict rules for Clean Minimal Layouts, Streamlined Action Toolbars, Single-Line Status Badges, Dual-Action Contact Popovers, and Floating Island Modal Architecture across all forms.
+  - Principle IV: Added strict mandate banning random rainbow SVG icon colors in dropdown menus, toolbars, and action lists, requiring uniform theme slate `#475569` / `#64748B` (transitioning to `#0F172A` on hover) and reserving `#DC2626` strictly for destructive/danger actions.
 - Added Architectural Guidelines:
-  - Mandatory single-line auto-wrap protection (`white-space: nowrap`) across all data table status badges and action groups.
-  - Streamlined header toolbars (Export CSV + consolidated Tools dropdown + primary Add CTA).
-  - Dual-action Phone triggers (WhatsApp Chat + Mobile Call redirecting to device dialer).
+  - Global `.header-menu-item svg` styling in `index.css`.
+  - Elimination of random inline SVG stroke colors across all component popovers.
 - Governance updates:
-  - Added Clean Minimal Layout compliance to UI/UX Taste Audit Gate.
+  - Added Unified Icon Styling compliance to UI/UX Taste Audit Gate.
 - Follow-up TODOs: None
 -->
 
@@ -70,7 +69,31 @@ Every modal dialog, creation popup, edit form, or credential slip across ANY mod
 4. **Island 3 — Floating White Content & Form Card**: Standalone floating white card (`background: #FFFFFF`, `border: 1px solid #E2E8F0`, `border-radius: 16px`, `padding: 20px 24px`, `box-shadow: 0 10px 25px -5px rgba(15,23,42,0.12)`, `max-height: 70vh`, `overflow-y: auto`) containing grouped inner sections with colored headers (`#2563EB` blue, `#7C3AED` purple, `#059669` emerald).
 5. **Island 4 — Floating Action Pills Row**: Action pill buttons (`border-radius: 9999px`, `height: 42px`) floating directly over the transparent backdrop:
    - *Data Entry / Edit Forms*: Right-aligned paired floating pills (`[ Cancel ]` white pill with `#CBD5E1` border + `[ ✓ Save / Submit ]` dark navy `#0F172A` pill with `#FFFFFF` text).
-   - *Credential Slips & Receipts*: 3-column floating action grid (`📋 Copy All`, `🖨️ Print Slip`, `✈️ Send via WhatsApp`) and a full-width floating `[ ✓ Done & Close ]` white pill button.
+7. **Modernized Theme-Matching Form Controls & Calendars (MANDATORY)**:
+   - Raw default browser `<select>` and raw unstyled `<input type="date">` are strictly FORBIDDEN across all modal forms and pages.
+   - Always use theme-matching custom components:
+     1. **`ModernSelect`** for all dropdowns: Sleek border radius (`10px`), subtle focus rings (`0 0 0 3px rgba(37,99,235,0.12)`), smooth 180° chevron rotation, and floating glassmorphic popover menus (`backdrop-filter: blur(16px)`).
+     2. **`ModernDatePicker`** for all dates/calendars: Human-readable formatted trigger badge (`📅 Wed, Aug 19, 2026`), floating glassmorphic calendar popover, `#0F172A` navy month/year navigator, quick preset chips (`[ Today ]`, `[ Tomorrow ]`, `[ In 7 Days ]`), and color-coded day grids with `#10B981` emerald selection indicators.
+8. **Strict Prohibition of Emojis Across Entire UI (ABSOLUTE MANDATE)**:
+   - Raw/system Unicode emojis (e.g. ⚡, 🎲, 📱, 🎓, 🏥, 💰, 📦, ⚠️, 🤝, 👨, 👩, 💵, 💳, 📢, 🗓️, 🟢, 🟡, 🔴, 💡, 🔒, 🌐, 🏷️, ⏸️, ▶️, 📚, 📖, ⭐, 📋, 👥, 📍, ⏰, ✍️, 🎯, 🎉, ⚙️, 🎨, ℹ️, 🖨️, etc.) are **STRICTLY FORBIDDEN** anywhere in the user interface.
+   - Applies universally to: dropdown menus, form input labels/placeholders, quick preset password chips, notification callouts, modal/drawer headers, tabs, table cells, and status badges.
+   - All UI visual indicators MUST use clean Lucide SVG components.
+9. **Unified Theme-Matching SVG Icon & Button Styling (ABSOLUTE MANDATE)**:
+   - Standard action icons, table row actions, quick action buttons, card headers, preset buttons, and toolbar options MUST use uniform theme slate Lucide SVG icons (`#475569` or `#64748B`), smoothly transitioning to dark navy (`#0F172A`) on hover (matching the `Edit Profile` button standard).
+   - Random/rainbow button background colors (`#FEF3C7`, `#EFF6FF`, `#ECFDF5`, `#FDE68A`, etc.) on card action buttons or table icon buttons are **STRICTLY PROHIBITED**. Use standardized `.table-icon-btn` styles.
+   - Destructive / critical actions (e.g. `Archive`, `Delete`, `Remove`) MUST strictly use `.table-icon-btn.danger` / `#DC2626` red.
+   - Only official brand triggers (e.g. WhatsApp `#16A34A`) or status pill badges carry explicit semantic colors.
+10. **Theme-Matching Rounded-Edge Input & Box Standard (ABSOLUTE MANDATE)**:
+   - All input text boxes (`<input type="text">`, `<input type="number">`, `<input type="email">`, `<input type="password">`, `<input type="tel">`, `<input type="search">`, `<textarea>`), search bars, form containers, card sections, and preset chips MUST have sleek theme-matching rounded edges (`border-radius: 10px` to `12px` / `rounded-xl`).
+   - Sharp, squared, or unrounded box corners (`border-radius: 0px` or raw default unstyled `<input>`) are **STRICTLY PROHIBITED** across all pages, forms, modals, drawers, and cards.
+   - Input text fields must perfectly match the curvature, height, and border styling of `ModernSelect` and `ModernDatePicker` (`border-radius: 12px`, `border: 1px solid #CBD5E1`, `background: #FFFFFF`, focus ring glow `0 0 0 3.5px rgba(59, 130, 246, 0.15)`).
+   - Form Section Cards: Inner modal grouping cards must use `border-radius: 14px` or `16px` (`rounded-2xl`), `background: #F8FAFC`, and `border: 1px solid #E2E8F0`.
+11. **Theme-Matching Drawer & Modal Tab Navigation Standard (ABSOLUTE MANDATE)**:
+   - All tab navigation bars across drawers, modals, cards, and sub-views MUST use the theme-matching active navy solid pill design with Lucide SVG icons (as established in `StudentProfileDrawer`).
+   - **Active Tab Pill**: Deep `#0F172A` dark navy solid pill background (`border-radius: 8px`–`10px`, `padding: 7px 10px`), pure white text (`#FFFFFF`), bold font (`font-weight: 800`), and pure white Lucide SVG icon (`color: #FFFFFF`).
+   - **Inactive Tab**: Clean transparent background, slate text (`#64748B`), slate Lucide SVG icon (`#64748B`), and subtle hover background (`#F1F5F9` / `#F8FAFC`).
+   - **Mandatory SVG Icons**: Every single tab button MUST include a relevant Lucide SVG icon paired with its label.
+   - **Prohibition**: Text-only tabs, underline-style tabs (`border-bottom: 2px solid #2563EB`), and raw non-pill navigation bars are **STRICTLY PROHIBITED** across all drawers and modal views.
 
 ### V. Multi-Role RBAC & Zero-Trust Security
 Security MUST be enforced at both network and application boundaries:
@@ -114,7 +137,6 @@ Quality and stability MUST be verified through reproducible testing:
 - **Versioning Policy**: Semantic versioning (SemVer) is strictly enforced:
   - **MAJOR (X.0.0)**: Removal, deprecation, or incompatible redefinition of core principles or architectural constraints.
   - **MINOR (x.Y.0)**: Addition of new principles, governance sections, or material expansion of development standards.
-  - **PATCH (x.y.Z)**: Clarifications, formatting adjustments, or non-semantic wording refinements.
 - **Compliance**: All automated agents, developers, and code reviews MUST verify compliance against this document before merging changes.
 
-**Version**: 1.3.0 | **Ratified**: 2026-08-15 | **Last Amended**: 2026-08-15
+**Version**: 1.7.0 | **Ratified**: 2026-08-15 | **Last Amended**: 2026-08-19

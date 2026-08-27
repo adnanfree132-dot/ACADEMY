@@ -36,20 +36,19 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({ 
   students, teachers, batches, transactions, leads, onNavigate, dashboardStats 
 }) => {
-  // Use API stats if available, otherwise fallback to local array lengths
-  const totalStudents = dashboardStats?.totalStudents ?? students.length;
-  const totalTeachers = dashboardStats?.totalTeachers ?? teachers.length;
-  const totalBatches = dashboardStats?.totalBatches ?? batches.length;
+  // Pure reactive state computations (0ms instant optimistic UI updates on add/edit/delete)
+  const totalStudents = students.length;
+  const totalTeachers = teachers.length;
+  const totalBatches = batches.length;
   const todayAttendancePct = dashboardStats?.todayAttendancePct ?? 0;
   
-  const totalCollected = dashboardStats?.totalCollected ?? 
-    transactions.reduce((sum, t) => sum + t.amount, 0);
+  const totalCollected = transactions.length > 0 
+    ? transactions.reduce((sum, t) => sum + (t.amount || 0), 0)
+    : (dashboardStats?.totalCollected ?? 0);
     
-  const totalPending = dashboardStats?.totalPending ?? 
-    students.reduce((sum, s) => sum + s.dueBalance, 0);
+  const totalPending = students.reduce((sum, s) => sum + (s.dueBalance || 0), 0);
     
-  const defaultersCount = dashboardStats?.defaultersCount ?? 
-    students.filter(s => s.isDefaulter).length;
+  const defaultersCount = students.filter(s => s.isDefaulter || (s.dueBalance || 0) > 0).length;
     
   const totalTarget = totalCollected + totalPending;
   const collectionPct = totalTarget > 0 ? Math.round((totalCollected / totalTarget) * 100) : 0;
@@ -97,7 +96,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="overview-subcards">
             <div className="subcard-item">
               <div style={{ marginBottom: 4 }}>
-                <Calendar size={16} color="#16A34A" />
+                <Calendar size={16} color="#475569" />
               </div>
               <div className="subcard-val">{todayAttendancePct}%</div>
               <div className="subcard-lbl">Today Attendance</div>
@@ -105,7 +104,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="subcard-item">
               <div style={{ marginBottom: 4 }}>
-                <GraduationCap size={16} color="#0F172A" />
+                <GraduationCap size={16} color="#475569" />
               </div>
               <div className="subcard-val">{totalBatches}</div>
               <div className="subcard-lbl">Active Batches / Sections</div>
@@ -113,7 +112,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="subcard-item">
               <div style={{ marginBottom: 4 }}>
-                <AlertTriangle size={16} color="#D97706" />
+                <AlertTriangle size={16} color="#475569" />
               </div>
               <div className="subcard-val">${totalPending.toLocaleString()}</div>
               <div className="subcard-lbl">Pending Dues</div>

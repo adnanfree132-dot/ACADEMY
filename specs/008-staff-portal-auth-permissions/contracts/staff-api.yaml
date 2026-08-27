@@ -1,0 +1,221 @@
+openapi: 3.0.3
+info:
+  title: Academy Pro OS - Staff & RBAC Permissions API
+  version: 1.0.0
+  description: Endpoints for staff onboarding, credentials, dynamic staff types, granular permissions, attendance, and leave management.
+
+paths:
+  /api/v1/staff:
+    get:
+      summary: List all staff members
+      tags: [Staff]
+      parameters:
+        - name: staff_type_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, probation, on_leave, suspended, resigned, terminated] }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        200:
+          description: List of staff members with role badges and basic stats.
+
+    post:
+      summary: Register a new staff member (Auto-generates Staff ID and password)
+      tags: [Staff]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phone, staffTypeId, designation]
+              properties:
+                fullName: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                gender: { type: string, enum: [Male, Female, Other] }
+                staffTypeId: { type: string }
+                designation: { type: string }
+                qualification: { type: string }
+                joiningDate: { type: string }
+                baseSalary: { type: number }
+                hourlyRate: { type: number }
+                paymentMethod: { type: string }
+                bankDetails: { type: object }
+                emergencyContact: { type: object }
+      responses:
+        201:
+          description: Staff created with credentials payload for Credential Slip.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      staff: { type: object }
+                      credentials:
+                        type: object
+                        properties:
+                          staffId: { type: string }
+                          temporaryPassword: { type: string }
+                          loginUrl: { type: string }
+                          issuedAt: { type: string }
+
+  /api/v1/staff/{id}:
+    get:
+      summary: Get detailed staff profile with permissions, assignments, and documents
+      tags: [Staff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Full staff profile details.
+
+    put:
+      summary: Update staff details, status, or salary terms
+      tags: [Staff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        200:
+          description: Staff profile updated.
+
+  /api/v1/staff/{id}/reset-password:
+    post:
+      summary: Admin action to regenerate temporary password and issue fresh credential slip
+      tags: [Staff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: New temporary password generated with slip data.
+
+  /api/v1/staff-types:
+    get:
+      summary: List all default and custom staff types
+      tags: [StaffTypes]
+      responses:
+        200:
+          description: List of staff types.
+
+    post:
+      summary: Create a new custom staff type
+      tags: [StaffTypes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name: { type: string }
+                code: { type: string }
+                description: { type: string }
+                iconName: { type: string }
+                defaultPermissions: { type: object }
+      responses:
+        201:
+          description: Staff type created.
+
+  /api/v1/staff/{id}/permissions:
+    get:
+      summary: Get granular module permissions for a staff member
+      tags: [Permissions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Map of module permissions.
+
+    put:
+      summary: Update granular module permissions for a staff member
+      tags: [Permissions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    type: object
+                    required: [moduleKey, accessLevel]
+                    properties:
+                      moduleKey: { type: string }
+                      accessLevel: { type: string, enum: [hidden, view_only, editable] }
+                      isGlobalScope: { type: boolean }
+      responses:
+        200:
+          description: Permissions updated.
+
+  /api/v1/staff-attendance:
+    get:
+      summary: Get staff attendance records by date or month
+      tags: [StaffAttendance]
+    post:
+      summary: Mark or bulk mark daily staff attendance
+      tags: [StaffAttendance]
+
+  /api/v1/staff-leaves:
+    get:
+      summary: List staff leave applications
+      tags: [StaffLeaves]
+    post:
+      summary: Submit a leave request (Staff self-service)
+      tags: [StaffLeaves]
+
+  /api/v1/staff-leaves/{id}/decision:
+    put:
+      summary: Approve or reject a leave request (Admin action)
+      tags: [StaffLeaves]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, rejected] }
+                remarks: { type: string }
+                substituteTeacherId: { type: string }
+      responses:
+        200:
+          description: Leave request updated and substitute teacher assigned if provided.

@@ -55,3 +55,28 @@ Thumbs.db
 
 # Test & Audit Artifacts
 mobile_audit_screenshots/
+
+# Temporary Agent Swarm & Scratch Workspaces
+.agents/auditor_*
+.agents/backend_*
+.agents/challenger_*
+.agents/e2e_*
+.agents/frontend_*
+.agents/m[0-9]*
+.agents/orchestrator*
+.agents/remediation_*
+.agents/reviewer_*
+.agents/sentinel*
+.agents/spec_miner_*
+.agents/survey_*
+.agents/test_writer_*
+.agents/victory_*
+*.b64
+*.tmp*
+*.cjs
+append_chunk.js
+build_adversarial_suite.js
+create_test.js
+gen_tests.py
+make_suite.py
+test_single_line.txt

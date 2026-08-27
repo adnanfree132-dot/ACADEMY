@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Teacher, Batch, Student } from '../types';
-import { X, User, Phone, Mail, GraduationCap, Calendar, BookOpen, Users, Star, Award, Plus, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { X, User, Phone, Mail, GraduationCap, Calendar, BookOpen, Users, Star, Award, Plus, CheckCircle2, ShieldCheck, MessageSquare, FileText, MapPin, Clock } from 'lucide-react';
 import { api } from '../api/apiClient';
+import { StudentProfileDrawer } from './StudentProfileDrawer';
 
 interface TeacherProfileDrawerProps {
   teacher: Teacher | null;
@@ -20,6 +21,7 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'batches' | 'students'>('overview');
   const [teacherSubjects, setTeacherSubjects] = useState<any[]>([]);
+  const [selectedStudentForConduct, setSelectedStudentForConduct] = useState<Student | null>(null);
 
   if (!teacher) return null;
 
@@ -50,12 +52,12 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
           boxShadow: '-8px 0 24px rgba(0,0,0,0.15)',
           display: 'flex',
           flexDirection: 'column',
-          overflowY: 'auto',
+          overflow: 'hidden',
           animation: 'slideInRight 0.25s ease-out'
         }}
       >
         {/* Header */}
-        <div style={{ background: '#0F172A', color: '#FFFFFF', padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flexShrink: 0, background: '#0F172A', color: '#FFFFFF', padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span className="badge" style={{ background: '#1E293B', color: '#38BDF8', border: '1px solid #334155', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.05em', fontWeight: 800 }}>Faculty Profile</span>
@@ -70,82 +72,49 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC', padding: '0 16px' }}>
+        <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid #E2E8F0', background: '#FFFFFF', padding: '6px 10px', gap: 4, overflow: 'hidden' }}>
           {(['overview', 'batches', 'students'] as const).map(tab => (
             <button
               key={tab}
+              type="button"
               onClick={() => setActiveTab(tab)}
               style={{
-                padding: '12px 16px',
+                padding: '7px 4px',
                 border: 'none',
-                background: 'transparent',
-                borderBottom: activeTab === tab ? '2px solid #0F172A' : '2px solid transparent',
-                color: activeTab === tab ? '#0F172A' : '#64748B',
+                background: activeTab === tab ? '#0F172A' : 'transparent',
+                borderRadius: 8,
+                color: activeTab === tab ? '#FFFFFF' : '#64748B',
                 fontWeight: activeTab === tab ? 800 : 600,
-                fontSize: 13,
+                fontSize: 12,
                 cursor: 'pointer',
-                textTransform: 'capitalize'
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5
               }}
             >
-              {tab === 'overview' && '📋 Overview'}
-              {tab === 'batches' && `📚 Classes (${assignedBatchList.length})`}
-              {tab === 'students' && `👥 Students (${myStudents.length})`}
+              {tab === 'overview' && <><FileText size={13} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Overview</span></>}
+              {tab === 'batches' && <><GraduationCap size={13} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Classes ({assignedBatchList.length})</span></>}
+              {tab === 'students' && <><Users size={13} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Students ({myStudents.length})</span></>}
             </button>
           ))}
         </div>
 
         {/* Tab Contents */}
-        <div style={{ padding: 24, flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ padding: 24, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Quick Stats Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: 14 }}>
-                  <div style={{ fontSize: 11, color: '#1E40AF', fontWeight: 700 }}>Assigned Batches</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#1D4ED8', marginTop: 2 }}>
-                    {assignedBatchList.length} Classes
-                  </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ background: '#F8FAFC', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>PRIMARY PHONE</span>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginTop: 4 }}>{teacher.phone || 'None on file'}</div>
                 </div>
-
-                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 14 }}>
-                  <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>Total Enrolled Students</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
-                    {myStudents.length} Students
-                  </div>
-                </div>
-              </div>
-
-
-              {/* Contact Information */}
-              <div style={{ background: '#F8FAFC', borderRadius: 12, padding: 16, border: '1px solid #E2E8F0' }}>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', textTransform: 'uppercase', marginBottom: 12 }}>Contact & Details</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, color: '#475569' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Mail size={16} color="#64748B" /> <strong>Email:</strong> {teacher.email}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Phone size={16} color="#64748B" /> <strong>Phone:</strong> {teacher.phone}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <GraduationCap size={16} color="#64748B" /> <strong>Qualification:</strong> {teacher.qualification || 'M.Sc Physics / Specialist'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Assigned Subjects & Batches */}
-              <div style={{ background: '#F8FAFC', borderRadius: 12, padding: 16, border: '1px solid #E2E8F0' }}>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', textTransform: 'uppercase', marginBottom: 10 }}>Assigned Batches</h4>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {assignedBatchList.length > 0 ? (
-                    assignedBatchList.map(b => (
-                      <span key={b.id} className="badge badge-gray" style={{ fontSize: 12, padding: '4px 10px' }}>
-                        {b.name} ({b.room || 'Room 101'})
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No active batches assigned</span>
-                  )}
+                <div style={{ background: '#F8FAFC', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>OFFICIAL EMAIL</span>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginTop: 4 }}>{teacher.email || 'None on file'}</div>
                 </div>
               </div>
             </div>
@@ -156,13 +125,24 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {assignedBatchList.length > 0 ? (
                 assignedBatchList.map(batch => (
-                  <div key={batch.id} style={{ background: '#FFFFFF', borderRadius: 12, padding: 16, border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div
+                    key={batch.id}
+                    style={{
+                      background: '#F8FAFC',
+                      padding: 16,
+                      borderRadius: 12,
+                      border: '1px solid #E2E8F0',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
                     <div>
                       <span className="badge badge-blue">{batch.code || batch.classLevel || 'Class'}</span>
                       <h4 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 4 }}>{batch.name}</h4>
                       <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 12 }}>
-                        <span>📍 {batch.room || 'Room 101'}</span>
-                        <span>⏰ {batch.schedule || batch.timing || '09:00 AM - 11:00 AM'}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} color="#64748B" /> {batch.room || 'Room 101'}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} color="#64748B" /> {batch.schedule || batch.timing || '09:00 AM - 11:00 AM'}</span>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -191,7 +171,7 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
                         <th>Student Name</th>
                         <th>Reg No</th>
                         <th>Class / Batch</th>
-                        <th>Fee Status</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -201,11 +181,25 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
                           <td><span style={{ fontSize: 12, color: '#64748B' }}>{student.regNo}</span></td>
                           <td><span className="badge badge-gray">{student.gradeBatch}</span></td>
                           <td>
-                            {(student.dueBalance || 0) <= 0 ? (
-                              <span className="badge badge-green">Paid</span>
-                            ) : (
-                              <span className="badge badge-red">Unpaid</span>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStudentForConduct(student)}
+                              style={{
+                                background: '#EFF6FF',
+                                border: '1px solid #BFDBFE',
+                                color: '#1D4ED8',
+                                borderRadius: 6,
+                                padding: '4px 10px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                            >
+                              <MessageSquare size={13} /> Conduct & Profile
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -222,6 +216,13 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
           )}
         </div>
       </div>
+
+      {selectedStudentForConduct && (
+        <StudentProfileDrawer
+          student={selectedStudentForConduct}
+          onClose={() => setSelectedStudentForConduct(null)}
+        />
+      )}
     </div>
   );
 };

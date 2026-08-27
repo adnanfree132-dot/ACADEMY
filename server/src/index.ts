@@ -8,6 +8,14 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught Exception in Express Server:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled Rejection in Express Server:', reason);
+});
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 

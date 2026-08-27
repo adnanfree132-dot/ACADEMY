@@ -8,6 +8,8 @@ import { TeachersView } from './pages/TeachersView';
 import { BatchesView } from './pages/BatchesView';
 import { SubjectsView } from './pages/SubjectsView';
 import { AttendanceView } from './pages/AttendanceView';
+import { StaffAttendanceView } from './pages/StaffAttendanceView';
+import { StaffPayrollView } from './pages/StaffPayrollView';
 import { FeeManagementView } from './pages/FeeManagementView';
 import { CrmView } from './pages/CrmView';
 import { AnnouncementsView } from './pages/AnnouncementsView';
@@ -24,19 +26,9 @@ import { RegisterStudentModal } from './components/RegisterStudentModal';
 import { CreateBatchModal } from './components/CreateBatchModal';
 import { RecordFeeModal } from './components/RecordFeeModal';
 
-import { 
-  INITIAL_STUDENTS, 
-  INITIAL_TEACHERS, 
-  INITIAL_BATCHES, 
-  INITIAL_TRANSACTIONS, 
-  INITIAL_LEADS, 
-  INITIAL_ANNOUNCEMENTS, 
-  INITIAL_SUBJECTS 
-} from './mockData';
-
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'));
-  const [isAppLoading, setIsAppLoading] = useState<boolean>(false);
+  const [isAppLoading, setIsAppLoading] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,15 +39,15 @@ export function App() {
   const [isMobileAddBatchOpen, setIsMobileAddBatchOpen] = useState(false);
   const [isMobileRecordFeeOpen, setIsMobileRecordFeeOpen] = useState(false);
 
-  // Main State (Connected to Express API Backend with rich baseline datasets)
+  // Main State (Live Database Connected via Express REST API)
   const [dashboardStats, setDashboardStats] = useState<any>(null);
-  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
-  const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
-  const [batches, setBatches] = useState<Batch[]>(INITIAL_BATCHES);
-  const [transactions, setTransactions] = useState<FeeTransaction[]>(INITIAL_TRANSACTIONS);
-  const [leads, setLeads] = useState<CRMLead[]>(INITIAL_LEADS);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
-  const [subjects, setSubjects] = useState<Subject[]>(INITIAL_SUBJECTS);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [transactions, setTransactions] = useState<FeeTransaction[]>([]);
+  const [leads, setLeads] = useState<CRMLead[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
 
   // Sync with Backend API
   const refreshDataFromBackend = async () => {
@@ -92,24 +84,20 @@ export function App() {
 
       if (Array.isArray(backendStudents) && backendStudents.length > 0) {
         setStudents(backendStudents.map((s: any, idx: number) => {
-          const totalFee = s.feePlan?.monthly_amount || 10000;
-          let dueBalance = totalFee;
-          if (idx % 3 === 0) {
-            dueBalance = 0;
-          } else if (idx % 3 === 1) {
-            dueBalance = totalFee;
-          } else {
-            dueBalance = totalFee * 2.5;
-          }
-
-          if (s.dueBalance !== undefined) {
-            dueBalance = s.dueBalance;
-          }
-
-          const paidFee = Math.max(0, (totalFee * 3) - dueBalance);
+          const totalFee = s.totalFee !== undefined ? s.totalFee : (s.feePlan?.monthly_amount || 10000);
+          const dueBalance = s.dueBalance !== undefined ? s.dueBalance : 0;
+          const paidFee = s.paidFee !== undefined ? s.paidFee : Math.max(0, totalFee - dueBalance);
 
           const grades = ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
           const gradeBatch = s.class?.name || grades[idx % grades.length];
+
+          let studentStatus: 'Active' | 'On Leave' | 'Graduated' | 'Suspended' | 'Left' = 'Active';
+          const sLower = (s.status || '').toLowerCase();
+          if (sLower === 'active') studentStatus = 'Active';
+          else if (sLower.includes('leave') || sLower === 'inactive') studentStatus = 'On Leave';
+          else if (sLower.includes('graduat') || sLower === 'alumni') studentStatus = 'Graduated';
+          else if (sLower.includes('suspend')) studentStatus = 'Suspended';
+          else if (sLower.includes('left') || sLower.includes('withdraw') || sLower.includes('remov')) studentStatus = 'Left';
 
           return {
             id: s.id,
@@ -119,13 +107,23 @@ export function App() {
             phone: s.phone,
             email: s.email || '',
             gradeBatch,
-            gender: s.gender as any || 'Male',
-            status: s.status === 'active' ? 'Active' : 'Left',
+            gender: (s.gender as any) || 'Male',
+            status: studentStatus,
+            statusReason: s.status_reason,
+            statusRemarks: s.status_remarks,
+            statusUpdatedAt: s.status_updated_at,
+            leavingDate: s.leaving_date ? s.leaving_date.split('T')[0] : undefined,
+            isFeePaused: s.is_fee_paused,
+            baseMonthlyFee: s.baseMonthlyFee || s.feePlan?.monthly_amount || 0,
+            scholarshipType: s.scholarshipType || s.feePlan?.scholarship_type || 'none',
+            scholarshipValue: s.scholarshipValue || s.feePlan?.scholarship_value || 0,
+            scholarshipReason: s.scholarshipReason || s.feePlan?.scholarship_reason || null,
+            billingAnchorDay: s.billingAnchorDay || s.feePlan?.billing_anchor_day || 1,
             totalFee,
             paidFee,
             dueBalance,
             dueDate: '2026-09-05',
-            isDefaulter: dueBalance > totalFee
+            isDefaulter: s.isDefaulter !== undefined ? s.isDefaulter : dueBalance > 0
           };
         }));
       }
@@ -190,19 +188,18 @@ export function App() {
     }
   }, [isAuthenticated]);
 
-  // Action Handlers (Persisted to Express API & SQLite Database)
+  // --- Optimistic Instant-Reflect Handlers (0ms UI Updates + Silent Background API) ---
   const handleAddStudent = async (newStudentData: Omit<Student, 'id' | 'regNo' | 'paidFee' | 'dueBalance' | 'isDefaulter'>) => {
-    // 1. Optimistic UI Update (Instant)
+    // 1. Optimistic UI Update (Instant 0ms)
     const tempStudent: Student = {
       ...newStudentData,
       id: `stu-${Date.now()}`,
-      regNo: `ACAD-TEMP`,
+      regNo: `STD-${Date.now().toString().slice(-4)}`,
       paidFee: 0,
       dueBalance: newStudentData.totalFee,
       isDefaulter: false
     };
-    setStudents([tempStudent, ...students]);
-    setDashboardStats((prev: any) => prev ? { ...prev, totalStudents: prev.totalStudents + 1 } : null);
+    setStudents(prev => [tempStudent, ...prev]);
 
     // 2. Background Sync
     try {
@@ -210,12 +207,13 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error adding student to backend:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleEditStudent = async (updatedStudent: Student) => {
-    // 1. Optimistic UI Update
-    setStudents(students.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+    // 1. Optimistic UI Update (Instant 0ms)
+    setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
     
     // 2. Background Sync
     try {
@@ -226,44 +224,42 @@ export function App() {
         email: updatedStudent.email,
         status: updatedStudent.status.toLowerCase(),
         gender: updatedStudent.gender
-      }).catch(err => console.warn('Mock API update warning:', err));
+      });
+      refreshDataFromBackend();
     } catch (err) {
       console.error('Error updating student to backend:', err);
+      refreshDataFromBackend();
     }
   };
 
-  const handleDeleteStudent = async (studentId: string) => {
-    // 1. Optimistic UI Update - Remove from UI to give immediate visual feedback of deletion
-    // The backend handles the actual soft-archive logic in the DB to preserve fee history.
-    setStudents(students.filter(s => s.id !== studentId));
-    setDashboardStats((prev: any) => prev ? { ...prev, totalStudents: Math.max(0, prev.totalStudents - 1) } : null);
+  const handleDeleteStudent = async (studentId: string, mode: 'soft' | 'hard' = 'soft') => {
+    // 1. Optimistic UI Update (Instant 0ms removal from all views & dashboard)
+    setStudents(prev => prev.filter(s => s.id !== studentId));
 
     // 2. Background Sync
     try {
-      await api.deleteStudent(studentId).catch(err => console.warn('Mock API delete warning:', err));
+      await api.deleteStudent(studentId, mode);
     } catch (err) {
-      console.error('Error deleting student to backend:', err);
+      console.error('Error deleting student on backend:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleAddPayment = async (paymentData: Omit<FeeTransaction, 'id' | 'receiptNo'>) => {
-    // 1. Optimistic UI Update
+    // 1. Optimistic UI Update (Instant 0ms)
     const tempPayment: FeeTransaction = {
       ...paymentData,
       id: `txn-${Date.now()}`,
-      receiptNo: `REC-TEMP`
+      receiptNo: `REC-${Date.now().toString().slice(-4)}`
     };
-    setTransactions([tempPayment, ...transactions]);
-    setDashboardStats((prev: any) => prev ? { 
-      ...prev, 
-      totalCollected: prev.totalCollected + paymentData.amount,
-      totalPending: Math.max(0, prev.totalPending - paymentData.amount)
-    } : null);
+    setTransactions(prev => [tempPayment, ...prev]);
     
-    setStudents(students.map(s => {
+    setStudents(prev => prev.map(s => {
       if (s.id === paymentData.studentId) {
+        const discountVal = paymentData.discount || 0;
         const newPaid = (s.paidFee || 0) + paymentData.amount;
-        return { ...s, paidFee: newPaid, dueBalance: s.totalFee - newPaid, isDefaulter: (s.totalFee - newPaid) > 0 };
+        const newDue = Math.max(0, s.dueBalance - paymentData.amount - discountVal);
+        return { ...s, paidFee: newPaid, dueBalance: newDue, isDefaulter: newDue > 0 };
       }
       return s;
     }));
@@ -274,24 +270,27 @@ export function App() {
         studentId: paymentData.studentId,
         amount: paymentData.amount,
         method: paymentData.method.toLowerCase(),
-        notes: paymentData.notes
+        notes: paymentData.notes,
+        discount: paymentData.discount,
+        discountRemarks: paymentData.discountRemarks,
+        invoiceId: (paymentData as any).invoiceId
       });
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error recording payment to backend:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleAddTeacher = async (teacherData: Omit<Teacher, 'id' | 'assignedSubjects' | 'assignedBatches'>) => {
-    // 1. Optimistic UI Update
+    // 1. Optimistic UI Update (Instant 0ms)
     const tempTeacher: Teacher = {
       ...teacherData,
       id: `tch-${Date.now()}`,
       assignedSubjects: ['Pending'],
       assignedBatches: ['Pending']
     };
-    setTeachers([tempTeacher, ...teachers]);
-    setDashboardStats((prev: any) => prev ? { ...prev, totalTeachers: prev.totalTeachers + 1 } : null);
+    setTeachers(prev => [tempTeacher, ...prev]);
 
     // 2. Background Sync
     try {
@@ -304,17 +303,17 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error adding teacher:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleDeleteTeacher = async (teacherId: string) => {
     setTeachers(prev => prev.filter(t => t.id !== teacherId));
-    setDashboardStats((prev: any) => prev ? { ...prev, totalTeachers: Math.max(0, prev.totalTeachers - 1) } : null);
     try {
       await api.deleteTeacher(teacherId);
-      refreshDataFromBackend();
     } catch (err) {
       console.error('Error deleting teacher:', err);
+      refreshDataFromBackend();
     }
   };
 
@@ -330,18 +329,18 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error updating teacher:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleAddBatch = async (batchData: Omit<Batch, 'id' | 'studentsCount'>) => {
-    // 1. Optimistic UI Update
+    // 1. Optimistic UI Update (Instant 0ms)
     const tempBatch: Batch = {
       ...batchData,
       id: `batch-${Date.now()}`,
       studentsCount: 0
     };
-    setBatches([...batches, tempBatch]);
-    setDashboardStats((prev: any) => prev ? { ...prev, totalBatches: prev.totalBatches + 1 } : null);
+    setBatches(prev => [...prev, tempBatch]);
 
     // 2. Background Sync
     try {
@@ -355,17 +354,17 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error adding batch to backend:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleDeleteBatch = async (batchId: string) => {
     setBatches(prev => prev.filter(b => b.id !== batchId));
-    setDashboardStats((prev: any) => prev ? { ...prev, totalBatches: Math.max(0, prev.totalBatches - 1) } : null);
     try {
       await api.deleteBatch(batchId);
-      refreshDataFromBackend();
     } catch (err) {
       console.error('Error deleting batch from backend:', err);
+      refreshDataFromBackend();
     }
   };
 
@@ -379,17 +378,18 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error updating batch in backend:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleAddAnnouncement = async (announcementData: Omit<Announcement, 'id' | 'date'>) => {
-    // 1. Optimistic UI Update
+    // 1. Optimistic UI Update (Instant 0ms)
     const tempAnn: Announcement = {
       ...announcementData,
       id: `ann-${Date.now()}`,
       date: new Date().toISOString().split('T')[0]
     };
-    setAnnouncements([tempAnn, ...announcements]);
+    setAnnouncements(prev => [tempAnn, ...prev]);
 
     // 2. Background Sync
     try {
@@ -397,18 +397,19 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error adding announcement:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleAddLead = async (leadData: Omit<CRMLead, 'id' | 'date' | 'status'>) => {
-    // 1. Optimistic UI Update
+    // 1. Optimistic UI Update (Instant 0ms)
     const tempLead: CRMLead = {
       ...leadData,
       id: `lead-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       status: 'New'
     };
-    setLeads([tempLead, ...leads]);
+    setLeads(prev => [tempLead, ...prev]);
 
     // 2. Background Sync
     try {
@@ -416,6 +417,53 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error adding inquiry:', err);
+      refreshDataFromBackend();
+    }
+  };
+
+  const handleAddSubject = async (subjectData: { name: string; code: string }) => {
+    // 1. Optimistic UI Update (Instant 0ms)
+    const tempSubject: Subject = {
+      id: `subj-${Date.now()}`,
+      name: subjectData.name,
+      code: subjectData.code
+    };
+    setSubjects(prev => [tempSubject, ...prev]);
+
+    // 2. Background Sync
+    try {
+      await api.createSubject(subjectData);
+      refreshDataFromBackend();
+    } catch (err) {
+      console.error('Error adding subject:', err);
+      refreshDataFromBackend();
+    }
+  };
+
+  const handleEditSubject = async (subjectId: string, subjectData: { name: string; code: string }) => {
+    // 1. Optimistic UI Update (Instant 0ms)
+    setSubjects(prev => prev.map(s => s.id === subjectId ? { ...s, ...subjectData } : s));
+
+    // 2. Background Sync
+    try {
+      await api.updateSubject(subjectId, subjectData);
+      refreshDataFromBackend();
+    } catch (err) {
+      console.error('Error updating subject:', err);
+      refreshDataFromBackend();
+    }
+  };
+
+  const handleDeleteSubject = async (subjectId: string) => {
+    // 1. Optimistic UI Update (Instant 0ms)
+    setSubjects(prev => prev.filter(s => s.id !== subjectId));
+
+    // 2. Background Sync
+    try {
+      await api.deleteSubject(subjectId);
+    } catch (err) {
+      console.error('Error deleting subject:', err);
+      refreshDataFromBackend();
     }
   };
 
@@ -433,23 +481,29 @@ export function App() {
     }
   };
 
-  const handleBulkDelete = async (studentIds: string[]) => {
-    setStudents(students.filter(s => !studentIds.includes(s.id)));
+  const handleBulkDelete = async (studentIds: string[], mode: 'soft' | 'hard' = 'soft') => {
+    // 1. Optimistic UI Update (Instant 0ms)
+    setStudents(prev => prev.filter(s => !studentIds.includes(s.id)));
+
+    // 2. Background Sync
     try {
-      await api.bulkDeleteStudents(studentIds);
-      refreshDataFromBackend();
+      await api.bulkDeleteStudents(studentIds, mode);
     } catch (err) {
       console.error('Bulk delete error:', err);
+      refreshDataFromBackend();
     }
   };
 
   const handleBulkTransfer = async (studentIds: string[], targetBatch: string) => {
-    setStudents(students.map(s => studentIds.includes(s.id) ? { ...s, gradeBatch: targetBatch } : s));
+    // 1. Optimistic UI Update (Instant 0ms)
+    setStudents(prev => prev.map(s => studentIds.includes(s.id) ? { ...s, gradeBatch: targetBatch } : s));
+
+    // 2. Background Sync
     try {
       await api.bulkTransferStudents(studentIds, targetBatch);
-      refreshDataFromBackend();
     } catch (err) {
       console.error('Bulk transfer error:', err);
+      refreshDataFromBackend();
     }
   };
 
@@ -480,6 +534,7 @@ export function App() {
             onBulkImport={handleBulkImport}
             onBulkDelete={handleBulkDelete}
             onBulkTransfer={handleBulkTransfer}
+            onRefreshStudents={refreshDataFromBackend}
           />
         );
       case 'teachers':
@@ -511,6 +566,9 @@ export function App() {
         return (
           <SubjectsView
             subjects={subjects}
+            onAddSubject={handleAddSubject}
+            onEditSubject={handleEditSubject}
+            onDeleteSubject={handleDeleteSubject}
             onRefresh={refreshDataFromBackend}
           />
         );
@@ -521,6 +579,10 @@ export function App() {
             students={students}
           />
         );
+      case 'staff_attendance':
+        return <StaffAttendanceView />;
+      case 'staff_payroll':
+        return <StaffPayrollView />;
       case 'fees':
         return (
           <FeeManagementView
@@ -539,7 +601,7 @@ export function App() {
       case 'timetable':
         return <TimetableView />;
       case 'exams':
-        return <ExamsView students={students} />;
+        return <ExamsView students={students} batches={batches} />;
       case 'homework':
         return <HomeworkView />;
       case 'settings':
@@ -571,6 +633,8 @@ export function App() {
     batches: 'Classes & Batches',
     subjects: 'Course Subjects',
     attendance: 'Attendance Portal',
+    staff_attendance: 'Staff Geolocation Attendance',
+    staff_payroll: 'Staff Payroll & Salary Management',
     fees: 'Fee Management',
     crm: 'Inquiries & CRM',
     announcements: 'Announcements',

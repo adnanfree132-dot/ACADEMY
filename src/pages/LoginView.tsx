@@ -47,41 +47,42 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>Username / Email</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>Username / Email / Staff ID</label>
             <input
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-strong)', outline: 'none', fontSize: '15px' }}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '14px', background: '#FFFFFF' }}
               required
             />
           </div>
 
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-strong)', outline: 'none', fontSize: '15px' }}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '14px', background: '#FFFFFF' }}
               required
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
-            style={{ 
-              width: '100%', 
-              padding: '12px', 
-              backgroundColor: 'var(--color-primary-500)', 
-              color: '#fff', 
-              border: 'none', 
-              borderRadius: '8px', 
-              fontSize: '15px', 
-              fontWeight: 600, 
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: '#0F172A',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1
+              opacity: loading ? 0.7 : 1,
+              transition: 'background-color 0.15s ease'
             }}
           >
             {loading ? 'Signing in...' : 'Sign In'}

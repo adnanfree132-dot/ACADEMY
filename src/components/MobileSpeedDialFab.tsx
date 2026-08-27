@@ -35,9 +35,9 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
               onAddStudent();
             }}
           >
-            <span>+ Add Student</span>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#F0FDF4', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <UserPlus size={15} />
+            <span>Add Student</span>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <UserPlus size={15} color="#475569" />
             </div>
           </button>
 
@@ -49,9 +49,9 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
               onAddBatch();
             }}
           >
-            <span>+ Create Batch</span>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <FolderPlus size={15} />
+            <span>Create Batch</span>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FolderPlus size={15} color="#475569" />
             </div>
           </button>
 
@@ -63,9 +63,9 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
               onRecordPayment();
             }}
           >
-            <span>💵 Record Fee</span>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#EEF2FF', color: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Receipt size={15} />
+            <span>Record Fee</span>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Receipt size={15} color="#475569" />
             </div>
           </button>
         </div>

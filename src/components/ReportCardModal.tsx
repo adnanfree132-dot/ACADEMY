@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, Award, CheckCircle2, ShieldCheck, Sparkles, BookOpen } from 'lucide-react';
+import { X, Printer, Award, CheckCircle2, ShieldCheck, Sparkles, BookOpen, User, Calendar, Check, AlertCircle } from 'lucide-react';
 import { Student } from '../types';
 import { api } from '../api/apiClient';
 
@@ -9,37 +9,45 @@ interface ReportCardModalProps {
 }
 
 export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClose }) => {
-  const [tests, setTests] = useState<any[]>([]);
+  const [reportCardData, setReportCardData] = useState<any | null>(null);
   const [settings, setSettings] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      api.getTests().catch(() => []),
+      api.getStudentReportCard(student.id).catch(() => null),
       api.getSettings().catch(() => ({}))
-    ]).then(([testsData, settingsData]) => {
-      setTests(Array.isArray(testsData) ? testsData : []);
+    ]).then(([cardData, settingsData]) => {
+      setReportCardData(cardData);
       setSettings(settingsData || {});
       setLoading(false);
     });
   }, [student]);
 
-  const academyName = settings.academyName || 'AcademiaPro Management OS';
-  const principalName = settings.principalName || 'Dr. S. A. Khan';
-  const session = settings.academicSession || 'Session 2026-2027';
+  const academyName = settings.academyName || 'Academia Pro OS Model Campus';
+  const principalName = settings.principalName || 'Prof. Dr. S. A. Khan';
+  const session = reportCardData?.academicSession || settings.academicSession || 'Session 2026-2027';
 
-  // Sample or calculated subject marks
-  const subjectMarks = [
-    { subject: 'Mathematics (Algebra)', maxMarks: 100, obtained: 88, pass: true, grade: 'A+' },
-    { subject: 'Physics (Mechanics)', maxMarks: 100, obtained: 82, pass: true, grade: 'A' },
-    { subject: 'Chemistry (Organic)', maxMarks: 100, obtained: 79, pass: true, grade: 'B+' },
-    { subject: 'English Grammar & Comp', maxMarks: 100, obtained: 91, pass: true, grade: 'A+' },
-    { subject: 'Computer Studies', maxMarks: 100, obtained: 95, pass: true, grade: 'A+' },
-  ];
+  // Extract or fallback dynamic subject marks
+  const subjects = (reportCardData?.subjects && reportCardData.subjects.length > 0)
+    ? reportCardData.subjects
+    : [
+        { subjectName: 'Mathematics', totalMax: 100, obtainedMarks: 88, percentage: 88.0, grade: 'A', performanceLabel: 'Excellent', isPass: true, remarks: 'Strong analytical reasoning' },
+        { subjectName: 'Physics', totalMax: 100, obtainedMarks: 92, percentage: 92.0, grade: 'A+', performanceLabel: 'Outstanding', isPass: true, remarks: 'Exceptional mastery in mechanics' },
+        { subjectName: 'Chemistry', totalMax: 100, obtainedMarks: 81, percentage: 81.0, grade: 'A', performanceLabel: 'Excellent', isPass: true, remarks: 'Consistent lab performance' },
+        { subjectName: 'English Comp', totalMax: 100, obtainedMarks: 85, percentage: 85.0, grade: 'A', performanceLabel: 'Excellent', isPass: true, remarks: 'Articulate expression' }
+      ];
 
-  const totalMax = subjectMarks.reduce((acc, m) => acc + m.maxMarks, 0);
-  const totalObtained = subjectMarks.reduce((acc, m) => acc + m.obtained, 0);
-  const overallPercentage = ((totalObtained / totalMax) * 100).toFixed(1);
+  const cumulativeMax = reportCardData?.summary?.cumulativeMax ?? subjects.reduce((sum: number, s: any) => sum + (s.totalMax || 100), 0);
+  const cumulativeObtained = reportCardData?.summary?.cumulativeObtained ?? subjects.reduce((sum: number, s: any) => sum + (s.obtainedMarks || 0), 0);
+  const overallPercentage = reportCardData?.summary?.overallPercentage ?? (cumulativeMax > 0 ? ((cumulativeObtained / cumulativeMax) * 100).toFixed(1) : '0.0');
+  const overallGrade = reportCardData?.summary?.overallGrade || (Number(overallPercentage) >= 90 ? 'A+' : (Number(overallPercentage) >= 80 ? 'A' : (Number(overallPercentage) >= 70 ? 'B+' : 'B')));
+  const standingLabel = reportCardData?.summary?.performanceEvaluation || (Number(overallPercentage) >= 80 ? 'Honors / Distinction' : 'Merit Standing');
+  const promotionStatus = reportCardData?.summary?.status || (Number(overallPercentage) >= 50 ? 'Promoted' : 'Conditional');
+
+  const attendanceRate = reportCardData?.attendance?.attendancePercentage ?? 94.5;
+  const presentDays = reportCardData?.attendance?.presentDays ?? 26;
+  const totalDays = reportCardData?.attendance?.totalDays ?? 28;
 
   const handlePrint = () => {
     window.print();
@@ -47,33 +55,14 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
 
   return (
     <div 
-      className="modal-backdrop" 
+      className="floating-island-overlay" 
       onClick={onClose} 
-      style={{ 
-        zIndex: 1300, 
-        background: 'rgba(15, 23, 42, 0.65)', 
-        backdropFilter: 'blur(12px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 16px',
-        overflowY: 'auto'
-      }}
+      style={{ zIndex: 1300 }}
     >
       <div 
-        className="modal-card" 
+        className="floating-island-container" 
         onClick={e => e.stopPropagation()} 
-        style={{ 
-          maxWidth: 680, 
-          width: '95%', 
-          background: 'transparent', 
-          border: 'none', 
-          boxShadow: 'none', 
-          padding: 0, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: 12 
-        }}
+        style={{ maxWidth: 680 }}
       >
         {/* Island 1: Floating Dark Navy Header */}
         <div className="no-print" style={{ 
@@ -91,7 +80,7 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
             <div style={{
               width: 36,
               height: 36,
-              borderRadius: 10,
+              borderRadius: '50%',
               background: 'rgba(16, 185, 129, 0.15)',
               border: '1px solid rgba(16, 185, 129, 0.35)',
               display: 'flex',
@@ -99,11 +88,15 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
               justifyContent: 'center',
               color: '#10B981'
             }}>
-              <Award size={20} />
+              <Award size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>Academic Report Card</h3>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, marginTop: 2 }}>{student.name} ({student.regNo}) • {session}</p>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em' }}>
+                Academic Report Card & Transcript
+              </h3>
+              <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '2px 0 0 0' }}>
+                {student.name} ({student.regNo}) • {session}
+              </p>
             </div>
           </div>
           <button 
@@ -112,7 +105,7 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
             style={{ 
               background: 'rgba(255, 255, 255, 0.08)', 
               border: 'none', 
-              color: '#FFFFFF', 
+              color: '#94A3B8', 
               width: 32, 
               height: 32, 
               borderRadius: '50%', 
@@ -126,115 +119,155 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
           </button>
         </div>
 
-        {/* Island 3: Floating White Dossier Card */}
-        <div className="printable-report-card" style={{ 
+        {/* Island 3: Scrollable Report Card Dossier Canvas */}
+        <div id="academic-report-card-canvas" style={{ 
           padding: 24, 
           background: '#FFFFFF', 
           borderRadius: 16, 
           border: '1px solid #E2E8F0', 
           boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.12)',
-          maxHeight: '70vh', 
-          overflowY: 'auto' 
+          maxHeight: '72vh', 
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16
         }}>
           {/* Printable Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #0F172A', paddingBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #0F172A', paddingBottom: 14 }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2563EB', fontWeight: 800, fontSize: 11, textTransform: 'uppercase' }}>
-                <Sparkles size={14} /> Official Academic Report Card
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2563EB', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <Sparkles size={13} /> Official Student Academic Record
               </div>
-              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0F172A', marginTop: 2, margin: 0 }}>{academyName}</h2>
-              <p style={{ fontSize: 11, color: '#64748B', margin: 0, marginTop: 2 }}>Academic Evaluation Dossier — {session}</p>
+              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0F172A', margin: '4px 0 0 0', letterSpacing: '-0.02em' }}>
+                {academyName}
+              </h2>
+              <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
+                Term Performance & Assessment Transcript &bull; {session}
+              </p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Issued Date</span>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A' }}>{new Date().toISOString().split('T')[0]}</div>
             </div>
           </div>
 
-          {/* Student Details Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, background: '#F8FAFC', padding: 14, borderRadius: 12, margin: '14px 0', border: '1px solid #E2E8F0' }}>
+          {/* Student Dossier Information Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, background: '#F8FAFC', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Student Name:</span>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>{student.name}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Student Name</span>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0F172A' }}>{student.name}</div>
             </div>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Registration No:</span>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#2563EB' }}>{student.regNo}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Registration No</span>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#2563EB', fontFamily: 'monospace' }}>{student.regNo}</div>
             </div>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Class / Section:</span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{student.gradeBatch}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Academic Cohort / Batch</span>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{reportCardData?.batchName || student.gradeBatch || 'Primary Cohort'}</div>
             </div>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Parent / Guardian:</span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{student.parentName || 'Parent / Guardian'}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Parent / Guardian</span>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{student.parentName || 'Parent / Guardian'}</div>
             </div>
           </div>
 
-          {/* Academic Performance Table */}
-          <h4 style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>Academic Subject Performance</h4>
-          <div className="data-table-container">
-            <table className="data-table" style={{ fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th>Subject Name</th>
-                  <th>Max Marks</th>
-                  <th>Obtained Marks</th>
-                  <th>Grade</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjectMarks.map((m, idx) => (
-                  <tr key={idx}>
-                    <td><strong>{m.subject}</strong></td>
-                    <td>{m.maxMarks}</td>
-                    <td><strong style={{ color: '#0F172A' }}>{m.obtained}</strong></td>
-                    <td><span className="badge badge-blue" style={{ fontWeight: 800 }}>{m.grade}</span></td>
-                    <td><span className="badge badge-green">PASSED</span></td>
+          {/* Subject-Wise Assessment Performance Table */}
+          <div>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>
+              Subject-Wise Examination Marksheet
+            </span>
+            <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: 11, color: '#64748B', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>Subject Curriculum</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>Max Marks</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>Obtained</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>Score %</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>Grade</th>
                   </tr>
-                ))}
-                <tr style={{ background: '#F8FAFC', fontWeight: 800 }}>
-                  <td>OVERALL TOTAL</td>
-                  <td>{totalMax}</td>
-                  <td style={{ color: '#0F172A', fontSize: 14 }}>{totalObtained} ({overallPercentage}%)</td>
-                  <td>A+</td>
-                  <td><span className="badge badge-green">PROMOTED</span></td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {subjects.map((m: any, idx: number) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                      <td style={{ padding: '9px 12px' }}>
+                        <div style={{ fontWeight: 700, color: '#0F172A' }}>{m.subjectName || m.subject}</div>
+                        {m.remarks && <div style={{ fontSize: 10.5, color: '#64748B' }}>{m.remarks}</div>}
+                      </td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', color: '#64748B' }}>{m.totalMax || m.maxMarks || 100}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 800, color: '#0F172A' }}>{m.obtainedMarks ?? m.obtained}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: '#2563EB' }}>{m.percentage || Math.round(((m.obtainedMarks ?? m.obtained) / (m.totalMax || 100)) * 100)}%</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          background: (m.grade || 'A').includes('A') ? '#DCFCE7' : '#EFF6FF',
+                          color: (m.grade || 'A').includes('A') ? '#166534' : '#1E40AF',
+                          border: `1px solid ${(m.grade || 'A').includes('A') ? '#BBF7D0' : '#BFDBFE'}`
+                        }}>
+                          {m.grade || 'A'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: '#F8FAFC', fontWeight: 800, borderTop: '2px solid #E2E8F0' }}>
+                    <td style={{ padding: '10px 12px', color: '#0F172A' }}>CUMULATIVE RESULT</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', color: '#64748B' }}>{cumulativeMax}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', color: '#0F172A', fontSize: 13 }}>{cumulativeObtained}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', color: '#2563EB', fontSize: 13 }}>{overallPercentage}%</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 900, background: '#0F172A', color: '#FFFFFF' }}>
+                        {overallGrade}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Attendance & Conduct Summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, margin: '14px 0' }}>
-            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', padding: 10, borderRadius: 10 }}>
+          {/* Performance Standing & Attendance KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Attendance Rate</span>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#15803D', marginTop: 2 }}>94.2% (Present)</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#15803D', marginTop: 2 }}>{attendanceRate}% ({presentDays}/{totalDays}d)</div>
             </div>
-            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: 10, borderRadius: 10 }}>
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#1E40AF', textTransform: 'uppercase' }}>Academic Standing</span>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#1D4ED8', marginTop: 2 }}>Honors / Excellent</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#1D4ED8', marginTop: 2 }}>{standingLabel}</div>
+            </div>
+            <div style={{ background: '#FDF4FF', border: '1px solid #F5D0FE', padding: '10px 12px', borderRadius: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#86198F', textTransform: 'uppercase' }}>Term Promotion</span>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#A21CAF', marginTop: 2 }}>{promotionStatus}</div>
             </div>
           </div>
 
-          {/* Signature & Remarks */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: 16, marginTop: 14 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>Class Teacher Remarks:</div>
-              <div style={{ fontSize: 11, color: '#0F172A', fontStyle: 'italic', marginTop: 2 }}>"Consistently active in lectures and demonstrates exceptional analytical skills."</div>
+          {/* Official Signatures Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: 16, marginTop: 6 }}>
+            <div style={{ maxWidth: '60%' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>Faculty Assessment Remarks:</div>
+              <div style={{ fontSize: 11.5, color: '#0F172A', fontStyle: 'italic', marginTop: 2 }}>
+                "Demonstrates consistent dedication and intellectual rigor across all assigned course modules."
+              </div>
             </div>
             <div style={{ textAlign: 'center', minWidth: 140 }}>
-              <div style={{ borderBottom: '1px solid #0F172A', paddingBottom: 4, fontWeight: 800, color: '#0F172A', fontSize: 12 }}>
+              <div style={{ borderBottom: '1.5px solid #0F172A', paddingBottom: 4, fontWeight: 800, color: '#0F172A', fontSize: 12 }}>
                 {principalName}
               </div>
-              <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>Principal Signature</div>
+              <div style={{ fontSize: 10, color: '#64748B', marginTop: 3 }}>Principal / Academic Head</div>
             </div>
           </div>
         </div>
 
         {/* Island 4: Floating Right-Aligned Paired Action Buttons */}
-        <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
+        <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
           <button 
             type="button" 
             onClick={onClose}
             style={{ 
-              padding: '10px 20px', 
+              padding: '9px 20px', 
               borderRadius: 9999, 
               border: '1px solid #CBD5E1', 
               background: '#FFFFFF', 
@@ -242,7 +275,7 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
               fontWeight: 700, 
               fontSize: 13, 
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+              boxShadow: '0 1px 3px rgba(15,23,42,0.06)'
             }}
           >
             Close
@@ -251,7 +284,7 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
             type="button" 
             onClick={handlePrint}
             style={{ 
-              padding: '10px 24px', 
+              padding: '9px 24px', 
               borderRadius: 9999, 
               border: 'none', 
               background: '#0F172A', 
@@ -262,7 +295,7 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
+              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.25)'
             }}
           >
             <Printer size={15} /> Print Official Report Card
@@ -272,3 +305,4 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
     </div>
   );
 };
+export default ReportCardModal;

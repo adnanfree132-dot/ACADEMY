@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, UserCheck, ShieldAlert, Sparkles, UserPlus } from 'lucide-react';
 import { Batch, Teacher } from '../types';
 import { api } from '../api/apiClient';
+import { ModernSelect } from './ModernSelect';
+import { ModernDatePicker } from './ModernDatePicker';
 
 interface SubstituteTeacherModalProps {
   batch: Batch;
@@ -22,47 +24,33 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
   const [coTeacherId, setCoTeacherId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAssignSubstitute = async (e: React.FormEvent) => {
+  const handleAssignSubstitute = (e: React.FormEvent) => {
     e.preventDefault();
     const selectedTeacher = teachers.find(t => t.id === substituteTeacherId);
     if (!selectedTeacher) return;
 
-    setIsSubmitting(true);
-    try {
-      await api.assignSubstitute(batch.id, {
-        substituteTeacherId: selectedTeacher.id,
-        substituteName: selectedTeacher.name,
-        date: substituteDate,
-        reason
-      });
-      alert(`Substitute teacher ${selectedTeacher.name} assigned for ${substituteDate}!`);
-      if (onSaved) onSaved();
-      onClose();
-    } catch (err: any) {
-      alert(err.message || 'Error assigning substitute teacher');
-    } finally {
-      setIsSubmitting(false);
-    }
+    if (onSaved) onSaved();
+    onClose();
+
+    api.assignSubstitute(batch.id, {
+      substituteTeacherId: selectedTeacher.id,
+      substituteName: selectedTeacher.name,
+      date: substituteDate,
+      reason
+    }).catch(err => console.error('Error assigning substitute in background:', err));
   };
 
-  const handleAssignCoTeacher = async () => {
+  const handleAssignCoTeacher = () => {
     const selectedTeacher = teachers.find(t => t.id === coTeacherId);
     if (!selectedTeacher) return;
 
-    setIsSubmitting(true);
-    try {
-      await api.assignCoTeacher(batch.id, {
-        coTeacherId: selectedTeacher.id,
-        coTeacherName: selectedTeacher.name
-      });
-      alert(`Co-Teacher ${selectedTeacher.name} assigned to ${batch.name}!`);
-      if (onSaved) onSaved();
-      onClose();
-    } catch (err: any) {
-      alert(err.message || 'Error assigning co-teacher');
-    } finally {
-      setIsSubmitting(false);
-    }
+    if (onSaved) onSaved();
+    onClose();
+
+    api.assignCoTeacher(batch.id, {
+      coTeacherId: selectedTeacher.id,
+      coTeacherName: selectedTeacher.name
+    }).catch(err => console.error('Error assigning co-teacher in background:', err));
   };
 
   return (
@@ -168,18 +156,22 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
 
             <div className="form-group">
               <label className="form-label" style={{ fontSize: 12 }}>Select Substitute Faculty *</label>
-              <select className="form-select" value={substituteTeacherId} onChange={e => setSubstituteTeacherId(e.target.value)} required>
-                <option value="">— Select Available Teacher —</option>
-                {teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.name} ({t.qualification || 'Faculty'})</option>
-                ))}
-              </select>
+              <ModernSelect
+                value={substituteTeacherId}
+                onChange={setSubstituteTeacherId}
+                placeholder="— Select Available Teacher —"
+                options={teachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))}
+                zIndex={1200}
+              />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="form-group">
                 <label className="form-label" style={{ fontSize: 12 }}>Coverage Date *</label>
-                <input type="date" className="form-input" value={substituteDate} onChange={e => setSubstituteDate(e.target.value)} required />
+                <ModernDatePicker
+                  value={substituteDate}
+                  onChange={setSubstituteDate}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label" style={{ fontSize: 12 }}>Reason for Cover *</label>
@@ -218,12 +210,13 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
 
             <div className="form-group">
               <label className="form-label" style={{ fontSize: 12 }}>Co-Teacher / Teaching Assistant</label>
-              <select className="form-select" value={coTeacherId} onChange={e => setCoTeacherId(e.target.value)}>
-                <option value="">— Select Co-Teacher —</option>
-                {teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.name} ({t.qualification || 'Faculty'})</option>
-                ))}
-              </select>
+              <ModernSelect
+                value={coTeacherId}
+                onChange={setCoTeacherId}
+                placeholder="— Select Co-Teacher —"
+                options={teachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))}
+                zIndex={1200}
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>

@@ -1,14 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, DollarSign, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { Student, Batch } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  X,
+  User,
+  Phone,
+  Mail,
+  DollarSign,
+  CheckCircle2,
+  AlertTriangle,
+  UserCheck,
+  Clock,
+  Slash,
+  GraduationCap,
+  LogOut,
+  Award,
+  Percent,
+  Calculator
+} from 'lucide-react';
+import { Student, Batch, ScholarshipType, ScholarshipReason } from '../types';
 import { compressAndResizeImage } from '../utils/imageResizer';
+import { ModernSelect } from './ModernSelect';
+import { ModernDayOfMonthPicker } from './ModernDayOfMonthPicker';
+import {
+  calculateLiveFeeBreakdown,
+  formatCurrency
+} from '../utils/feeCalculator';
 
 interface EditStudentModalProps {
   isOpen: boolean;
   student: Student | null;
   batches: Batch[];
   onClose: () => void;
-  onSave: (updatedStudent: Student) => void;
+  onSave: (updatedStudent: any) => void;
 }
 
 export const EditStudentModal: React.FC<EditStudentModalProps> = ({
@@ -24,25 +46,45 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState<'Male' | 'Female'>('Male');
   const [batchSelect, setBatchSelect] = useState('');
-  const [totalFee, setTotalFee] = useState('');
   const [status, setStatus] = useState<'Active' | 'On Leave' | 'Graduated' | 'Suspended' | 'Left'>('Active');
   const [photoUrl, setPhotoUrl] = useState('');
+  
+  // Fee Terms & Scholarship State
+  const [baseMonthlyFee, setBaseMonthlyFee] = useState('5000');
+  const [scholarshipType, setScholarshipType] = useState<ScholarshipType>('none');
+  const [scholarshipValue, setScholarshipValue] = useState('0');
+  const [scholarshipReason, setScholarshipReason] = useState<ScholarshipReason>('merit');
+  const [anchorDay, setAnchorDay] = useState('1');
+
   const [feeWarning, setFeeWarning] = useState(false);
   const [capacityWarning, setCapacityWarning] = useState(false);
 
   useEffect(() => {
     if (student) {
-      setName(student.name);
-      setParentName(student.parentName);
-      setPhone(student.phone);
+      setName(student.name || '');
+      setParentName(student.parentName || '');
+      setPhone(student.phone || '');
       setEmail(student.email || '');
-      setGender(student.gender);
-      setBatchSelect(student.gradeBatch);
-      setTotalFee(student.totalFee.toString());
-      setStatus(student.status);
+      setGender(student.gender || 'Male');
+      setBatchSelect(student.gradeBatch || '');
+      setStatus(student.status || 'Active');
       setPhotoUrl(student.photoUrl || '');
+      
+      const initialFee = student.baseMonthlyFee || student.totalFee || 5000;
+      setBaseMonthlyFee(String(initialFee));
+      setScholarshipType(student.scholarshipType || 'none');
+      setScholarshipValue(String(student.scholarshipValue || 0));
+      setScholarshipReason(student.scholarshipReason || 'merit');
+      setAnchorDay(String(student.billingAnchorDay || 1));
     }
   }, [student]);
+
+  // Live Reactive Breakdown
+  const feeBreakdown = useMemo(() => {
+    const gross = Number(baseMonthlyFee) || 0;
+    const sVal = scholarshipType === 'none' ? 0 : Number(scholarshipValue) || 0;
+    return calculateLiveFeeBreakdown(gross, scholarshipType, sVal);
+  }, [baseMonthlyFee, scholarshipType, scholarshipValue]);
 
   if (!isOpen || !student) return null;
 
@@ -50,7 +92,6 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      // Compress and resize photo down to 300x300 1:1 ratio max ~20KB
       const compressedUrl = await compressAndResizeImage(file, 300, 300, 0.85);
       setPhotoUrl(compressedUrl);
     } catch (err) {
@@ -58,20 +99,10 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     }
   };
 
-  const handleBatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newBatch = e.target.value;
-    setBatchSelect(newBatch);
-    const targetBatch = batches.find(b => b.name === newBatch);
-    if (targetBatch && targetBatch.capacity && targetBatch.studentsCount >= targetBatch.capacity) {
-      setCapacityWarning(true);
-    } else {
-      setCapacityWarning(false);
-    }
-  };
-
   const handleFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTotalFee(e.target.value);
-    if (Number(e.target.value) !== student.totalFee) {
+    setBaseMonthlyFee(e.target.value);
+    const origFee = student.baseMonthlyFee || student.totalFee || 0;
+    if (Number(e.target.value) !== origFee) {
       setFeeWarning(true);
     } else {
       setFeeWarning(false);
@@ -85,19 +116,29 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     onSave({
       ...student,
       name,
+      fullName: name,
       parentName,
       phone,
       email,
       gender,
       gradeBatch: batchSelect,
       status,
-      totalFee: Number(totalFee) || student.totalFee,
+      baseMonthlyFee: Number(baseMonthlyFee) || 0,
+      totalFee: Number(baseMonthlyFee) || 0,
+      scholarshipType,
+      scholarship_type: scholarshipType,
+      scholarshipValue: scholarshipType === 'none' ? 0 : Number(scholarshipValue) || 0,
+      scholarship_value: scholarshipType === 'none' ? 0 : Number(scholarshipValue) || 0,
+      scholarshipReason: scholarshipType === 'none' ? undefined : scholarshipReason,
+      scholarship_reason: scholarshipType === 'none' ? undefined : scholarshipReason,
+      billingAnchorDay: Number(anchorDay) || 1,
+      billing_anchor_day: Number(anchorDay) || 1,
       photoUrl
     });
     
-    // reset warnings
     setFeeWarning(false);
     setCapacityWarning(false);
+    onClose();
   };
 
   return (
@@ -119,7 +160,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         className="modal-card" 
         onClick={e => e.stopPropagation()} 
         style={{ 
-          maxWidth: 560, 
+          maxWidth: 640, 
           width: '100%', 
           background: 'transparent', 
           border: 'none', 
@@ -144,8 +185,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               borderRadius: 10,
               background: 'rgba(16, 185, 129, 0.15)',
               border: '1px solid rgba(16, 185, 129, 0.35)',
@@ -158,7 +199,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             </div>
             <div>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>Edit Student Profile</h3>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, marginTop: 2 }}>{student.regNo} • Modify enrollment, profile & status</p>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, marginTop: 2 }}>
+                {student.regNo || student.admission_no || 'STU'} • Modify profile, scholarship terms & status
+              </p>
             </div>
           </div>
           <button 
@@ -193,7 +236,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         }}>
           <form id="edit-student-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             
-            {/* Card 1: Student Profile */}
+            {/* Section 1: Student Profile */}
             <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#2563EB', letterSpacing: '0.05em' }}>STUDENT PROFILE</div>
               
@@ -229,15 +272,20 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                 </div>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Gender</label>
-                  <select className="form-select" value={gender} onChange={e => setGender(e.target.value as any)}>
-                    <option value="Male">👨 Male</option>
-                    <option value="Female">👩 Female</option>
-                  </select>
+                  <ModernSelect
+                    value={gender}
+                    onChange={v => setGender(v as any)}
+                    options={[
+                      { value: 'Male', label: 'Male', icon: <User size={14} color="#475569" /> },
+                      { value: 'Female', label: 'Female', icon: <User size={14} color="#475569" /> }
+                    ]}
+                    zIndex={1250}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Parent / Guardian Details */}
+            {/* Section 2: Parent / Guardian Details */}
             <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#7C3AED', letterSpacing: '0.05em' }}>PARENT / GUARDIAN CONTACT</div>
               <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -258,20 +306,31 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
               </div>
             </div>
 
-            {/* Card 3: Academic, Fee & Status */}
+            {/* Section 3: Academic & Status */}
             <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', letterSpacing: '0.05em' }}>ACADEMIC & STATUS</div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', letterSpacing: '0.05em' }}>ACADEMIC BATCH & STATUS</div>
               
               <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Assigned Batch Section</label>
-                  <select className="form-select" value={batchSelect} onChange={handleBatchChange}>
-                    {batches.length > 0 ? (
-                      batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)
+                  <ModernSelect
+                    value={batchSelect}
+                    onChange={v => {
+                      setBatchSelect(v);
+                      const target = batches.find(b => b.name === v);
+                      if (target && target.studentsCount && target.capacity && target.studentsCount >= target.capacity) {
+                        setCapacityWarning(true);
+                      } else {
+                        setCapacityWarning(false);
+                      }
+                    }}
+                    options={batches.length > 0 ? (
+                      batches.map(b => ({ value: b.name, label: b.name }))
                     ) : (
-                      <option value={batchSelect}>{batchSelect}</option>
+                      [{ value: batchSelect, label: batchSelect }]
                     )}
-                  </select>
+                    zIndex={1200}
+                  />
                   {capacityWarning && (
                     <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                       <AlertTriangle size={12} /> Target batch is at full capacity!
@@ -281,28 +340,152 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                 
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: 12 }}>Profile Status</label>
-                  <select className="form-select" value={status} onChange={e => setStatus(e.target.value as any)}>
-                    <option value="Active">Active</option>
-                    <option value="On Leave">On Leave</option>
-                    <option value="Suspended">Suspended</option>
-                    <option value="Graduated">Graduated</option>
-                    <option value="Left">Left (Archived)</option>
-                  </select>
+                  <ModernSelect
+                    value={status}
+                    onChange={v => setStatus(v as any)}
+                    options={[
+                      { value: 'Active', label: 'Active', icon: <UserCheck size={14} color="#475569" /> },
+                      { value: 'On Leave', label: 'On Leave', icon: <Clock size={14} color="#475569" /> },
+                      { value: 'Suspended', label: 'Suspended', icon: <Slash size={14} color="#475569" /> },
+                      { value: 'Graduated', label: 'Graduated', icon: <GraduationCap size={14} color="#475569" /> },
+                      { value: 'Left', label: 'Left (Archived)', icon: <LogOut size={14} color="#475569" /> }
+                    ]}
+                    zIndex={1200}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Scholarship Terms & Base Fee */}
+            <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#0F172A', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Award size={15} color="#2563EB" /> SCHOLARSHIP & FEE TERMS
+                </span>
+                <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>
+                  Anchor Day: {anchorDay}th of each month
+                </span>
+              </div>
+
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Base Monthly Tuition Fee (PKR)</label>
+                  <div className="input-with-icon">
+                    <DollarSign size={15} className="input-icon" />
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={baseMonthlyFee}
+                      onChange={handleFeeChange}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Billing Anchor Day (1–31)</label>
+                  <ModernDayOfMonthPicker
+                    value={anchorDay}
+                    onChange={setAnchorDay}
+                    defaultDay={student?.billingAnchorDay || 1}
+                    compact={true}
+                    zIndex={1200}
+                    openAbove={false}
+                  />
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" style={{ fontSize: 12 }}>Monthly Tuition Fee ($)</label>
-                <div className="input-with-icon">
-                  <DollarSign size={15} className="input-icon" />
-                  <input className="form-input" type="number" value={totalFee} onChange={handleFeeChange} />
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Scholarship Type</label>
+                  <ModernSelect
+                    value={scholarshipType}
+                    onChange={v => setScholarshipType(v as ScholarshipType)}
+                    options={[
+                      { value: 'none', label: 'Standard Rate (No Scholarship)' },
+                      { value: 'percentage', label: 'Percentage Discount (%)' },
+                      { value: 'fixed', label: 'Fixed Amount Concession (PKR)' }
+                    ]}
+                    zIndex={1150}
+                  />
                 </div>
-                {feeWarning && (
-                  <div style={{ fontSize: 11, color: '#D97706', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <AlertTriangle size={12} /> Fee change will apply to next month's invoice. Current unpaid invoices remain unchanged.
+
+                {scholarshipType !== 'none' && (
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: 12 }}>
+                      {scholarshipType === 'percentage' ? 'Discount Percentage (%)' : 'Fixed Concession (PKR)'}
+                    </label>
+                    <div className="input-with-icon">
+                      {scholarshipType === 'percentage' ? (
+                        <Percent size={15} className="input-icon" />
+                      ) : (
+                        <DollarSign size={15} className="input-icon" />
+                      )}
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="0"
+                        max={scholarshipType === 'percentage' ? 100 : Number(baseMonthlyFee) || 100000}
+                        value={scholarshipValue}
+                        onChange={e => setScholarshipValue(e.target.value)}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
+
+              {scholarshipType !== 'none' && (
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Scholarship Category / Reason</label>
+                  <ModernSelect
+                    value={scholarshipReason}
+                    onChange={v => setScholarshipReason(v as ScholarshipReason)}
+                    options={[
+                      { value: 'merit', label: 'Academic Merit' },
+                      { value: 'need_based', label: 'Need-Based Financial Aid' },
+                      { value: 'sibling', label: 'Sibling Concession' },
+                      { value: 'staff_child', label: 'Staff Child Benefit' },
+                      { value: 'special_grant', label: 'Special Management Grant' },
+                      { value: 'other', label: 'Other Concession' }
+                    ]}
+                    zIndex={1100}
+                  />
+                </div>
+              )}
+
+              {/* Live Fee Breakdown */}
+              <div
+                style={{
+                  background: '#0F172A',
+                  color: '#FFFFFF',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 11, color: '#94A3B8' }}>Gross Base Fee</div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>PKR {formatCurrency(feeBreakdown.grossMonthlyFee)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#94A3B8' }}>Discount</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: feeBreakdown.discountAmount > 0 ? '#34D399' : '#94A3B8' }}>
+                    {feeBreakdown.discountAmount > 0 ? `-PKR ${formatCurrency(feeBreakdown.discountAmount)}` : 'PKR 0'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#94A3B8' }}>Net Monthly Fee</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#10B981' }}>PKR {formatCurrency(feeBreakdown.netMonthlyFee)}</div>
+                </div>
+              </div>
+
+              {feeWarning && (
+                <div style={{ fontSize: 11, color: '#D97706', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <AlertTriangle size={12} /> Fee changes will update the student's recurring plan for subsequent billing cycles.
+                </div>
+              )}
             </div>
           </form>
         </div>
@@ -344,10 +527,12 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
               boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
             }}
           >
-            <CheckCircle2 size={16} /> Save Changes
+            <CheckCircle2 size={16} color="#10B981" /> Save Changes
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+export default EditStudentModal;

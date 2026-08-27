@@ -1,12 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { Batch, Teacher, Student, Subject } from '../types';
-import { BookOpen, Plus, Users, Clock, MapPin, Pencil, Trash2, X, ChevronRight, Tag, UserPlus, UserMinus } from 'lucide-react';
+import {
+  BookOpen,
+  Plus,
+  Users,
+  Clock,
+  MapPin,
+  Pencil,
+  Trash2,
+  X,
+  ChevronRight,
+  Tag,
+  UserPlus,
+  UserMinus,
+  Layers,
+  Calendar,
+  DollarSign,
+  UserCheck,
+  GitBranch
+} from 'lucide-react';
 import { CreateBatchModal } from '../components/CreateBatchModal';
+import { EnrollStudentModal } from '../components/EnrollStudentModal';
 import { SubstituteTeacherModal } from '../components/SubstituteTeacherModal';
 import { SplitClassModal } from '../components/SplitClassModal';
 import { SyllabusTrackerModal } from '../components/SyllabusTrackerModal';
 import { api } from '../api/apiClient';
-import { UserCheck, GitBranch } from 'lucide-react';
+import { ModernSelect } from '../components/ModernSelect';
+import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
 
 interface BatchesViewProps {
   batches: Batch[];
@@ -20,17 +40,25 @@ interface BatchesViewProps {
   onRefresh?: () => void;
 }
 
-export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = [], subjects = [], students = [], onOpenCreateModal, onAddBatch, onDeleteBatch, onEditBatch, onRefresh }) => {
+export const BatchesView: React.FC<BatchesViewProps> = ({
+  batches,
+  teachers = [],
+  subjects = [],
+  students = [],
+  onOpenCreateModal,
+  onAddBatch,
+  onDeleteBatch,
+  onEditBatch,
+  onRefresh
+}) => {
   const [isCreateBatchModalOpen, setIsCreateBatchModalOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
+  const [enrollModalBatch, setEnrollModalBatch] = useState<Batch | null>(null);
   const [manageSubjectsBatch, setManageSubjectsBatch] = useState<Batch | null>(null);
   const [substituteBatch, setSubstituteBatch] = useState<Batch | null>(null);
   const [splitBatchState, setSplitBatchState] = useState<Batch | null>(null);
   const [syllabusBatchState, setSyllabusBatchState] = useState<Batch | null>(null);
-
-
-
 
   // Edit Form State
   const [editName, setEditName] = useState('');
@@ -42,7 +70,6 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
   // Batch Detail State
   const [batchStudents, setBatchStudents] = useState<any[]>([]);
   const [batchSubjects, setBatchSubjects] = useState<any[]>([]);
-  const [enrollStudentId, setEnrollStudentId] = useState('');
 
   // Manage Subjects State
   const [assignSubjectId, setAssignSubjectId] = useState('');
@@ -55,7 +82,6 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
     setEditRoom(batch.room || '');
     setEditTiming(batch.schedule || batch.timing || '');
     setEditCapacity(String(batch.maxCapacity || batch.capacity || 30));
-    // Try to find the teacher ID from the teachers list
     const matchedTeacher = teachers.find(t => t.name === batch.teacherName || t.name === batch.instructor);
     setEditTeacherId(matchedTeacher?.id || '');
   };
@@ -81,15 +107,19 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
       onEditBatch(updated);
     }
 
-    // Also update teacher_id on backend
     if (editTeacherId) {
-      api.updateBatch(editingBatch.id, { teacherId: editTeacherId, name: editName.trim(), capacity: Number(editCapacity), timing: editTiming.trim(), room: editRoom.trim() }).catch(() => {});
+      api.updateBatch(editingBatch.id, {
+        teacherId: editTeacherId,
+        name: editName.trim(),
+        capacity: Number(editCapacity),
+        timing: editTiming.trim(),
+        room: editRoom.trim()
+      }).catch(() => {});
     }
 
     setEditingBatch(null);
   };
 
-  // Batch Detail - load enrolled students and subjects
   const openBatchDetail = async (batch: Batch) => {
     setSelectedBatch(batch);
     try {
@@ -105,31 +135,40 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
     }
   };
 
-  const handleEnrollStudent = async () => {
-    if (!selectedBatch || !enrollStudentId) return;
-    try {
-      await api.enrollStudentInBatch(selectedBatch.id, enrollStudentId);
-      setEnrollStudentId('');
-      openBatchDetail(selectedBatch); // refresh
+  const handleEnrollStudentSubmission = (payload: any) => {
+    if (!enrollModalBatch) return;
+    const batchId = enrollModalBatch.id;
+    const currBatch = selectedBatch;
+
+    // 1. Instant close and trigger refresh
+    setEnrollModalBatch(null);
+    if (onRefresh) onRefresh();
+
+    // 2. Background sync
+    api.enrollStudentInBatch(batchId, payload).then(() => {
+      if (currBatch && currBatch.id === batchId) {
+        openBatchDetail(currBatch);
+      }
       if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error enrolling student');
-    }
+    }).catch(err => console.error('Error enrolling student in background:', err));
   };
 
-  const handleRemoveStudent = async (studentId: string) => {
+  const handleRemoveStudent = (studentId: string) => {
     if (!selectedBatch) return;
     if (!window.confirm('Remove this student from the batch?')) return;
-    try {
-      await api.removeStudentFromBatch(selectedBatch.id, studentId);
-      openBatchDetail(selectedBatch);
+    
+    const batch = selectedBatch;
+    // 1. Instant optimistic update
+    setBatchStudents(prev => prev.filter(s => s.id !== studentId));
+    if (onRefresh) onRefresh();
+
+    // 2. Background sync
+    api.removeStudentFromBatch(batch.id, studentId).then(() => {
+      openBatchDetail(batch);
       if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error removing student');
-    }
+    }).catch(err => console.error('Error removing student in background:', err));
   };
 
-  // Manage Subjects
   const openManageSubjects = async (batch: Batch) => {
     setManageSubjectsBatch(batch);
     setAssignSubjectId('');
@@ -149,6 +188,7 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
       setAssignSubjectId('');
       setAssignTeacherId('');
       openManageSubjects(manageSubjectsBatch);
+      if (onRefresh) onRefresh();
     } catch (err: any) {
       alert(err.message || 'Error assigning subject');
     }
@@ -159,6 +199,7 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
     try {
       await api.removeBatchSubject(manageSubjectsBatch.id, subjectId);
       openManageSubjects(manageSubjectsBatch);
+      if (onRefresh) onRefresh();
     } catch (err: any) {
       alert(err.message || 'Error removing subject');
     }
@@ -166,10 +207,11 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Header */}
       <div className="directory-header-container">
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Classes & Batches Management</h2>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 2, margin: 0 }}>Active academic sections, capacity limits, and room allocations</p>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>Batches & Academic Classes</h2>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 2, margin: 0 }}>Manage batch schedules, course fee plans, installments, and student rosters</p>
         </div>
         <div className="header-action-bar">
           <button className="btn-primary" onClick={() => setIsCreateBatchModalOpen(true)}>
@@ -178,24 +220,52 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
         </div>
       </div>
 
+      {/* Batch Cards Grid */}
       <div className="card-grid-3">
         {batches.map(batch => (
-          <div key={batch.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: '0 2px 8px rgba(15,23,42,0.04)', padding: 16 }} onClick={() => openBatchDetail(batch)}>
-            {/* Card Top Header */}
+          <div
+            key={batch.id}
+            className="card"
+            style={{
+              background: '#FFFFFF',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              position: 'relative'
+            }}
+            onClick={() => openBatchDetail(batch)}
+          >
+            {/* Top Row: Code Badge & Actions */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="badge badge-blue">{batch.code || batch.classLevel || 'Class'}</span>
-                <span className="badge badge-green">Active</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="badge badge-blue">{batch.code || batch.classLevel || 'BATCH'}</span>
+                {batch.course_type === 'fixed_course' ? (
+                  <span style={{ background: '#F3E8FF', color: '#7E22CE', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 700, border: '1px solid #E9D5FF' }}>
+                    Fixed Course
+                  </span>
+                ) : (
+                  <span style={{ background: '#ECFDF5', color: '#047857', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 700, border: '1px solid #A7F3D0' }}>
+                    Monthly Recurring
+                  </span>
+                )}
               </div>
-              
-              {/* Desktop Direct Icons */}
-              <div className="table-action-group desktop-only" onClick={e => e.stopPropagation()}>
+
+              {/* Desktop Hover Icons */}
+              <div className="desktop-only" style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                 <button
                   type="button"
                   className="table-icon-btn"
-                  title="Assign Substitute / Schedule Cover"
+                  title="Enroll Student"
+                  onClick={() => setEnrollModalBatch(batch)}
+                >
+                  <UserPlus size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="table-icon-btn"
+                  title="Assign Teacher Coverage"
                   onClick={() => setSubstituteBatch(batch)}
-                  style={{ border: '1px solid #FDE68A', background: '#FEF3C7', color: '#D97706' }}
                 >
                   <UserCheck size={13} />
                 </button>
@@ -204,16 +274,14 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   className="table-icon-btn"
                   title="Split Class Section"
                   onClick={() => setSplitBatchState(batch)}
-                  style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#334155' }}
                 >
                   <GitBranch size={13} />
                 </button>
                 <button
                   type="button"
                   className="table-icon-btn"
-                  title="Track Syllabus Progress & Class Diary"
+                  title="Track Syllabus Progress"
                   onClick={() => setSyllabusBatchState(batch)}
-                  style={{ border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#2563EB' }}
                 >
                   <BookOpen size={13} />
                 </button>
@@ -222,7 +290,6 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   className="table-icon-btn"
                   title="Manage Subjects"
                   onClick={() => openManageSubjects(batch)}
-                  style={{ border: '1px solid #BBF7D0', background: '#F0FDF4', color: '#16A34A' }}
                 >
                   <Tag size={13} />
                 </button>
@@ -231,44 +298,18 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   className="table-icon-btn"
                   title="Edit Class"
                   onClick={() => openEditModal(batch)}
-                  style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569' }}
                 >
                   <Pencil size={13} />
                 </button>
                 <button
                   type="button"
-                  className="table-icon-btn"
+                  className="table-icon-btn danger"
                   title="Delete Class"
                   onClick={() => {
                     if (window.confirm(`Are you sure you want to delete ${batch.name}?`)) {
                       if (onDeleteBatch) onDeleteBatch(batch.id);
                     }
                   }}
-                  style={{ border: '1px solid #FECACA', background: '#FEF2F2', color: '#DC2626' }}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-
-              {/* Mobile Quick Edit/Delete */}
-              <div className="mobile-only" style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className="table-icon-btn"
-                  onClick={() => openEditModal(batch)}
-                  style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569' }}
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="table-icon-btn"
-                  onClick={() => {
-                    if (window.confirm(`Are you sure you want to delete ${batch.name}?`)) {
-                      if (onDeleteBatch) onDeleteBatch(batch.id);
-                    }
-                  }}
-                  style={{ border: '1px solid #FECACA', background: '#FEF2F2', color: '#DC2626' }}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -276,61 +317,48 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
             </div>
 
             <div>
-              <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0F172A' }}>{batch.name}</h3>
-              <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', margin: 0 }}>{batch.name}</h3>
+              {batch.section_name && (
+                <span style={{ fontSize: 12, color: '#2563EB', fontWeight: 600 }}>{batch.section_name}</span>
+              )}
+              <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 2, margin: 0 }}>
                 Instructor: {batch.instructor || batch.teacherName || 'Unassigned'}
               </p>
             </div>
 
+            {/* Fee & Course Details Pill */}
+            {batch.course_type === 'fixed_course' && (
+              <div style={{ background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: 8, padding: '8px 10px', fontSize: 11.5, color: '#6B21A8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700 }}>
+                  Total Fee: PKR {formatCurrency(batch.total_fee || 0)}
+                </span>
+                <span style={{ color: '#7E22CE', fontWeight: 600 }}>
+                  {batch.default_installments || 3} Installments
+                </span>
+              </div>
+            )}
+
             <div style={{ fontSize: 12.5, color: '#475569', display: 'flex', flexDirection: 'column', gap: 6, background: '#F8FAFC', padding: '10px 12px', borderRadius: 8 }}>
-              {batch.room ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <MapPin size={14} color="#64748B" /> Room: {batch.room}
+              {batch.start_date && batch.end_date ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#475569' }}>
+                  <Calendar size={13} color="#64748B" /> Duration: {batch.start_date} to {batch.end_date}
                 </div>
               ) : null}
 
               {(batch.schedule || batch.timing) ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Clock size={14} color="#64748B" /> {batch.schedule || batch.timing}
+                  <Clock size={13} color="#64748B" /> {batch.schedule || batch.timing}
                 </div>
               ) : null}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Users size={14} color="#64748B" /> {batch.studentsCount || 0} Enrolled Students
+                <Users size={13} color="#64748B" /> {batch.studentsCount || 0} Enrolled Students
               </div>
-            </div>
-
-            {/* Mobile Quick Action Buttons Bar */}
-            <div className="mobile-only" style={{ display: 'flex', gap: 6, borderTop: '1px solid #F1F5F9', paddingTop: 10 }} onClick={e => e.stopPropagation()}>
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={() => openManageSubjects(batch)}
-                style={{ flex: 1, justifyContent: 'center', fontSize: 11.5, padding: '7px 8px' }}
-              >
-                <Tag size={12} color="#16A34A" /> Subjects
-              </button>
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={() => setSyllabusBatchState(batch)}
-                style={{ flex: 1, justifyContent: 'center', fontSize: 11.5, padding: '7px 8px' }}
-              >
-                <BookOpen size={12} color="#2563EB" /> Syllabus
-              </button>
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={() => setSubstituteBatch(batch)}
-                style={{ flex: 1, justifyContent: 'center', fontSize: 11.5, padding: '7px 8px' }}
-              >
-                <UserCheck size={12} color="#D97706" /> Cover
-              </button>
             </div>
 
             {/* Click hint */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94A3B8', borderTop: '1px solid #F1F5F9', paddingTop: 8 }}>
-              <ChevronRight size={12} /> Click to view enrolled students & details
+              <ChevronRight size={12} /> Click to view enrolled students & installment timeline
             </div>
           </div>
         ))}
@@ -342,19 +370,20 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              position: 'fixed', top: 0, right: 0, bottom: 0, width: '100%', maxWidth: 600,
+              position: 'fixed', top: 0, right: 0, bottom: 0, width: '100%', maxWidth: 620,
               background: '#FFFFFF', boxShadow: '-8px 0 24px rgba(0,0,0,0.15)',
-              display: 'flex', flexDirection: 'column', overflowY: 'auto',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
               animation: 'slideInRight 0.25s ease-out'
             }}
           >
             {/* Header */}
-            <div style={{ background: '#0F172A', color: '#FFF', padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0, background: '#0F172A', color: '#FFF', padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <span className="badge badge-blue" style={{ marginBottom: 6 }}>{selectedBatch.code || selectedBatch.classLevel}</span>
-                <h2 style={{ fontSize: 22, fontWeight: 800, color: '#FFF', marginTop: 4 }}>{selectedBatch.name}</h2>
-                <p style={{ fontSize: 13, color: '#94A3B8', marginTop: 2 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: '#FFF', marginTop: 4, margin: 0 }}>{selectedBatch.name}</h2>
+                <p style={{ fontSize: 13, color: '#94A3B8', marginTop: 2, margin: 0 }}>
                   Instructor: {selectedBatch.instructor || selectedBatch.teacherName || 'Unassigned'}
+                  {selectedBatch.course_type === 'fixed_course' && ` • Total Course Fee: PKR ${formatCurrency(selectedBatch.total_fee || 0)}`}
                 </p>
               </div>
               <button onClick={() => setSelectedBatch(null)} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
@@ -363,10 +392,12 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
             </div>
 
             {/* Subjects Section */}
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid #F1F5F9' }}>
-              <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>📚 Assigned Subjects</h4>
+            <div style={{ flexShrink: 0, padding: '16px 24px', borderBottom: '1px solid #F1F5F9' }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <BookOpen size={15} color="#475569" /> Assigned Subjects
+              </h4>
               {batchSubjects.length > 0 ? (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                   {batchSubjects.map((bs: any) => (
                     <span key={bs.subject?.id} style={{
                       fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 6,
@@ -377,34 +408,21 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No subjects assigned yet. Use the "Subjects" button on the card.</p>
+                <p style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', margin: 0, marginTop: 4 }}>No subjects assigned yet.</p>
               )}
             </div>
 
             {/* Enrolled Students Section */}
-            <div style={{ padding: '16px 24px', flex: 1 }}>
+            <div style={{ padding: '16px 24px', flex: 1, overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>👥 Enrolled Students ({batchStudents.length})</h4>
-              </div>
-
-              {/* Enroll Student */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                <select
-                  className="form-input"
-                  value={enrollStudentId}
-                  onChange={e => setEnrollStudentId(e.target.value)}
-                  style={{ flex: 1, fontSize: 13 }}
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                  <Users size={15} color="#475569" /> Enrolled Students ({batchStudents.length})
+                </h4>
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={() => setEnrollModalBatch(selectedBatch)}
                 >
-                  <option value="">— Select a student to enroll —</option>
-                  {students
-                    .filter(s => !batchStudents.some((bs: any) => bs.student?.id === s.id || bs.student_id === s.id))
-                    .map(s => (
-                      <option key={s.id} value={s.id}>{s.name} ({s.regNo})</option>
-                    ))
-                  }
-                </select>
-                <button className="btn-primary" onClick={handleEnrollStudent} disabled={!enrollStudentId} style={{ fontSize: 12, padding: '6px 14px' }}>
-                  <UserPlus size={14} /> Enroll
+                  <UserPlus size={14} /> Enroll Student
                 </button>
               </div>
 
@@ -416,27 +434,35 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                       <tr>
                         <th>Student Name</th>
                         <th>Reg No</th>
-                        <th>Phone</th>
                         <th>Enrolled On</th>
-                        <th>Action</th>
+                        <th>Timeline</th>
+                        <th style={{ textAlign: 'right' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {batchStudents.map((enrollment: any) => {
-                        const stu = enrollment.student || {};
+                        const stu = enrollment.student || enrollment || {};
                         return (
                           <tr key={enrollment.id || stu.id}>
-                            <td><strong style={{ color: '#0F172A' }}>{stu.full_name || 'Unknown'}</strong></td>
-                            <td><span style={{ fontSize: 12, color: '#64748B' }}>{stu.admission_no || '—'}</span></td>
-                            <td>{stu.phone || '—'}</td>
-                            <td><span style={{ fontSize: 12, color: '#64748B' }}>{enrollment.enrolled_on ? String(enrollment.enrolled_on).split('T')[0] : '—'}</span></td>
+                            <td><strong style={{ color: '#0F172A' }}>{stu.full_name || stu.name || 'Unknown'}</strong></td>
+                            <td><span style={{ fontSize: 12, color: '#64748B' }}>{stu.admission_no || stu.regNo || '—'}</span></td>
+                            <td><span style={{ fontSize: 12, color: '#64748B' }}>{enrollment.enrolledOn ? String(enrollment.enrolledOn).split('T')[0] : '—'}</span></td>
                             <td>
+                              {enrollment.isExtendedTimeline ? (
+                                <span style={{ fontSize: 11, color: '#7E22CE', fontWeight: 600, background: '#FAF5FF', padding: '2px 6px', borderRadius: 4 }}>
+                                  Extended ({enrollment.individualEndDate ? String(enrollment.individualEndDate).split('T')[0] : 'Custom'})
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 11, color: '#475569' }}>Standard</span>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
                               <button
                                 onClick={() => handleRemoveStudent(stu.id)}
                                 style={{
                                   padding: '3px 8px', borderRadius: 6, border: '1px solid #FECACA',
                                   background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 11,
-                                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
                                 }}
                               >
                                 <UserMinus size={11} /> Remove
@@ -451,8 +477,8 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
               ) : (
                 <div style={{ textAlign: 'center', padding: 32, color: '#94A3B8' }}>
                   <Users size={32} style={{ marginBottom: 8, opacity: 0.5 }} />
-                  <p style={{ fontSize: 13, fontWeight: 600 }}>No students enrolled in this batch yet.</p>
-                  <p style={{ fontSize: 12 }}>Use the dropdown above to enroll students.</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>No students enrolled in this batch yet.</p>
+                  <p style={{ fontSize: 12, margin: 0, marginTop: 4 }}>Click "Enroll Student" above to add students with installment schedules.</p>
                 </div>
               )}
             </div>
@@ -460,20 +486,39 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
         </div>
       )}
 
-      {/* ==================== Manage Subjects Modal ==================== */}
+      {/* Modals */}
+      <CreateBatchModal
+        isOpen={isCreateBatchModalOpen}
+        onClose={() => setIsCreateBatchModalOpen(false)}
+        onAddBatch={(batchData) => {
+          if (onAddBatch) onAddBatch(batchData);
+          setIsCreateBatchModalOpen(false);
+          if (onRefresh) onRefresh();
+        }}
+      />
+
+      {enrollModalBatch && (
+        <EnrollStudentModal
+          isOpen={!!enrollModalBatch}
+          batch={enrollModalBatch}
+          students={students}
+          onClose={() => setEnrollModalBatch(null)}
+          onEnroll={handleEnrollStudentSubmission}
+        />
+      )}
+
       {manageSubjectsBatch && (
         <div className="modal-backdrop" onClick={() => setManageSubjectsBatch(null)}>
           <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>
-                📚 Manage Subjects — {manageSubjectsBatch.name}
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BookOpen size={20} color="#10B981" /> Manage Subjects — {manageSubjectsBatch.name}
               </h3>
               <button className="modal-close-btn" onClick={() => setManageSubjectsBatch(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
             </div>
 
-            {/* Current Assignments */}
             <div style={{ marginTop: 16 }}>
               <h4 style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>Currently Assigned</h4>
               {batchSubjectsForManage.length > 0 ? (
@@ -504,44 +549,32 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No subjects assigned to this batch yet.</p>
+                <p style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No subjects assigned yet.</p>
               )}
             </div>
 
-            {/* Assign New Subject */}
             <div style={{ marginTop: 20, borderTop: '1px solid #E2E8F0', paddingTop: 16 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>Assign New Subject</h4>
+              <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>Assign New Subject</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Subject</label>
-                    <select className="form-input" value={assignSubjectId} onChange={e => setAssignSubjectId(e.target.value)}>
-                      <option value="">— Select Subject —</option>
-                      {subjects
-                        .filter(s => !batchSubjectsForManage.some((bs: any) => bs.subject?.id === s.id))
-                        .map(s => (
-                          <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                        ))
-                      }
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Taught By</label>
-                    <select className="form-input" value={assignTeacherId} onChange={e => setAssignTeacherId(e.target.value)}>
-                      <option value="">— Select Teacher —</option>
-                      {teachers.map(t => (
-                        <option key={t.id} value={t.id}>{t.name} ({t.qualification || 'Faculty'})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                <ModernSelect
+                  value={assignSubjectId}
+                  onChange={setAssignSubjectId}
+                  placeholder="Select Subject..."
+                  options={subjects.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                />
+                <ModernSelect
+                  value={assignTeacherId}
+                  onChange={setAssignTeacherId}
+                  placeholder="Select Teacher..."
+                  options={teachers.map(t => ({ value: t.id, label: t.name }))}
+                />
                 <button
                   className="btn-primary"
                   onClick={handleAssignSubject}
                   disabled={!assignSubjectId || !assignTeacherId}
-                  style={{ alignSelf: 'flex-end', fontSize: 12, padding: '8px 16px' }}
+                  style={{ justifyContent: 'center' }}
                 >
-                  <Plus size={14} /> Assign Subject
+                  Assign Subject & Teacher
                 </button>
               </div>
             </div>
@@ -549,67 +582,16 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
         </div>
       )}
 
-      {/* ==================== Edit Class Modal ==================== */}
-      {editingBatch && (
-        <div className="modal-backdrop" onClick={() => setEditingBatch(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>Edit Class / Batch</h3>
-              <button className="modal-close-btn" onClick={() => setEditingBatch(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>×</button>
-            </div>
-            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Class / Batch Name</label>
-                <input className="form-input" value={editName} onChange={e => setEditName(e.target.value)} required />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Room Allocation</label>
-                  <input className="form-input" placeholder="e.g. Room 101" value={editRoom} onChange={e => setEditRoom(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Max Capacity</label>
-                  <input className="form-input" type="number" value={editCapacity} onChange={e => setEditCapacity(e.target.value)} required />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Class Timing / Schedule</label>
-                <input className="form-input" placeholder="e.g. 09:00 AM - 11:00 AM" value={editTiming} onChange={e => setEditTiming(e.target.value)} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Assign Teacher / Instructor</label>
-                <select className="form-input" value={editTeacherId} onChange={e => setEditTeacherId(e.target.value)}>
-                  <option value="">— No Teacher Assigned —</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.qualification || 'Faculty'})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn-secondary" onClick={() => setEditingBatch(null)}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ background: '#0F172A', color: '#FFF' }}>✓ Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <CreateBatchModal
-        isOpen={isCreateBatchModalOpen}
-        onClose={() => setIsCreateBatchModalOpen(false)}
-        onAddBatch={onAddBatch || (() => {})}
-      />
-
+      {/* Other Modals */}
       {substituteBatch && (
         <SubstituteTeacherModal
           batch={substituteBatch}
           teachers={teachers}
           onClose={() => setSubstituteBatch(null)}
-          onSaved={onRefresh}
+          onSaved={() => {
+            setSubstituteBatch(null);
+            if (onRefresh) onRefresh();
+          }}
         />
       )}
 
@@ -617,7 +599,10 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
         <SplitClassModal
           batch={splitBatchState}
           onClose={() => setSplitBatchState(null)}
-          onSaved={onRefresh}
+          onSaved={() => {
+            setSplitBatchState(null);
+            if (onRefresh) onRefresh();
+          }}
         />
       )}
 
@@ -631,5 +616,4 @@ export const BatchesView: React.FC<BatchesViewProps> = ({ batches, teachers = []
   );
 };
 
-
-
+export default BatchesView;

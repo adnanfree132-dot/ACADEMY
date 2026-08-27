@@ -241,7 +241,7 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({ isOpen, st
               boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.4)'
             }}
           >
-            💵 Record Payment
+            <CreditCard size={15} color="#FFFFFF" /> Record Payment
           </button>
         </div>
       </div>
