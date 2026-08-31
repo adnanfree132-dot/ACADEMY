@@ -90,7 +90,8 @@ export const payrollBatchGenerateSchema = z.object({
   period: z.string().regex(MONTH_PERIOD_REGEX).optional(),
   staff_type_id: z.string().optional().nullable(),
   staffTypeId: z.string().optional().nullable(),
-  notes: z.string().trim().max(500).optional().nullable()
+  notes: z.string().trim().max(500).optional().nullable(),
+  rules: z.any().optional()
 }).refine(data => {
   if (data.month !== undefined && data.year !== undefined) return true;
   if (data.month_period || data.monthPeriod || data.period) return true;
@@ -112,7 +113,8 @@ export const payrollBatchGenerateSchema = z.object({
     month: month!,
     period: year + '-' + String(month).padStart(2, '0'),
     staffTypeId: data.staff_type_id || data.staffTypeId || undefined,
-    notes: data.notes || null
+    notes: data.notes || null,
+    rules: data.rules || undefined
   };
 });
 

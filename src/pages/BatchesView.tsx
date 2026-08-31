@@ -51,6 +51,12 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
   onEditBatch,
   onRefresh
 }) => {
+  // Exclude terminated / inactive teachers from selectors
+  const activeTeachers = teachers.filter(t => {
+    const st = ((t as any).status || '').toLowerCase();
+    return st !== 'terminated' && st !== 'inactive' && st !== 'left' && st !== 'resigned';
+  });
+
   const [isCreateBatchModalOpen, setIsCreateBatchModalOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
@@ -444,12 +450,12 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                         const stu = enrollment.student || enrollment || {};
                         return (
                           <tr key={enrollment.id || stu.id}>
-                            <td><strong style={{ color: '#0F172A' }}>{stu.full_name || stu.name || 'Unknown'}</strong></td>
+                            <td><span style={{ fontWeight: 600, color: '#0F172A' }}>{stu.full_name || stu.name || 'Unknown'}</span></td>
                             <td><span style={{ fontSize: 12, color: '#64748B' }}>{stu.admission_no || stu.regNo || '—'}</span></td>
                             <td><span style={{ fontSize: 12, color: '#64748B' }}>{enrollment.enrolledOn ? String(enrollment.enrolledOn).split('T')[0] : '—'}</span></td>
                             <td>
                               {enrollment.isExtendedTimeline ? (
-                                <span style={{ fontSize: 11, color: '#7E22CE', fontWeight: 600, background: '#FAF5FF', padding: '2px 6px', borderRadius: 4 }}>
+                                <span style={{ fontSize: 11, color: '#7E22CE', fontWeight: 500, background: '#FAF5FF', padding: '2px 6px', borderRadius: 4 }}>
                                   Extended ({enrollment.individualEndDate ? String(enrollment.individualEndDate).split('T')[0] : 'Custom'})
                                 </span>
                               ) : (
@@ -529,10 +535,10 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                       padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0'
                     }}>
                       <div>
-                        <span style={{ fontWeight: 800, color: '#0F172A', fontSize: 14 }}>{bs.subject?.name}</span>
+                        <span style={{ fontWeight: 600, color: '#0F172A', fontSize: 13.5 }}>{bs.subject?.name}</span>
                         <span style={{ fontSize: 11, color: '#64748B', marginLeft: 8 }}>({bs.subject?.code})</span>
                         <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                          Teacher: <strong>{bs.teacher?.user?.full_name || 'Unassigned'}</strong>
+                          Teacher: <span style={{ fontWeight: 600, color: '#334155' }}>{bs.teacher?.user?.full_name || 'Unassigned'}</span>
                         </div>
                       </div>
                       <button
@@ -566,7 +572,7 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                   value={assignTeacherId}
                   onChange={setAssignTeacherId}
                   placeholder="Select Teacher..."
-                  options={teachers.map(t => ({ value: t.id, label: t.name }))}
+                  options={activeTeachers.map(t => ({ value: t.id, label: t.name }))}
                 />
                 <button
                   className="btn-primary"

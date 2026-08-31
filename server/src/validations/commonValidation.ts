@@ -41,7 +41,7 @@ export const accessLevelEnum = z.union([
 
 export const staffLifecycleStatusEnum = z.preprocess(
   (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
-  z.enum(['active', 'probation', 'on_leave', 'suspended', 'resigned', 'terminated'])
+  z.enum(['active', 'probation', 'on_leave', 'suspended', 'resigned', 'terminated', 'inactive'])
 );
 
 export const staffGenderEnum = z.preprocess(

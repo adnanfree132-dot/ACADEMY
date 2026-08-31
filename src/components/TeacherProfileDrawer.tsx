@@ -84,7 +84,7 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
                 background: activeTab === tab ? '#0F172A' : 'transparent',
                 borderRadius: 8,
                 color: activeTab === tab ? '#FFFFFF' : '#64748B',
-                fontWeight: activeTab === tab ? 800 : 600,
+                fontWeight: 500,
                 fontSize: 12,
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',

@@ -130,7 +130,7 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
                         border: 'none',
                         background: isActive ? '#F1F5F9' : 'transparent',
                         color: isActive ? '#0F172A' : '#334155',
-                        fontWeight: isActive ? 800 : 600,
+                        fontWeight: 500,
                         fontSize: 13,
                         cursor: 'pointer',
                         transition: 'all 0.15s ease'

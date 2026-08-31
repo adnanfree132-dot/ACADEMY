@@ -782,7 +782,7 @@ option:hover {
   background: #F8FAFC;
   color: #64748B;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 12px 16px;
@@ -804,6 +804,7 @@ option:hover {
   border-bottom: 1px solid #F1F5F9;
   vertical-align: middle;
   color: #334155;
+  font-weight: 500;
   box-sizing: border-box;
 }
 

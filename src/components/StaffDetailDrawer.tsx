@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   User,
@@ -20,7 +20,9 @@ import {
   ChevronRight,
   HeartHandshake,
   Info,
-  Settings
+  Settings,
+  Trash2,
+  CreditCard
 } from 'lucide-react';
 import { api } from '../api/apiClient';
 import { StaffSalaryStructureModal } from './StaffSalaryStructureModal';
@@ -33,6 +35,8 @@ interface StaffDetailDrawerProps {
   onOpenCredentials?: (staff: any) => void;
   onResetPassword?: (staff: any) => void;
   onEditStaff?: (staff: any) => void;
+  onOpenStatusModal?: (staff: any) => void;
+  onDeleteStaff?: (staff: any) => void;
 }
 
 export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
@@ -42,9 +46,12 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
   onOpenPermissions,
   onOpenCredentials,
   onResetPassword,
-  onEditStaff
+  onEditStaff,
+  onOpenStatusModal,
+  onDeleteStaff
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'salary' | 'documents' | 'leaves'>('overview');
+  const [currentStaff, setCurrentStaff] = useState<any>(staff);
   const [docTitle, setDocTitle] = useState('');
   const [docType, setDocType] = useState('cnic');
   const [docUrl, setDocUrl] = useState('');
@@ -52,10 +59,22 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
   const [showResetInfo, setShowResetInfo] = useState(false);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
 
-  if (!isOpen || !staff) return null;
+  // Sync currentStaff when staff prop changes
+  useEffect(() => {
+    setCurrentStaff(staff);
+  }, [staff]);
 
-  const staffName = staff.fullName || staff.name || 'Staff Member';
-  const roleName = staff.staffType?.name || staff.role || 'Staff';
+  // Always reset to 'overview' tab whenever the drawer opens or when staff member changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('overview');
+    }
+  }, [isOpen, staff?.id]);
+
+  if (!isOpen || !currentStaff) return null;
+
+  const staffName = currentStaff.fullName || currentStaff.name || 'Staff Member';
+  const roleName = currentStaff.staffType?.name || currentStaff.role || 'Staff';
 
   const handleAddDocument = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -365,7 +384,7 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
                 background: activeTab === tab ? '#0F172A' : 'transparent',
                 borderRadius: 8,
                 color: activeTab === tab ? '#FFFFFF' : '#64748B',
-                fontWeight: activeTab === tab ? 800 : 600,
+                fontWeight: 500,
                 fontSize: 11.5,
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
@@ -378,7 +397,7 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
             >
               {tab === 'overview' && <><FileText size={12} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Overview</span></>}
               {tab === 'schedule' && <><Calendar size={12} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Schedule</span></>}
-              {tab === 'salary' && <><DollarSign size={12} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Payroll</span></>}
+              {tab === 'salary' && <><CreditCard size={12} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Payroll</span></>}
               {tab === 'documents' && <><FileText size={12} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Documents{docs.length > 0 ? ` (${docs.length})` : ''}</span></>}
               {tab === 'leaves' && <><Clock size={12} color={activeTab === tab ? '#FFFFFF' : '#64748B'} /> <span>Leaves</span></>}
             </button>
@@ -412,17 +431,52 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
                   </div>
                   <div>
                     <span style={{ color: '#64748B', fontSize: 11 }}>Academic Qualification</span>
-                    <div style={{ fontWeight: 700, color: '#0F172A' }}>{staff.qualification || 'M.Sc Physics'}</div>
+                    <div style={{ fontWeight: 600, color: '#0F172A' }}>{staff.qualification || 'M.Sc Physics'}</div>
                   </div>
                   <div>
                     <span style={{ color: '#64748B', fontSize: 11 }}>Current Status</span>
-                    <div>
-                      <span className="badge badge-emerald" style={{ fontSize: 11 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                      <span 
+                        className={
+                          (staff.status === 'terminated' || staff.status === 'suspended')
+                            ? 'badge badge-red'
+                            : (staff.status === 'inactive' || staff.status === 'resigned')
+                            ? 'badge badge-slate'
+                            : staff.status === 'on_leave'
+                            ? 'badge badge-amber'
+                            : 'badge badge-emerald'
+                        } 
+                        style={{ fontSize: 11, fontWeight: 500, textTransform: 'capitalize' }}
+                      >
                         {staff.status || 'Active'}
                       </span>
+                      {onOpenStatusModal && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenStatusModal(staff)}
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            border: '1px solid #CBD5E1',
+                            background: '#FFFFFF',
+                            color: '#0F172A',
+                            fontSize: 10.5,
+                            fontWeight: 500,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Change Status
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
+
+                {(staff.statusRemarks || staff.status_remarks) && (
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #E2E8F0', fontSize: 12, color: '#475569' }}>
+                    <span style={{ fontWeight: 600, color: '#0F172A' }}>Status Remarks:</span> {staff.statusRemarks || staff.status_remarks}
+                  </div>
+                )}
               </div>
 
               {/* Emergency Contact */}
@@ -445,6 +499,54 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Danger Zone: Delete Staff Member */}
+              {onDeleteStaff && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    paddingTop: 12,
+                    borderTop: '1px solid #E2E8F0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 10
+                  }}
+                >
+                  <div style={{ fontSize: 11.5, color: '#64748B' }}>
+                    Archive or permanently delete this staff member
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteStaff(staff)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #FECACA',
+                      background: '#FEF2F2',
+                      color: '#DC2626',
+                      fontSize: 11.5,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = '#FEE2E2';
+                      e.currentTarget.style.borderColor = '#FCA5A5';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = '#FEF2F2';
+                      e.currentTarget.style.borderColor = '#FECACA';
+                    }}
+                  >
+                    <Trash2 size={13} color="#DC2626" /> Delete Staff Member
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -497,12 +599,12 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
                   <div>
                     <span style={{ color: '#64748B', fontSize: 11 }}>Base Pay (Monthly)</span>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
-                      PKR {Number(staff.baseSalary || staff.base_salary || 65000).toLocaleString()}
+                      PKR {Number(currentStaff.baseSalary || currentStaff.base_salary || 65000).toLocaleString()}
                     </div>
                   </div>
                   <div>
                     <span style={{ color: '#64748B', fontSize: 11 }}>Payment Mode</span>
-                    <div style={{ fontWeight: 700, color: '#0F172A' }}>{staff.paymentMethod || staff.payment_method || 'Bank Transfer'}</div>
+                    <div style={{ fontWeight: 700, color: '#0F172A' }}>{currentStaff.paymentMethod || currentStaff.payment_method || 'Bank Transfer'}</div>
                   </div>
                 </div>
               </div>
@@ -566,8 +668,24 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
           <StaffSalaryStructureModal
             isOpen={isStructureModalOpen}
             onClose={() => setIsStructureModalOpen(false)}
-            staffMember={staff}
-            onSaved={() => setIsStructureModalOpen(false)}
+            staffMember={currentStaff}
+            onSaved={(savedStructure: any) => {
+              setIsStructureModalOpen(false);
+              const updated = {
+                ...currentStaff,
+                baseSalary: savedStructure.base_salary ?? savedStructure.baseSalary ?? currentStaff.baseSalary,
+                base_salary: savedStructure.base_salary ?? savedStructure.baseSalary ?? currentStaff.baseSalary,
+                paymentMethod: savedStructure.payment_method ?? savedStructure.paymentMethod ?? currentStaff.paymentMethod,
+                payment_method: savedStructure.payment_method ?? savedStructure.paymentMethod ?? currentStaff.paymentMethod,
+                salaryType: savedStructure.salary_type ?? savedStructure.salaryType ?? currentStaff.salaryType,
+                salary_type: savedStructure.salary_type ?? savedStructure.salaryType ?? currentStaff.salaryType,
+                salaryStructure: savedStructure
+              };
+              setCurrentStaff(updated);
+              if (onEditStaff) {
+                onEditStaff(updated);
+              }
+            }}
           />
         )}
       </div>

@@ -24,7 +24,7 @@ export async function generateMonthlyPayrollBatch(req: AuthenticatedRequest, res
       return sendError(res, errorMsg, 400);
     }
 
-    const { year, month, period, staffTypeId, notes } = parseResult.data;
+    const { year, month, period, staffTypeId, notes, rules } = parseResult.data;
     const batchCode = 'PAY-' + year + '-' + String(month).padStart(2, '0');
     const daysInMonth = getDaysInMonth(year, month);
     const startDate = period + '-01';
@@ -116,7 +116,8 @@ export async function generateMonthlyPayrollBatch(req: AuthenticatedRequest, res
           unexcusedAbsences: unexcusedUnits
         },
         year,
-        month
+        month,
+        rules
       );
 
       const payslipNumber = generatePayslipNumber(year, month, i + 1, staff.staff_id);

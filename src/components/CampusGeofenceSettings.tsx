@@ -37,13 +37,23 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
   const [absentMinHours, setAbsentMinHours] = useState<number>(2.0);
   const [enforceGeofence, setEnforceGeofence] = useState<boolean>(true);
 
+  // Time Format Preference (Default: 12-Hour)
+  const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>(() => {
+    try {
+      return (localStorage.getItem('attendance_time_format') as '12h' | '24h') || '12h';
+    } catch {
+      return '12h';
+    }
+  });
+
   // Status & Feedback State
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
   const [saveErrorMsg, setSaveErrorMsg] = useState<string>('');
+  const [showInfoExplainer, setShowInfoExplainer] = useState<boolean>(false);
 
-  // Live Haversine Distance Test Simulator State
+  // Live GPS Distance Test Simulator State
   const [testLat, setTestLat] = useState<string>('31.520500');
   const [testLng, setTestLng] = useState<string>('74.358900');
   const [isDetectingGps, setIsDetectingGps] = useState<boolean>(false);
@@ -225,7 +235,7 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
     }
   };
 
-  const radiusPresets = [50, 100, 150, 250, 500, 1000];
+  const radiusPresets = [50, 100, 150, 250];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -468,7 +478,7 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               <input
                 type="range"
                 min="20"
-                max="1000"
+                max="300"
                 step="10"
                 value={radiusMeters}
                 onChange={e => setRadiusMeters(parseInt(e.target.value, 10))}
@@ -482,16 +492,16 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
                     type="button"
                     onClick={() => setRadiusMeters(preset)}
                     style={{
-                      padding: '4px 10px',
+                      padding: '4px 12px',
                       borderRadius: 8,
-                      fontSize: 11.5,
-                      fontWeight: radiusMeters === preset ? 800 : 600,
-                      background: radiusMeters === preset ? '#0F172A' : '#F1F5F9',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      background: radiusMeters === preset ? '#0F172A' : '#F8FAFC',
                       color: radiusMeters === preset ? '#FFFFFF' : '#475569',
-                      border: '1px solid',
+                      border: '1.5px solid',
                       borderColor: radiusMeters === preset ? '#0F172A' : '#E2E8F0',
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease'
+                      transition: 'background-color 0.15s ease, border-color 0.15s ease'
                     }}
                   >
                     {preset}m
@@ -552,28 +562,30 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               boxShadow: '0 4px 12px rgba(15, 23, 42, 0.03)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #F1F5F9', paddingBottom: 12 }}>
-              <div 
-                style={{ 
-                  width: 32, 
-                  height: 32, 
-                  borderRadius: 8, 
-                  background: '#F0FDF4', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  color: '#10B981'
-                }}
-              >
-                <Clock size={16} />
-              </div>
-              <div>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  Shift Timings & Attendance Classification
-                </h3>
-                <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
-                  Configurable threshold rules for all 5 attendance categories
-                </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div 
+                  style={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: 8, 
+                    background: '#F0FDF4', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: '#10B981'
+                  }}
+                >
+                  <Clock size={16} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Shift Timings & Attendance Rules
+                  </h3>
+                  <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
+                    Configurable thresholds for on-time, late, half-day, and absence calculations
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -624,75 +636,75 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               </div>
             </div>
 
-            {/* Configurable Policy Rule Blocks */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Clean Minimalist Policy Rule Blocks */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               
-              {/* Rule 1: Present (Grace Period) */}
-              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              {/* Rule 1: Present */}
+              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#166534', background: '#DCFCE7', padding: '1px 6px', borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="badge badge-green" style={{ fontWeight: 700 }}>
                       Present
                     </span>
-                    <span style={{ fontSize: 11.5, color: '#15803D' }}>On-Time Arrival</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>On-Time Arrival Grace</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
                     Arrivals within grace window from shift start ({shiftStartTime || '08:00'})
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <input
                     type="number"
                     min="0"
                     max="60"
                     value={gracePeriodMinutes}
                     onChange={e => setGracePeriodMinutes(parseInt(e.target.value, 10) || 0)}
-                    style={{ width: 60, height: 32, borderRadius: 6, border: '1px solid #86EFAC', padding: '0 6px', fontSize: 12, fontWeight: 700, textAlign: 'center', background: '#FFFFFF', color: '#166534' }}
+                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
                   />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#166534' }}>mins</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>mins</span>
                 </div>
               </div>
 
               {/* Rule 2: Late Arrival */}
-              <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#92400E', background: '#FEF9C3', padding: '1px 6px', borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="badge badge-amber" style={{ fontWeight: 700 }}>
                       Late
                     </span>
-                    <span style={{ fontSize: 11.5, color: '#B45309' }}>Grace to Cutoff Window</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Grace to Late Cutoff</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#92400E', marginTop: 2 }}>
-                    From {gracePeriodMinutes}m up to late cutoff threshold
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+                    From {gracePeriodMinutes}m up to maximum late threshold
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <input
                     type="number"
                     min="20"
                     max="240"
                     value={halfDayLateCutoffMins}
                     onChange={e => setHalfDayLateCutoffMins(parseInt(e.target.value, 10) || 90)}
-                    style={{ width: 60, height: 32, borderRadius: 6, border: '1px solid #FCD34D', padding: '0 6px', fontSize: 12, fontWeight: 700, textAlign: 'center', background: '#FFFFFF', color: '#92400E' }}
+                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
                   />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#92400E' }}>mins</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>mins</span>
                 </div>
               </div>
 
               {/* Rule 3: Half-Day */}
-              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#1E40AF', background: '#DBEAFE', padding: '1px 6px', borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="badge badge-blue" style={{ fontWeight: 700 }}>
                       Half-Day
                     </span>
-                    <span style={{ fontSize: 11.5, color: '#2563EB' }}>Arrival &gt; {halfDayLateCutoffMins}m OR Minimum Hours</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Arrival &gt; {halfDayLateCutoffMins}m / Min Hours</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#1E40AF', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
                     Calculates 0.5 unexcused absence deduction unit
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <input
                     type="number"
                     step="0.5"
@@ -700,26 +712,26 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
                     max="10"
                     value={halfDayMinHours}
                     onChange={e => setHalfDayMinHours(parseFloat(e.target.value) || 4.0)}
-                    style={{ width: 60, height: 32, borderRadius: 6, border: '1px solid #93C5FD', padding: '0 6px', fontSize: 12, fontWeight: 700, textAlign: 'center', background: '#FFFFFF', color: '#1E40AF' }}
+                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
                   />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#1E40AF' }}>hrs</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>hrs</span>
                 </div>
               </div>
 
               {/* Rule 4: Absent */}
-              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#991B1B', background: '#FEE2E2', padding: '1px 6px', borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="badge badge-red" style={{ fontWeight: 700 }}>
                       Absent
                     </span>
-                    <span style={{ fontSize: 11.5, color: '#DC2626' }}>No Check-In OR Less Than Minimum Hours</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>No Check-In / Below Min Hours</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#991B1B', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
                     Calculates 1.0 unexcused absence deduction unit
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <input
                     type="number"
                     step="0.5"
@@ -727,35 +739,157 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
                     max="6"
                     value={absentMinHours}
                     onChange={e => setAbsentMinHours(parseFloat(e.target.value) || 2.0)}
-                    style={{ width: 60, height: 32, borderRadius: 6, border: '1px solid #FCA5A5', padding: '0 6px', fontSize: 12, fontWeight: 700, textAlign: 'center', background: '#FFFFFF', color: '#991B1B' }}
+                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
                   />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#991B1B' }}>hrs</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>hrs</span>
                 </div>
               </div>
 
-              {/* Rule 5: Approved Leave / Excused */}
-              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* Rule 5: Approved Leave */}
+              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#334155', background: '#E2E8F0', padding: '1px 6px', borderRadius: 4 }}>
-                      Excused / Leave
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="badge badge-gray" style={{ fontWeight: 700 }}>
+                      Excused Leave
                     </span>
-                    <span style={{ fontSize: 11.5, color: '#475569' }}>Institution-Approved Leave Requests</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Official Approved Leave</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
                     Exempted from payroll pro-rata absence deductions (0 deduction)
                   </div>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', background: '#DCFCE7', padding: '2px 8px', borderRadius: 9999 }}>
+                <span className="badge badge-green" style={{ fontWeight: 700 }}>
                   0 Deduction
                 </span>
               </div>
 
             </div>
           </div>
+
+          {/* Card: Display & Time Format Preferences */}
+          <div 
+            style={{ 
+              background: '#FFFFFF', 
+              borderRadius: 16, 
+              border: '1.5px solid #E2E8F0', 
+              padding: '20px 22px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.03)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div 
+                  style={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: 8, 
+                    background: '#F0FDF4', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: '#10B981'
+                  }}
+                >
+                  <Clock size={16} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Time Format Display
+                  </h3>
+                  <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
+                    Choose whether attendance arrival &amp; departure times are displayed in 12-Hour (AM/PM) or 24-Hour (Military) format
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {/* 12-Hour Option Card */}
+              <div
+                onClick={() => {
+                  setTimeFormat('12h');
+                  localStorage.setItem('attendance_time_format', '12h');
+                  setSaveSuccessMsg('Time format set to 12-Hour (AM/PM) format.');
+                  setTimeout(() => setSaveSuccessMsg(''), 3000);
+                }}
+                style={{
+                  border: timeFormat === '12h' ? '2px solid #0F172A' : '1.5px solid #E2E8F0',
+                  background: timeFormat === '12h' ? '#F8FAFC' : '#FFFFFF',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>12-Hour Format</span>
+                    <span className="badge badge-green" style={{ fontSize: 10.5, fontWeight: 800 }}>Default</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, fontFamily: 'monospace' }}>
+                    e.g. 08:30 AM &bull; 04:30 PM
+                  </div>
+                </div>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    border: timeFormat === '12h' ? '6px solid #0F172A' : '2px solid #CBD5E1',
+                    background: '#FFFFFF'
+                  }}
+                />
+              </div>
+
+              {/* 24-Hour Option Card */}
+              <div
+                onClick={() => {
+                  setTimeFormat('24h');
+                  localStorage.setItem('attendance_time_format', '24h');
+                  setSaveSuccessMsg('Time format set to 24-Hour format.');
+                  setTimeout(() => setSaveSuccessMsg(''), 3000);
+                }}
+                style={{
+                  border: timeFormat === '24h' ? '2px solid #0F172A' : '1.5px solid #E2E8F0',
+                  background: timeFormat === '24h' ? '#F8FAFC' : '#FFFFFF',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>24-Hour Format</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, fontFamily: 'monospace' }}>
+                    e.g. 08:30 &bull; 16:30
+                  </div>
+                </div>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    border: timeFormat === '24h' ? '6px solid #0F172A' : '2px solid #CBD5E1',
+                    background: '#FFFFFF'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Card 3: Interactive Perimeter Tester & Haversine Distance Radar */}
+        {/* Card 3: Interactive Perimeter Tester & GPS Distance Calculation */}
         <div 
           style={{ 
             background: '#FFFFFF', 
@@ -775,22 +909,45 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
                   width: 32, 
                   height: 32, 
                   borderRadius: 8, 
-                  background: '#FDF4FF', 
+                  background: '#EFF6FF', 
                   display: 'flex', 
                   alignItems: 'center', 
                   justifyContent: 'center',
-                  color: '#A855F7'
+                  color: '#2563EB'
                 }}
               >
-                <Radio size={16} />
+                <MapPin size={16} />
               </div>
-              <div>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  Real-Time Haversine Distance Calculator & Perimeter Radar
-                </h3>
-                <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
-                  Test coordinate validation against configured campus boundary
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    GPS Distance & Perimeter Verification
+                  </h3>
+                  <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
+                    Verify test coordinates against configured campus boundary
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInfoExplainer(prev => !prev)}
+                  title="How does GPS Perimeter Verification work?"
+                  style={{
+                    border: 'none',
+                    background: showInfoExplainer ? '#0F172A' : '#F1F5F9',
+                    color: showInfoExplainer ? '#FFFFFF' : '#475569',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    flexShrink: 0
+                  }}
+                >
+                  <Info size={13} />
+                </button>
               </div>
             </div>
 
@@ -799,14 +956,14 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               onClick={() => handleDetectDeviceGps(false)}
               disabled={isDetectingGps}
               style={{
-                borderRadius: 9999,
+                borderRadius: 8,
                 height: 34,
                 padding: '0 14px',
                 border: '1.5px solid #CBD5E1',
                 background: '#FFFFFF',
                 color: '#334155',
                 fontSize: 12,
-                fontWeight: 700,
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
@@ -818,6 +975,30 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               Test Live Device Location
             </button>
           </div>
+
+          {/* Info Explainer Banner */}
+          {showInfoExplainer && (
+            <div
+              style={{
+                background: '#F8FAFC',
+                border: '1.5px solid #CBD5E1',
+                borderRadius: 12,
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                color: '#334155',
+                fontSize: 12.5,
+                lineHeight: 1.5
+              }}
+            >
+              <Info size={16} color="#2563EB" style={{ marginTop: 2, flexShrink: 0 }} />
+              <div>
+                <strong style={{ color: '#0F172A', display: 'block', marginBottom: 2 }}>How GPS Perimeter Verification Works:</strong>
+                The system computes the exact straight-line distance (in meters) between the staff member's mobile GPS device and the institution's center coordinates. If the distance is within the allowed radius (e.g. {radiusMeters}m), attendance is marked as <strong style={{ color: '#166534' }}>Verified On-Site</strong>. Attempts outside the perimeter are flagged or blocked.
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -871,20 +1052,21 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               onClick={() => handleRunTest()}
               style={{
                 height: 38,
-                borderRadius: 10,
+                borderRadius: 8,
                 border: '1.5px solid #0F172A',
                 background: '#0F172A',
                 color: '#FFFFFF',
                 fontSize: 12.5,
-                fontWeight: 700,
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 6,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'background-color 0.15s ease'
               }}
             >
-              <Activity size={14} /> Calculate Haversine Distance
+              <Activity size={14} /> Calculate Distance
             </button>
           </div>
 
@@ -942,24 +1124,24 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
             type="submit"
             disabled={isSaving}
             style={{
-              borderRadius: 9999,
-              height: 42,
-              padding: '0 28px',
+              borderRadius: 8,
+              height: 38,
+              padding: '0 24px',
               border: 'none',
               background: '#0F172A',
               color: '#FFFFFF',
               fontSize: 13,
-              fontWeight: 700,
+              fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
               cursor: isSaving ? 'wait' : 'pointer',
-              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.25)',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)',
               transition: 'background-color 0.15s ease'
             }}
           >
-            <Save size={16} />
-            {isSaving ? 'Saving Parameters...' : 'Save Geofence Configuration'}
+            <Save size={15} />
+            {isSaving ? 'Saving...' : 'Save Geofence Configuration'}
           </button>
         </div>
       </form>

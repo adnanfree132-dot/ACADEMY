@@ -73,8 +73,12 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
       setRosterRecords(data);
     } catch (err) {
       console.warn('Could not load daily roster, synthesizing from staff list:', err);
-      // Synthesize fallback from staff list
-      const fallback: StaffAttendanceRecord[] = staffList.map(staff => ({
+      // Synthesize fallback from active staff list (exclude terminated)
+      const activeStaffList = staffList.filter(s => {
+        const st = (s.status || '').toLowerCase();
+        return st !== 'terminated' && st !== 'inactive' && st !== 'left' && st !== 'resigned';
+      });
+      const fallback: StaffAttendanceRecord[] = activeStaffList.map(staff => ({
         id: `att-${staff.id}-${dateStr}`,
         staff_member_id: staff.id,
         staffMemberId: staff.id,
@@ -435,7 +439,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                 borderRadius: 8,
                 padding: '6px 14px',
                 fontSize: 12.5,
-                fontWeight: viewMode === 'daily' ? 800 : 600,
+                fontWeight: 600,
                 border: 'none',
                 background: viewMode === 'daily' ? '#0F172A' : 'transparent',
                 color: viewMode === 'daily' ? '#FFFFFF' : '#64748B',
@@ -457,7 +461,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                 borderRadius: 8,
                 padding: '6px 14px',
                 fontSize: 12.5,
-                fontWeight: viewMode === 'monthly' ? 800 : 600,
+                fontWeight: 600,
                 border: 'none',
                 background: viewMode === 'monthly' ? '#0F172A' : 'transparent',
                 color: viewMode === 'monthly' ? '#FFFFFF' : '#64748B',
@@ -531,7 +535,6 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, alignItems: 'center' }}>
           {/* Search Box */}
           <div style={{ position: 'relative', width: '100%' }}>
-            <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
               type="text"
               value={searchQuery}
@@ -543,7 +546,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                 borderRadius: 10,
                 border: '1.5px solid #E2E8F0',
                 background: '#FFFFFF',
-                paddingLeft: 38,
+                paddingLeft: 12,
                 paddingRight: 12,
                 fontSize: 12,
                 fontWeight: 500,
@@ -596,7 +599,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
               <tr style={{ background: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0', textAlign: 'left' }}>
                 <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Staff Member</th>
                 <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Department / Role</th>
-                <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Check-In & Verification</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Check-In</th>
                 <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Check-Out</th>
                 <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Working Duration</th>
                 <th style={{ padding: '12px 16px', fontWeight: 800, color: '#475569' }}>Classification</th>
@@ -629,14 +632,14 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontWeight: 800,
+                              fontWeight: 600,
                               fontSize: 12
                             }}
                           >
                             {staffName.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 800, color: '#0F172A' }}>{staffName}</div>
+                            <div style={{ fontWeight: 600, color: '#0F172A' }}>{staffName}</div>
                             <span style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>{staffCode}</span>
                           </div>
                         </div>
@@ -644,25 +647,25 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
 
                       {/* Department / Designation */}
                       <td style={{ padding: '12px 16px' }}>
-                        <div style={{ fontWeight: 600, color: '#334155' }}>{designation}</div>
+                        <div style={{ fontWeight: 500, color: '#334155' }}>{designation}</div>
                         <span style={{ fontSize: 11, color: '#94A3B8' }}>{dept}</span>
                       </td>
 
                       {/* Check-In & Verification */}
                       <td style={{ padding: '12px 16px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <strong style={{ fontFamily: 'monospace', color: item.check_in_time ? '#0F172A' : '#94A3B8' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 500, color: item.check_in_time ? '#0F172A' : '#94A3B8' }}>
                             {item.check_in_time || item.checkInTime || '--:--'}
-                          </strong>
+                          </span>
                           <div>{renderVerificationBadge(item)}</div>
                         </div>
                       </td>
 
                       {/* Check-Out */}
                       <td style={{ padding: '12px 16px' }}>
-                        <strong style={{ fontFamily: 'monospace', color: item.check_out_time ? '#0F172A' : '#94A3B8' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 500, color: item.check_out_time ? '#0F172A' : '#94A3B8' }}>
                           {item.check_out_time || item.checkOutTime || '--:--'}
-                        </strong>
+                        </span>
                       </td>
 
                       {/* Working Duration */}
@@ -670,7 +673,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                         <span 
                           style={{ 
                             fontFamily: 'monospace', 
-                            fontWeight: 700,
+                            fontWeight: 500,
                             color: (item.total_hours || 0) >= 8 ? '#059669' : ((item.total_hours || 0) > 0 ? '#D97706' : '#94A3B8')
                           }}
                         >
@@ -748,7 +751,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                 <th 
                   style={{ 
                     padding: '10px 14px', 
-                    fontWeight: 800, 
+                    fontWeight: 600, 
                     color: '#475569', 
                     position: 'sticky', 
                     left: 0, 
@@ -766,18 +769,18 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                     style={{ 
                       padding: '8px 4px', 
                       textAlign: 'center', 
-                      fontWeight: 800, 
-                      color: '#475569',
+                      fontWeight: 600, 
+                      color: '#475569', 
                       minWidth: 26
                     }}
                   >
                     {day}
                   </th>
                 ))}
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 800, color: '#065F46' }}>P</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 800, color: '#92400E' }}>L</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 800, color: '#991B1B' }}>A</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 800, color: '#0F172A' }}>Hrs</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#065F46' }}>P</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#92400E' }}>L</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#991B1B' }}>A</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#0F172A' }}>Hrs</th>
               </tr>
             </thead>
             <tbody>
@@ -808,7 +811,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                         boxShadow: '2px 0 5px rgba(0,0,0,0.03)'
                       }}
                     >
-                      <div style={{ fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap' }}>{staff.full_name}</div>
+                      <div style={{ fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap' }}>{staff.full_name}</div>
                       <span style={{ fontSize: 10.5, color: '#64748B', fontFamily: 'monospace' }}>{staff.staff_id}</span>
                     </td>
 
@@ -887,7 +890,7 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                               borderRadius: 4,
                               background: cellBg,
                               color: cellColor,
-                              fontWeight: 800,
+                              fontWeight: 600,
                               fontSize: 10
                             }}
                           >
@@ -898,10 +901,10 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
                     })}
 
                     {/* Monthly Aggregated Totals */}
-                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 800, color: '#065F46' }}>{p}</td>
-                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 800, color: '#92400E' }}>{l}</td>
-                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 800, color: '#991B1B' }}>{a}</td>
-                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 800, color: '#0F172A', fontFamily: 'monospace' }}>
+                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 600, color: '#065F46' }}>{p}</td>
+                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 600, color: '#92400E' }}>{l}</td>
+                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 600, color: '#991B1B' }}>{a}</td>
+                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 600, color: '#0F172A', fontFamily: 'monospace' }}>
                       {Math.round(totalH * 10) / 10}h
                     </td>
                   </tr>

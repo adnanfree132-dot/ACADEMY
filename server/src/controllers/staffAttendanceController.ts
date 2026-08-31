@@ -107,17 +107,22 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
       updated_at: new Date()
     };
 
-    // 3. Haversine Perimeter Validation
-    const { isInside, distanceMeters, allowedRadius } = isWithinGeofence(
-      latitude,
-      longitude,
-      activeGeofence.latitude,
-      activeGeofence.longitude,
-      activeGeofence.radius_meters
-    );
+    // 3. Geolocation & Haversine Distance Validation
+    let isInside = true;
+    let distanceMeters: number | null = null;
+    let allowedRadius = activeGeofence.radius_meters || 150;
 
-    if (!isInside) {
-      return sendError(res, formatGeofenceRejectionMessage(distanceMeters, allowedRadius), 400);
+    if (latitude !== undefined && longitude !== undefined) {
+      const check = isWithinGeofence(
+        latitude,
+        longitude,
+        activeGeofence.latitude,
+        activeGeofence.longitude,
+        allowedRadius
+      );
+      isInside = check.isInside;
+      distanceMeters = check.distanceMeters;
+      allowedRadius = check.allowedRadius;
     }
 
     // 4. Shift Arrival Classification
@@ -150,10 +155,10 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
         check_in_time: existing?.check_in_time || currentTime,
         status: statusToSet,
         shift_status: shiftStatus,
-        location_verified: true,
-        check_in_lat: latitude,
-        check_in_lng: longitude,
-        distance_meters: Math.round(distanceMeters * 100) / 100,
+        location_verified: isInside,
+        check_in_lat: latitude !== undefined ? latitude : existing?.check_in_lat,
+        check_in_lng: longitude !== undefined ? longitude : existing?.check_in_lng,
+        distance_meters: distanceMeters !== null ? Math.round(distanceMeters * 100) / 100 : existing?.distance_meters,
         device_info: device_info || (req.headers['user-agent'] as string) || 'Mobile/Browser GPS',
         notes: notes || undefined
       },
@@ -163,10 +168,10 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
         check_in_time: currentTime,
         status: shiftStatus,
         shift_status: shiftStatus,
-        location_verified: true,
-        check_in_lat: latitude,
-        check_in_lng: longitude,
-        distance_meters: Math.round(distanceMeters * 100) / 100,
+        location_verified: isInside,
+        check_in_lat: latitude || null,
+        check_in_lng: longitude || null,
+        distance_meters: distanceMeters !== null ? Math.round(distanceMeters * 100) / 100 : null,
         device_info: device_info || (req.headers['user-agent'] as string) || 'Mobile/Browser GPS',
         marked_by: req.user?.role || 'self',
         notes: notes || null
@@ -189,8 +194,8 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
       res,
       attendance,
       {
-        distance_meters: Math.round(distanceMeters * 100) / 100,
-        inside_geofence: true,
+        distance_meters: distanceMeters !== null ? Math.round(distanceMeters * 100) / 100 : undefined,
+        inside_geofence: isInside,
         shift_status: shiftStatus
       },
       201
@@ -319,6 +324,15 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
       status
     } = req.query;
 
+    const sanitizeParam = (val: any) => {
+      if (!val || val === 'undefined' || val === 'null' || val === 'all' || val === '') return undefined;
+      return String(val);
+    };
+
+    const targetStaffTypeId = sanitizeParam(staff_type_id);
+    const targetStaffMemberId = sanitizeParam(staff_member_id);
+    const targetStatus = sanitizeParam(status);
+
     const todayStr = formatDateIso(new Date());
     const queryDate = (date as string) || (!month && !start_date ? todayStr : undefined);
 
@@ -327,8 +341,8 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
       const activeStaff = await prisma.staffMember.findMany({
         where: {
           status: { in: ['active', 'probation', 'on_leave'] },
-          staff_type_id: staff_type_id ? (staff_type_id as string) : undefined,
-          id: staff_member_id ? (staff_member_id as string) : undefined
+          staff_type_id: targetStaffTypeId,
+          id: targetStaffMemberId
         },
         include: {
           staffType: { select: { id: true, name: true, code: true } }
@@ -339,8 +353,8 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
       const attendances = await prisma.staffAttendance.findMany({
         where: {
           date: queryDate,
-          staff_member_id: staff_member_id ? (staff_member_id as string) : undefined,
-          status: status ? (status as string) : undefined
+          staff_member_id: targetStaffMemberId,
+          status: targetStatus
         }
       });
 
@@ -351,17 +365,20 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
         const att = attMap.get(staff.id);
         const hasCheckIn = !!att?.check_in_time;
 
-        let gpsTag: string;
+        let statusTag: string;
         if (att?.admin_override) {
-          gpsTag = 'Admin Override';
+          statusTag = 'Admin Override';
         } else if (att?.location_verified) {
-          gpsTag = 'Verified On-Site';
+          const dist = att?.distance_meters !== null && att?.distance_meters !== undefined
+            ? ` (${Math.round(att.distance_meters)}m)`
+            : '';
+          statusTag = `Verified On-Site${dist}`;
         } else if (att?.check_in_lat !== null && att?.check_in_lat !== undefined) {
-          gpsTag = 'Off-Site';
+          statusTag = 'Off-Site';
         } else if (hasCheckIn) {
-          gpsTag = 'Remote';
+          statusTag = 'Remote';
         } else {
-          gpsTag = 'Not Checked In';
+          statusTag = 'Not Checked In';
         }
 
         return {
@@ -379,9 +396,12 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
           status: att?.status || 'unmarked',
           shift_status: att?.shift_status || null,
           total_hours: att?.total_hours || 0,
-          location_verified: att?.location_verified || false,
-          distance_meters: att?.distance_meters || null,
-          gps_tag: gpsTag,
+          location_verified: att?.location_verified ?? false,
+          check_in_lat: att?.check_in_lat ?? null,
+          check_in_lng: att?.check_in_lng ?? null,
+          distance_meters: att?.distance_meters ?? null,
+          status_tag: statusTag,
+          gps_tag: statusTag,
           admin_override: att?.admin_override || false,
           override_reason: att?.override_reason || null,
           override_timestamp: att?.override_timestamp || null,
@@ -399,6 +419,7 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
       const absentCount = roster.filter((r) => r.status === 'absent').length;
       const onLeaveCount = roster.filter((r) => ['on_leave', 'excused', 'on_duty'].includes(r.status)).length;
       const unmarkedCount = roster.filter((r) => r.status === 'unmarked').length;
+      const checkedInCount = roster.filter((r) => !!r.check_in_time).length;
       const verifiedOnSiteCount = roster.filter((r) => r.location_verified && !r.admin_override).length;
       const overrideCount = roster.filter((r) => r.admin_override).length;
 
@@ -414,6 +435,7 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
           absent_count: absentCount,
           on_leave_count: onLeaveCount,
           unmarked_count: unmarkedCount,
+          checked_in_count: checkedInCount,
           verified_on_site_count: verifiedOnSiteCount,
           admin_override_count: overrideCount,
           attendance_rate_pct: attendanceRatePct
@@ -429,8 +451,8 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
     } else if (start_date && end_date) {
       where.date = { gte: start_date as string, lte: end_date as string };
     }
-    if (staff_member_id) where.staff_member_id = staff_member_id as string;
-    if (status) where.status = status as string;
+    if (targetStaffMemberId) where.staff_member_id = targetStaffMemberId;
+    if (targetStatus) where.status = targetStatus;
 
     const attendances = await prisma.staffAttendance.findMany({
       where,
@@ -445,17 +467,20 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
     });
 
     const enriched = attendances.map((att) => {
-      let gpsTag: string;
+      let statusTag: string;
       if (att.admin_override) {
-        gpsTag = 'Admin Override';
+        statusTag = 'Admin Override';
       } else if (att.location_verified) {
-        gpsTag = 'Verified On-Site';
+        const dist = att.distance_meters !== null && att.distance_meters !== undefined
+          ? ` (${Math.round(att.distance_meters)}m)`
+          : '';
+        statusTag = `Verified On-Site${dist}`;
       } else if (att.check_in_lat !== null && att.check_in_lat !== undefined) {
-        gpsTag = 'Off-Site';
+        statusTag = 'Off-Site';
       } else if (att.check_in_time) {
-        gpsTag = 'Remote';
+        statusTag = 'Remote';
       } else {
-        gpsTag = 'Manual';
+        statusTag = 'Not Checked In';
       }
 
       return {
@@ -465,7 +490,8 @@ export async function getStaffAttendanceRoster(req: AuthenticatedRequest, res: R
         designation: att.staffMember?.designation,
         department: att.staffMember?.staffType?.name || att.staffMember?.role || 'Staff',
         photo_url: att.staffMember?.photo_url,
-        gps_tag: gpsTag
+        status_tag: statusTag,
+        gps_tag: statusTag
       };
     });
 

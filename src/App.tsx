@@ -43,6 +43,7 @@ export function App() {
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [transactions, setTransactions] = useState<FeeTransaction[]>([]);
   const [leads, setLeads] = useState<CRMLead[]>([]);
@@ -56,6 +57,7 @@ export function App() {
         stats,
         backendStudents,
         backendTeachers,
+        backendStaff,
         backendBatches,
         backendAnn,
         backendInq
@@ -63,11 +65,16 @@ export function App() {
         api.getDashboard().catch(() => null),
         api.getStudents().catch(() => []),
         api.getTeachers().catch(() => []),
+        api.getStaffList().catch(() => []),
         api.getBatches().catch(() => []),
         api.getAnnouncements().catch(() => []),
         api.getInquiries().catch(() => []),
         api.getSubjects().catch(() => [])
       ]);
+
+      if (Array.isArray(backendStaff) && backendStaff.length > 0) {
+        setStaffList(backendStaff);
+      }
 
       const backendSubjects = (await api.getSubjects().catch(() => [])) as any[];
       if (Array.isArray(backendSubjects) && backendSubjects.length > 0) {
@@ -233,15 +240,18 @@ export function App() {
   };
 
   const handleDeleteStudent = async (studentId: string, mode: 'soft' | 'hard' = 'soft') => {
-    // 1. Optimistic UI Update (Instant 0ms removal from all views & dashboard)
-    setStudents(prev => prev.filter(s => s.id !== studentId));
+    // 1. Optimistic UI Update (Instant 0ms)
+    if (mode === 'hard') {
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+    } else {
+      setStudents(prev => prev.map(s => s.id === studentId ? { ...s, status: 'Left', isFeePaused: true } : s));
+    }
 
     // 2. Background Sync
     try {
       await api.deleteStudent(studentId, mode);
     } catch (err) {
       console.error('Error deleting student on backend:', err);
-      refreshDataFromBackend();
     }
   };
 
@@ -275,10 +285,8 @@ export function App() {
         discountRemarks: paymentData.discountRemarks,
         invoiceId: (paymentData as any).invoiceId
       });
-      refreshDataFromBackend();
     } catch (err) {
       console.error('Error recording payment to backend:', err);
-      refreshDataFromBackend();
     }
   };
 
@@ -303,17 +311,16 @@ export function App() {
       refreshDataFromBackend();
     } catch (err) {
       console.error('Error adding teacher:', err);
-      refreshDataFromBackend();
     }
   };
 
   const handleDeleteTeacher = async (teacherId: string) => {
     setTeachers(prev => prev.filter(t => t.id !== teacherId));
+    setStaffList(prev => prev.filter(s => s.id !== teacherId && s.teacher_id !== teacherId));
     try {
       await api.deleteTeacher(teacherId);
     } catch (err) {
       console.error('Error deleting teacher:', err);
-      refreshDataFromBackend();
     }
   };
 
@@ -541,6 +548,8 @@ export function App() {
         return (
           <TeachersView
             teachers={teachers}
+            staff={staffList}
+            onUpdateStaffList={setStaffList}
             batches={batches}
             students={students}
             onAddTeacher={handleAddTeacher}
@@ -661,10 +670,24 @@ export function App() {
       {/* Main Content View Container */}
       <main className="main-content">
         <Header
+          userName={(() => {
+            try {
+              const u = JSON.parse(localStorage.getItem('user') || '{}');
+              return u.name || u.full_name || u.username || 'Admin';
+            } catch {
+              return 'Admin';
+            }
+          })()}
           onOpenAction={(type) => setCurrentTab(type === 'student' ? 'students' : type === 'teacher' ? 'teachers' : type === 'fee' ? 'fees' : 'batches')}
           onSearch={setSearchQuery}
           onLogout={handleLogout}
           students={students}
+          teachers={teachers}
+          batches={batches}
+          onNavigate={(tab, query) => {
+            setCurrentTab(tab);
+            if (query) setSearchQuery(query);
+          }}
         />
         {renderCurrentView()}
       </main>

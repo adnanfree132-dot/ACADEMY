@@ -55,7 +55,11 @@ export const StaffPayrollView: React.FC = () => {
         api.getPayrollBatches().catch(() => []),
         api.getStaffTypes().catch(() => [])
       ]);
-      setStaffList(staffs || []);
+      const activeStaff = (staffs || []).filter((s: any) => {
+        const st = (s.status || '').toLowerCase();
+        return st !== 'terminated' && st !== 'inactive' && st !== 'left' && st !== 'resigned';
+      });
+      setStaffList(activeStaff);
       setStructures(structs || []);
       setBatches(batchList || []);
       setStaffTypes(types || []);
@@ -211,7 +215,7 @@ export const StaffPayrollView: React.FC = () => {
             borderRadius: 8,
             border: 'none',
             fontSize: 12,
-            fontWeight: activeTab === 'batch' ? 800 : 600,
+            fontWeight: 600,
             cursor: 'pointer',
             background: activeTab === 'batch' ? '#0F172A' : 'transparent',
             color: activeTab === 'batch' ? '#FFFFFF' : '#64748B',
@@ -233,7 +237,7 @@ export const StaffPayrollView: React.FC = () => {
             borderRadius: 8,
             border: 'none',
             fontSize: 12,
-            fontWeight: activeTab === 'structures' ? 800 : 600,
+            fontWeight: 600,
             cursor: 'pointer',
             background: activeTab === 'structures' ? '#0F172A' : 'transparent',
             color: activeTab === 'structures' ? '#FFFFFF' : '#64748B',
@@ -255,7 +259,7 @@ export const StaffPayrollView: React.FC = () => {
             borderRadius: 8,
             border: 'none',
             fontSize: 12,
-            fontWeight: activeTab === 'history' ? 800 : 600,
+            fontWeight: 600,
             cursor: 'pointer',
             background: activeTab === 'history' ? '#0F172A' : 'transparent',
             color: activeTab === 'history' ? '#FFFFFF' : '#64748B',
@@ -301,11 +305,6 @@ export const StaffPayrollView: React.FC = () => {
             </div>
 
             <div style={{ position: 'relative', width: 300 }}>
-              <Search
-                size={14}
-                color="#94A3B8"
-                style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-              />
               <input
                 type="text"
                 placeholder="Search staff by name or ID..."
@@ -316,13 +315,14 @@ export const StaffPayrollView: React.FC = () => {
                   height: 36,
                   borderRadius: 10,
                   border: '1.5px solid #E2E8F0',
-                  paddingLeft: 38,
+                  paddingLeft: 12,
                   paddingRight: 12,
                   fontSize: 12,
-                  background: '#FFFFFF',
+                  fontWeight: 500,
                   color: '#0F172A',
                   outline: 'none',
-                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -376,14 +376,14 @@ export const StaffPayrollView: React.FC = () => {
                               alignItems: 'center',
                               justifyContent: 'center',
                               color: '#2563EB',
-                              fontWeight: 800,
+                              fontWeight: 600,
                               fontSize: 12
                             }}
                           >
                             {(staff.full_name || staff.fullName || 'S').charAt(0)}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 800, color: '#0F172A', fontSize: 13 }}>
+                            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 13 }}>
                               {staff.full_name || staff.fullName}
                             </div>
                             <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>
@@ -394,36 +394,36 @@ export const StaffPayrollView: React.FC = () => {
                       </td>
 
                       <td>
-                        <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 12 }}>{staff.designation}</div>
+                        <div style={{ fontWeight: 500, color: '#0F172A', fontSize: 12 }}>{staff.designation}</div>
                         <div style={{ fontSize: 11, color: '#64748B' }}>{staff.staffType?.name || staff.role || 'Faculty'}</div>
                       </td>
 
                       <td>
-                        <span style={{ fontWeight: 700, color: '#0F172A', fontSize: 12.5 }}>
+                        <span style={{ fontWeight: 500, color: '#0F172A', fontSize: 12.5 }}>
                           {formatCurrencyPKR(base)}
                         </span>
                       </td>
 
                       <td>
-                        <span style={{ fontWeight: 600, color: allowancesTotal > 0 ? '#16A34A' : '#64748B', fontSize: 12 }}>
+                        <span style={{ fontWeight: 500, color: allowancesTotal > 0 ? '#16A34A' : '#64748B', fontSize: 12 }}>
                           {allowancesTotal > 0 ? `+${formatCurrencyPKR(allowancesTotal)}` : 'PKR 0'}
                         </span>
                       </td>
 
                       <td>
-                        <span style={{ fontWeight: 800, color: '#0F172A', fontSize: 12.5 }}>
+                        <span style={{ fontWeight: 600, color: '#0F172A', fontSize: 12.5 }}>
                           {formatCurrencyPKR(gross)}
                         </span>
                       </td>
 
                       <td>
-                        <span style={{ fontWeight: 600, color: deductionsTotal > 0 ? '#DC2626' : '#64748B', fontSize: 12 }}>
+                        <span style={{ fontWeight: 500, color: deductionsTotal > 0 ? '#DC2626' : '#64748B', fontSize: 12 }}>
                           {deductionsTotal > 0 ? `-${formatCurrencyPKR(deductionsTotal)}` : 'PKR 0'}
                         </span>
                       </td>
 
                       <td>
-                        <span style={{ fontWeight: 900, color: '#10B981', fontSize: 13.5 }}>
+                        <span style={{ fontWeight: 600, color: '#10B981', fontSize: 13.5 }}>
                           {formatCurrencyPKR(net)}
                         </span>
                       </td>
@@ -442,8 +442,9 @@ export const StaffPayrollView: React.FC = () => {
                             setSelectedStaffForStructure(staff);
                             setSelectedStructureForEdit(struct || null);
                           }}
+                          style={{ borderRadius: 8, height: 32 }}
                         >
-                          <Settings size={13} /> Configure Structure
+                          <Settings size={13} /> Configure
                         </button>
                       </td>
                     </tr>
@@ -455,7 +456,7 @@ export const StaffPayrollView: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Historical Payroll Batches */}
+      {/* Tab 3: Historical Payroll Batches & Disbursement Archive */}
       {activeTab === 'history' && (
         <div className="data-table-container">
           <table className="data-table">
@@ -464,10 +465,10 @@ export const StaffPayrollView: React.FC = () => {
                 <th>Batch Code</th>
                 <th>Payroll Period</th>
                 <th>Staff Count</th>
-                <th>Gross Payroll Budget</th>
-                <th>Attendance Deductions Saved</th>
-                <th>Net Disbursement</th>
-                <th>Disbursement Status</th>
+                <th>Total Gross</th>
+                <th>Attendance Deductions</th>
+                <th>Total Net Payable</th>
+                <th>Batch Status</th>
                 <th>Processed On</th>
               </tr>
             </thead>
@@ -476,37 +477,37 @@ export const StaffPayrollView: React.FC = () => {
                 batches.map(batch => (
                   <tr key={batch.id}>
                     <td>
-                      <span style={{ fontWeight: 800, color: '#0F172A', fontFamily: 'monospace' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0F172A' }}>
                         {batch.batch_code}
                       </span>
                     </td>
 
                     <td>
-                      <span style={{ fontWeight: 700, color: '#2563EB' }}>
+                      <span style={{ fontWeight: 600, color: '#2563EB' }}>
                         {batch.period}
                       </span>
                     </td>
 
                     <td>
-                      <span style={{ fontWeight: 600, color: '#0F172A' }}>
+                      <span style={{ fontWeight: 500, color: '#0F172A' }}>
                         {batch.total_staff_count} Employees
                       </span>
                     </td>
 
                     <td>
-                      <span style={{ fontWeight: 700, color: '#0F172A' }}>
+                      <span style={{ fontWeight: 500, color: '#0F172A' }}>
                         {formatCurrencyPKR(batch.total_gross_amount)}
                       </span>
                     </td>
 
                     <td>
-                      <span style={{ fontWeight: 700, color: '#DC2626' }}>
+                      <span style={{ fontWeight: 500, color: '#DC2626' }}>
                         -{formatCurrencyPKR(batch.total_attendance_deductions)}
                       </span>
                     </td>
 
                     <td>
-                      <span style={{ fontWeight: 900, color: '#16A34A', fontSize: 13.5 }}>
+                      <span style={{ fontWeight: 600, color: '#16A34A', fontSize: 13.5 }}>
                         {formatCurrencyPKR(batch.total_net_amount)}
                       </span>
                     </td>

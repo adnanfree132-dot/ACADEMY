@@ -112,7 +112,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   padding: '8px 12px',
                   borderRadius: 10,
                   fontSize: 13,
-                  fontWeight: isSelected ? 700 : 600,
+                  fontWeight: 500,
                   color: isSelected ? '#1D4ED8' : '#334155',
                   background: isSelected ? '#EFF6FF' : 'transparent',
                   cursor: 'pointer',

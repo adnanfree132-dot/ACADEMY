@@ -920,7 +920,7 @@ export interface StaffSalaryPaymentCreateInput {
 // ============================================================================
 
 export type AttendanceVerificationMode = 
-  | 'verified_gps' 
+  | 'verified_gps'
   | 'admin_override' 
   | 'remote_duty' 
   | 'biometric_sync'
@@ -930,8 +930,8 @@ export interface CampusGeofenceConfig {
   id?: string;
   campus_name?: string;
   campusName?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   campusLatitude?: number;
   campusLongitude?: number;
   radius_meters?: number;
@@ -981,6 +981,7 @@ export interface StaffAttendanceRecord {
   locationVerified?: boolean;
   location_verified?: boolean;
   verificationMode?: AttendanceVerificationMode;
+  status_tag?: string;
   gps_tag?: string;
   totalWorkingHours?: number | null;
   total_hours?: number | null;

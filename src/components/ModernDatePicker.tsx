@@ -369,7 +369,7 @@ export const ModernDatePicker: React.FC<ModernDatePickerProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 12.5,
-                    fontWeight: selected ? 800 : (currentToday ? 700 : 600),
+                    fontWeight: 500,
                     borderRadius: 8,
                     border: currentToday && !selected ? '1.5px solid #3B82F6' : '1px solid transparent',
                     background: selected ? '#0F172A' : (currentToday ? '#EFF6FF' : 'transparent'),

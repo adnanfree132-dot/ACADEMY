@@ -176,12 +176,12 @@ export async function registerStaff(req: AuthenticatedRequest, res: Response) {
     const data = parsed.data;
 
     // 1. Resolve StaffType
-    const normalizedInput = data.staffTypeId.trim();
+    const normalizedInput = (data.staffTypeId || '').trim();
     const isDomesticAlias = normalizedInput.toUpperCase().includes('DOM');
     const isFacultyAlias = normalizedInput.toUpperCase().includes('FAC') || normalizedInput.toUpperCase().includes('TEACH');
     const isAdminAlias = normalizedInput.toUpperCase().includes('ADM');
 
-    const staffType = await prisma.staffType.findFirst({
+    let staffType = await prisma.staffType.findFirst({
       where: {
         OR: [
           { id: normalizedInput },
@@ -204,13 +204,24 @@ export async function registerStaff(req: AuthenticatedRequest, res: Response) {
     });
 
     if (!staffType) {
+      staffType = await prisma.staffType.findFirst({
+        where: { code: 'FAC' },
+        include: { defaultPermissions: true }
+      }) || await prisma.staffType.findFirst({
+        include: { defaultPermissions: true }
+      });
+    }
+
+    if (!staffType) {
       return sendError(res, `Staff type "${data.staffTypeId}" could not be found.`, 400);
     }
 
     // 2. Uniqueness Checks
-    const phoneExists = await prisma.staffMember.findFirst({ where: { phone: data.phone } });
+    const phoneExists = await prisma.staffMember.findFirst({
+      where: { phone: { equals: data.phone.trim(), mode: 'insensitive' as const } }
+    });
     if (phoneExists) {
-      return sendError(res, `A staff member with phone number "${data.phone}" already exists.`, 409);
+      return sendError(res, `A staff member with phone number "${data.phone}" already exists (${phoneExists.full_name}).`, 409);
     }
 
     if (data.email) {
@@ -245,63 +256,130 @@ export async function registerStaff(req: AuthenticatedRequest, res: Response) {
       // Auto-generate unique Staff ID
       const staffId = await generateStaffId(tx, staffType.code);
 
-      // Create linked User
-      const user = await tx.user.create({
-        data: {
-          role: userRole,
-          full_name: data.fullName,
-          email: data.email || null,
-          phone: data.phone,
-          username: staffId,
-          password_hash: passwordHash,
-          must_change_password: true,
-          is_active: data.status === 'active' || data.status === 'probation'
-        }
-      });
+      // Check if user already exists by email or phone
+      let user = null;
+      if (data.email) {
+        user = await tx.user.findUnique({ where: { email: data.email } });
+      }
+      if (!user && data.phone) {
+        user = await tx.user.findUnique({ where: { phone: data.phone } });
+      }
 
-      // Create Teacher model if Faculty
-      let teacherRecord = null;
-      if (isFaculty) {
-        teacherRecord = await tx.teacher.create({
+      if (user) {
+        user = await tx.user.update({
+          where: { id: user.id },
           data: {
-            user_id: user.id,
-            qualification: data.qualification || null
+            role: userRole,
+            full_name: data.fullName,
+            username: staffId,
+            password_hash: passwordHash,
+            must_change_password: true,
+            is_active: data.status === 'active' || data.status === 'probation'
+          }
+        });
+      } else {
+        user = await tx.user.create({
+          data: {
+            role: userRole,
+            full_name: data.fullName,
+            email: data.email || null,
+            phone: data.phone,
+            username: staffId,
+            password_hash: passwordHash,
+            must_change_password: true,
+            is_active: data.status === 'active' || data.status === 'probation'
           }
         });
       }
 
-      // Create StaffMember
-      const staffMember = await tx.staffMember.create({
-        data: {
-          staff_id: staffId,
-          user_id: user.id,
-          teacher_id: teacherRecord?.id || null,
-          staff_type_id: staffType.id,
-          full_name: data.fullName,
-          email: data.email || null,
-          phone: data.phone,
-          gender: data.gender,
-          role: staffType.slug || staffType.code.toLowerCase(),
-          designation: data.designation,
-          qualification: data.qualification || null,
-          joining_date: new Date(data.joiningDate),
-          status: data.status,
-          base_salary: data.baseSalary,
-          hourly_rate: data.hourlyRate,
-          salary_type: data.salaryType,
-          payment_method: data.paymentMethod,
-          bank_name: data.bankName,
-          account_number: data.accountNumber,
-          account_title: data.accountTitle,
-          emergency_name: data.emergencyName,
-          emergency_phone: data.emergencyPhone,
-          emergency_relation: data.emergencyRelation,
-          password_hash: passwordHash,
-          temp_password_plain: tempPassword,
-          is_password_changed: false,
-          custom_fields: (data.customFields || undefined) as any
+      // Create or update Teacher model if Faculty
+      let teacherRecord = null;
+      if (isFaculty) {
+        teacherRecord = await tx.teacher.findFirst({ where: { user_id: user.id } });
+        if (teacherRecord) {
+          teacherRecord = await tx.teacher.update({
+            where: { id: teacherRecord.id },
+            data: {
+              qualification: data.qualification || null
+            }
+          });
+        } else {
+          teacherRecord = await tx.teacher.create({
+            data: {
+              user_id: user.id,
+              qualification: data.qualification || null
+            }
+          });
         }
-      });
+      }
+
+      // Check if existing staff member record is linked to this user
+      let staffMember = await tx.staffMember.findFirst({ where: { user_id: user.id } });
+      if (staffMember) {
+        staffMember = await tx.staffMember.update({
+          where: { id: staffMember.id },
+          data: {
+            staff_id: staffId,
+            teacher_id: teacherRecord?.id || staffMember.teacher_id,
+            staff_type_id: staffType.id,
+            full_name: data.fullName,
+            email: data.email || null,
+            phone: data.phone,
+            gender: data.gender,
+            role: staffType.slug || staffType.code.toLowerCase(),
+            designation: data.designation,
+            qualification: data.qualification || null,
+            joining_date: new Date(data.joiningDate),
+            status: data.status,
+            base_salary: data.baseSalary,
+            hourly_rate: data.hourlyRate,
+            salary_type: data.salaryType,
+            payment_method: data.paymentMethod,
+            bank_name: data.bankName,
+            account_number: data.accountNumber,
+            account_title: data.accountTitle,
+            emergency_name: data.emergencyName,
+            emergency_phone: data.emergencyPhone,
+            emergency_relation: data.emergencyRelation,
+            password_hash: passwordHash,
+            temp_password_plain: tempPassword,
+            is_password_changed: false,
+            custom_fields: (data.customFields || undefined) as any
+          }
+        });
+      } else {
+        staffMember = await tx.staffMember.create({
+          data: {
+            staff_id: staffId,
+            user_id: user.id,
+            teacher_id: teacherRecord?.id || null,
+            staff_type_id: staffType.id,
+            full_name: data.fullName,
+            email: data.email || null,
+            phone: data.phone,
+            gender: data.gender,
+            role: staffType.slug || staffType.code.toLowerCase(),
+            designation: data.designation,
+            qualification: data.qualification || null,
+            joining_date: new Date(data.joiningDate),
+            status: data.status,
+            base_salary: data.baseSalary,
+            hourly_rate: data.hourlyRate,
+            salary_type: data.salaryType,
+            payment_method: data.paymentMethod,
+            bank_name: data.bankName,
+            account_number: data.accountNumber,
+            account_title: data.accountTitle,
+            emergency_name: data.emergencyName,
+            emergency_phone: data.emergencyPhone,
+            emergency_relation: data.emergencyRelation,
+            password_hash: passwordHash,
+            temp_password_plain: tempPassword,
+            is_password_changed: false,
+            custom_fields: (data.customFields || undefined) as any
+          }
+        });
+      }
 
       // Clone / Apply Permissions
       const customPermMap = new Map<string, { accessLevel: AccessLevelString; isGlobalScope: boolean }>();
@@ -664,7 +742,8 @@ export async function updateStaff(req: AuthenticatedRequest, res: Response) {
 export async function deleteStaff(req: AuthenticatedRequest, res: Response) {
   try {
     const { id } = req.params;
-    const { permanent } = req.query;
+    const { permanent, mode } = req.query;
+    const isPermanent = permanent === 'true' || mode === 'hard';
 
     const staff = await prisma.staffMember.findFirst({
       where: {
@@ -680,29 +759,32 @@ export async function deleteStaff(req: AuthenticatedRequest, res: Response) {
       return sendError(res, 'Staff member not found', 404);
     }
 
-    // Guard: Check if teacher is assigned to active batches
-    if (staff.teacher_id) {
-      const activeBatches = await prisma.batch.findMany({
-        where: { teacher_id: staff.teacher_id, is_active: true },
-        select: { id: true, name: true }
-      });
-      if (activeBatches.length > 0) {
-        return sendError(
-          res,
-          `Cannot delete faculty member assigned to active batches. Please reassign batches first.`,
-          400
-        );
-      }
-    }
-
-    if (permanent === 'true') {
-      // Hard delete in transaction
+    if (isPermanent) {
+      // Hard delete in transaction with clean cascading
       await prisma.$transaction(async (tx) => {
+        // 1. Unassign batches and timetable slots if faculty
+        if (staff.teacher_id) {
+          await tx.batch.updateMany({
+            where: { teacher_id: staff.teacher_id },
+            data: { teacher_id: null }
+          });
+          await tx.timetableSlot.updateMany({
+            where: { teacher_id: staff.teacher_id },
+            data: { teacher_id: null }
+          }).catch(() => {});
+          await tx.homework.deleteMany({ where: { teacher_id: staff.teacher_id } }).catch(() => {});
+          await tx.studyMaterial.deleteMany({ where: { teacher_id: staff.teacher_id } }).catch(() => {});
+        }
+
+        // 2. Delete staff relationships
         await tx.staffPermission.deleteMany({ where: { staff_member_id: staff.id } });
         await tx.staffAttendance.deleteMany({ where: { staff_member_id: staff.id } });
         await tx.staffDocument.deleteMany({ where: { staff_member_id: staff.id } });
         await tx.staffSalaryPayment.deleteMany({ where: { staff_member_id: staff.id } });
         await tx.staffLeaveRequest.deleteMany({ where: { staff_member_id: staff.id } });
+        await tx.staffSalaryStructure.deleteMany({ where: { staff_member_id: staff.id } }).catch(() => {});
+
+        // 3. Delete staff member, teacher, user
         await tx.staffMember.delete({ where: { id: staff.id } });
         if (staff.teacher_id) {
           await tx.teacher.delete({ where: { id: staff.teacher_id } }).catch(() => {});
@@ -728,10 +810,10 @@ export async function deleteStaff(req: AuthenticatedRequest, res: Response) {
     }
 
     if (req.user && req.user.userId && req.user.userId !== 'admin-id') {
-      await createAuditLog(req.user.userId, 'DELETE_STAFF', 'StaffMember', staff.id, { staffId: staff.staff_id });
+      await createAuditLog(req.user.userId, 'DELETE_STAFF', 'StaffMember', staff.id, { staffId: staff.staff_id, mode: isPermanent ? 'hard' : 'soft' });
     }
 
-    return sendSuccess(res, { message: 'Staff member removed successfully', id: staff.id });
+    return sendSuccess(res, { message: 'Staff member deleted successfully', id: staff.id, mode: isPermanent ? 'hard' : 'soft' });
   } catch (err: any) {
     return sendError(res, err, 500);
   }
@@ -937,8 +1019,11 @@ export async function updateStaffPermissions(req: AuthenticatedRequest, res: Res
  */
 export async function bulkUpdateStaffStatus(req: AuthenticatedRequest, res: Response) {
   try {
-    const { staffIds, status, remarks } = req.body;
-    if (!Array.isArray(staffIds) || staffIds.length === 0) {
+    const rawStaffIds = req.body.staffIds || req.body.staff_ids;
+    const status = req.body.status;
+    const remarks = req.body.remarks || req.body.status_remarks || req.body.statusRemarks;
+
+    if (!Array.isArray(rawStaffIds) || rawStaffIds.length === 0) {
       return sendError(res, 'staffIds must be a non-empty array', 400);
     }
     if (!status) {
@@ -946,13 +1031,13 @@ export async function bulkUpdateStaffStatus(req: AuthenticatedRequest, res: Resp
     }
 
     const affected = await prisma.staffMember.findMany({
-      where: { id: { in: staffIds } },
+      where: { id: { in: rawStaffIds } },
       select: { id: true, user_id: true }
     });
 
     await prisma.$transaction(async (tx) => {
       await tx.staffMember.updateMany({
-        where: { id: { in: staffIds } },
+        where: { id: { in: rawStaffIds } },
         data: {
           status,
           ...(remarks && { status_remarks: remarks })
@@ -970,7 +1055,7 @@ export async function bulkUpdateStaffStatus(req: AuthenticatedRequest, res: Resp
       }
     });
 
-    return sendSuccess(res, { updatedCount: affected.length, staffIds, status });
+    return sendSuccess(res, { updatedCount: affected.length, staffIds: rawStaffIds, status });
   } catch (err: any) {
     return sendError(res, err, 500);
   }

@@ -4,8 +4,8 @@ import { DATE_REGEX, TIME_REGEX, MONTH_PERIOD_REGEX, staffAttendanceStatusEnum }
 export const staffCheckInSchema = z.object({
   staffMemberId: z.string().trim().optional(),
   staff_member_id: z.string().trim().optional(),
-  latitude: z.number({ required_error: 'Latitude coordinate is required', invalid_type_error: 'Latitude must be a valid number' }).min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90'),
-  longitude: z.number({ required_error: 'Longitude coordinate is required', invalid_type_error: 'Longitude must be a valid number' }).min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180'),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   device_info: z.string().trim().max(255).optional(),
   date: z.string().regex(DATE_REGEX, 'Date must be YYYY-MM-DD').optional(),
   check_in_time: z.string().regex(TIME_REGEX, 'Time must be HH:mm or HH:mm:ss').optional(),

@@ -2,6 +2,18 @@
 
 const BASE_URL = '/api/v1';
 
+function buildQueryString(params?: Record<string, any>): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, val]) => {
+    if (val !== undefined && val !== null && val !== '' && val !== 'all' && val !== 'undefined' && val !== 'null') {
+      searchParams.append(key, String(val));
+    }
+  });
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -482,8 +494,7 @@ export const api = {
 
   // Staff Members & Credentials
   getStaffList: (params?: { staff_type_id?: string; status?: string; role?: string; search?: string }) => {
-    const query = params ? new URLSearchParams(params as any).toString() : '';
-    return fetchApi<any[]>(`/staff${query ? `?${query}` : ''}`);
+    return fetchApi<any[]>(`/staff${buildQueryString(params)}`);
   },
   getStaffById: (id: string) => fetchApi<any>(`/staff/${id}`),
   registerStaff: (data: any) =>
@@ -556,16 +567,24 @@ export const api = {
     const query = params ? new URLSearchParams(params as any).toString() : '';
     return fetchApi<any[]>(`/staff-attendance${query ? `?${query}` : ''}`);
   },
-  checkInStaff: (staffId?: string, notes?: string) =>
-    fetchApi<any>('/staff-attendance/check-in', {
+  checkInStaff: (staffIdOrPayload?: string | { staffMemberId?: string; staff_id?: string; date?: string; check_in_time?: string; notes?: string; device_info?: string }, notes?: string) => {
+    const body = typeof staffIdOrPayload === 'string'
+      ? { staff_id: staffIdOrPayload, notes }
+      : (staffIdOrPayload || {});
+    return fetchApi<any>('/staff-attendance/check-in', {
       method: 'POST',
-      body: JSON.stringify({ staff_id: staffId, notes })
-    }),
-  checkOutStaff: (staffId?: string, notes?: string) =>
-    fetchApi<any>('/staff-attendance/check-out', {
+      body: JSON.stringify(body)
+    });
+  },
+  checkOutStaff: (staffIdOrPayload?: string | { staffMemberId?: string; staff_id?: string; date?: string; check_out_time?: string; notes?: string }, notes?: string) => {
+    const body = typeof staffIdOrPayload === 'string'
+      ? { staff_id: staffIdOrPayload, notes }
+      : (staffIdOrPayload || {});
+    return fetchApi<any>('/staff-attendance/check-out', {
       method: 'POST',
-      body: JSON.stringify({ staff_id: staffId, notes })
-    }),
+      body: JSON.stringify(body)
+    });
+  },
   bulkStaffAttendance: (date: string, entries: Array<{ staff_id: string; status: string; check_in_time?: string; check_out_time?: string; notes?: string }>) =>
     fetchApi<any>('/staff-attendance/bulk', {
       method: 'POST',
@@ -623,12 +642,12 @@ export const api = {
       body: JSON.stringify(payload)
     }),
 
-  // Staff Geolocation Check-In / Check-Out & Override
+  // Staff Attendance Override & GPS Fallback
   checkInStaffWithGps: (payload: {
     staffMemberId?: string;
     staff_id?: string;
-    latitude: number;
-    longitude: number;
+    latitude?: number;
+    longitude?: number;
     distance?: number;
     device_info?: string;
     notes?: string;
@@ -669,8 +688,7 @@ export const api = {
     staff_type_id?: string;
     status?: string;
   }) => {
-    const query = params ? new URLSearchParams(params as any).toString() : '';
-    return fetchApi<any>(`/staff-attendance/roster${query ? `?${query}` : ''}`);
+    return fetchApi<any>(`/staff-attendance/roster${buildQueryString(params)}`);
   },
 
   // ==========================================================================

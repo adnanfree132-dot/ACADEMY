@@ -9,9 +9,7 @@ import {
   Clock, 
   Download, 
   Users, 
-  GraduationCap, 
-  Navigation,
-  Compass
+  GraduationCap
 } from 'lucide-react';
 import { api } from '../api/apiClient';
 import { exportToCSV } from '../utils/csvExporter';
@@ -33,7 +31,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
   const currentBatch = batches.find(b => b.id === selectedBatchId) || batches[0];
   const batchStudents = students;
 
-  const [attendanceState, setAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late'>>({
+  const [attendanceState, setAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'>>({
     s1: 'Present',
     s2: 'Present',
     s3: 'Present',
@@ -41,7 +39,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
     s5: 'Present'
   });
 
-  const toggleStatus = (studentId: string, status: 'Present' | 'Absent' | 'Late') => {
+  const toggleStatus = (studentId: string, status: 'Present' | 'Absent' | 'Late' | 'Leave') => {
     setAttendanceState(prev => ({ ...prev, [studentId]: status }));
   };
 
@@ -92,7 +90,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
             borderRadius: 10,
             padding: '8px 18px',
             fontSize: 13,
-            fontWeight: portalTab === 'students' ? 800 : 600,
+            fontWeight: 500,
             border: 'none',
             background: portalTab === 'students' ? '#0F172A' : 'transparent',
             color: portalTab === 'students' ? '#FFFFFF' : '#64748B',
@@ -126,7 +124,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
             borderRadius: 10,
             padding: '8px 18px',
             fontSize: 13,
-            fontWeight: portalTab === 'staff' ? 800 : 600,
+            fontWeight: 500,
             border: 'none',
             background: portalTab === 'staff' ? '#0F172A' : 'transparent',
             color: portalTab === 'staff' ? '#FFFFFF' : '#64748B',
@@ -149,8 +147,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
             }
           }}
         >
-          <Navigation size={15} color={portalTab === 'staff' ? '#FFFFFF' : '#64748B'} />
-          Staff Geolocation Attendance
+          <Users size={15} color={portalTab === 'staff' ? '#FFFFFF' : '#64748B'} />
+          Staff Attendance
         </button>
       </div>
 
@@ -218,7 +216,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                   return (
                     <tr key={s.id}>
                       <td>
-                        <div style={{ fontWeight: 800, color: '#0F172A' }}>{s.name}</div>
+                        <div style={{ fontWeight: 600, color: '#0F172A' }}>{s.name}</div>
                         <div style={{ fontSize: 11, color: '#94A3B8' }}>{s.regNo}</div>
                       </td>
                       <td><span className="badge badge-gray">{s.gradeBatch}</span></td>
@@ -226,6 +224,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         {currentStatus === 'Present' && <span className="badge badge-green"><Check size={12} /> Present</span>}
                         {currentStatus === 'Absent' && <span className="badge badge-red"><X size={12} /> Absent</span>}
                         {currentStatus === 'Late' && <span className="badge badge-amber"><Clock size={12} /> Late</span>}
+                        {currentStatus === 'Leave' && <span className="badge badge-blue"><Users size={12} /> Leave</span>}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -247,6 +246,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                           >
                             Late
                           </button>
+                          <button 
+                            className={`btn-secondary btn-sm ${currentStatus === 'Leave' ? 'btn-primary' : ''}`}
+                            style={currentStatus === 'Leave' ? { background: '#2563EB', color: '#FFFFFF', borderColor: '#2563EB' } : {}}
+                            onClick={() => toggleStatus(s.id, 'Leave')}
+                          >
+                            Leave
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -264,14 +270,14 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                 <div key={s.id} className="mobile-entity-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>{s.name}</h3>
-                      <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{s.regNo}</span>
+                      <h3 style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', margin: 0 }}>{s.name}</h3>
+                      <span style={{ fontSize: 11, color: '#64748B', fontWeight: 500 }}>{s.regNo}</span>
                     </div>
                     <span className="badge badge-gray">{s.gradeBatch}</span>
                   </div>
 
                   {/* Status Segmented Touch Buttons */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, paddingTop: 4 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, paddingTop: 4 }}>
                     <button
                       type="button"
                       onClick={() => toggleStatus(s.id, 'Present')}
@@ -281,8 +287,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         border: currentStatus === 'Present' ? '1.5px solid #10B981' : '1.5px solid #E2E8F0',
                         background: currentStatus === 'Present' ? '#ECFDF5' : '#FFFFFF',
                         color: currentStatus === 'Present' ? '#065F46' : '#64748B',
-                        fontWeight: 700,
-                        fontSize: 12,
+                        fontWeight: 500,
+                        fontSize: 11.5,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -290,7 +296,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         gap: 4
                       }}
                     >
-                      <Check size={14} /> Present
+                      <Check size={13} /> Present
                     </button>
 
                     <button
@@ -302,8 +308,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         border: currentStatus === 'Absent' ? '1.5px solid #EF4444' : '1.5px solid #E2E8F0',
                         background: currentStatus === 'Absent' ? '#FEF2F2' : '#FFFFFF',
                         color: currentStatus === 'Absent' ? '#991B1B' : '#64748B',
-                        fontWeight: 700,
-                        fontSize: 12,
+                        fontWeight: 500,
+                        fontSize: 11.5,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -311,7 +317,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         gap: 4
                       }}
                     >
-                      <X size={14} /> Absent
+                      <X size={13} /> Absent
                     </button>
 
                     <button
@@ -323,8 +329,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         border: currentStatus === 'Late' ? '1.5px solid #F59E0B' : '1.5px solid #E2E8F0',
                         background: currentStatus === 'Late' ? '#FFFBEB' : '#FFFFFF',
                         color: currentStatus === 'Late' ? '#92400E' : '#64748B',
-                        fontWeight: 700,
-                        fontSize: 12,
+                        fontWeight: 500,
+                        fontSize: 11.5,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -332,7 +338,28 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                         gap: 4
                       }}
                     >
-                      <Clock size={14} /> Late
+                      <Clock size={13} /> Late
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleStatus(s.id, 'Leave')}
+                      style={{
+                        height: 36,
+                        borderRadius: 8,
+                        border: currentStatus === 'Leave' ? '1.5px solid #2563EB' : '1.5px solid #E2E8F0',
+                        background: currentStatus === 'Leave' ? '#EFF6FF' : '#FFFFFF',
+                        color: currentStatus === 'Leave' ? '#1E40AF' : '#64748B',
+                        fontWeight: 500,
+                        fontSize: 11.5,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4
+                      }}
+                    >
+                      <Users size={13} /> Leave
                     </button>
                   </div>
                 </div>

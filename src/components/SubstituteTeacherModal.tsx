@@ -18,6 +18,12 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
   onClose,
   onSaved
 }) => {
+  // Exclude terminated / inactive teachers from dropdown selector
+  const activeTeachers = teachers.filter(t => {
+    const st = ((t as any).status || '').toLowerCase();
+    return st !== 'terminated' && st !== 'inactive' && st !== 'left' && st !== 'resigned';
+  });
+
   const [substituteTeacherId, setSubstituteTeacherId] = useState('');
   const [substituteDate, setSubstituteDate] = useState(new Date().toISOString().split('T')[0]);
   const [reason, setReason] = useState('Primary instructor on medical leave');
@@ -26,7 +32,7 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
 
   const handleAssignSubstitute = (e: React.FormEvent) => {
     e.preventDefault();
-    const selectedTeacher = teachers.find(t => t.id === substituteTeacherId);
+    const selectedTeacher = activeTeachers.find(t => t.id === substituteTeacherId) || teachers.find(t => t.id === substituteTeacherId);
     if (!selectedTeacher) return;
 
     if (onSaved) onSaved();
@@ -160,7 +166,7 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
                 value={substituteTeacherId}
                 onChange={setSubstituteTeacherId}
                 placeholder="— Select Available Teacher —"
-                options={teachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))}
+                options={activeTeachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))}
                 zIndex={1200}
               />
             </div>
@@ -214,7 +220,7 @@ export const SubstituteTeacherModal: React.FC<SubstituteTeacherModalProps> = ({
                 value={coTeacherId}
                 onChange={setCoTeacherId}
                 placeholder="— Select Co-Teacher —"
-                options={teachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))}
+                options={activeTeachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))}
                 zIndex={1200}
               />
             </div>

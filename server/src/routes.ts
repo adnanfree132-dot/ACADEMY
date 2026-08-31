@@ -1238,24 +1238,37 @@ router.delete('/teachers/:id', authenticateJwt, requireModulePermission('teacher
     const teacher = await prisma.teacher.findUnique({ where: { id } });
     if (!teacher) return sendError(res, 'Teacher not found', 404);
 
-    // Guard: Check if teacher is assigned to active batches
-    const activeBatches = await prisma.batch.findMany({
-      where: { teacher_id: id, is_active: true },
-      select: { id: true, name: true }
-    });
-
-    if (activeBatches.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cannot delete faculty member assigned to active batches. Reassign batches first.',
-        data: { activeBatches }
+    await prisma.$transaction(async (tx) => {
+      // 1. Unassign batches and timetable slots
+      await tx.batch.updateMany({
+        where: { teacher_id: id },
+        data: { teacher_id: null }
       });
-    }
+      await tx.timetableSlot.updateMany({
+        where: { teacher_id: id },
+        data: { teacher_id: null }
+      }).catch(() => {});
+      await tx.homework.deleteMany({ where: { teacher_id: id } }).catch(() => {});
+      await tx.studyMaterial.deleteMany({ where: { teacher_id: id } }).catch(() => {});
 
-    await prisma.teacher.delete({ where: { id } });
-    if (teacher.user_id) {
-      await prisma.user.delete({ where: { id: teacher.user_id } }).catch(() => {});
-    }
+      // 2. Cascade delete linked StaffMember if exists
+      const staff = await tx.staffMember.findFirst({ where: { teacher_id: id } });
+      if (staff) {
+        await tx.staffPermission.deleteMany({ where: { staff_member_id: staff.id } });
+        await tx.staffAttendance.deleteMany({ where: { staff_member_id: staff.id } });
+        await tx.staffDocument.deleteMany({ where: { staff_member_id: staff.id } });
+        await tx.staffSalaryPayment.deleteMany({ where: { staff_member_id: staff.id } });
+        await tx.staffLeaveRequest.deleteMany({ where: { staff_member_id: staff.id } });
+        await tx.staffSalaryStructure.deleteMany({ where: { staff_member_id: staff.id } }).catch(() => {});
+        await tx.staffMember.delete({ where: { id: staff.id } });
+      }
+
+      // 3. Delete Teacher & User
+      await tx.teacher.delete({ where: { id } });
+      if (teacher.user_id) {
+        await tx.user.delete({ where: { id: teacher.user_id } }).catch(() => {});
+      }
+    });
 
     if (req.user) {
       await createAuditLog(req.user.userId, 'DELETE_TEACHER', 'Teacher', id);
@@ -1403,7 +1416,32 @@ router.put('/batches/:id', authenticateJwt, requireModulePermission('batches', '
 router.delete('/batches/:id', authenticateJwt, requireModulePermission('batches', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    await prisma.batch.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete installment schedules for enrollments in this batch
+      const enrollments = await tx.enrollment.findMany({ where: { batch_id: id }, select: { id: true } });
+      const enrollmentIds = enrollments.map(e => e.id);
+      if (enrollmentIds.length > 0) {
+        await tx.studentInstallmentSchedule.deleteMany({ where: { enrollment_id: { in: enrollmentIds } } });
+      }
+
+      // 2. Delete enrollments, batch subjects, schedules, attendance, tests
+      await tx.enrollment.deleteMany({ where: { batch_id: id } });
+      await tx.batchSubject.deleteMany({ where: { batch_id: id } });
+      await tx.timetableSlot.deleteMany({ where: { batch_id: id } }).catch(() => {});
+      await tx.attendance.deleteMany({ where: { batch_id: id } });
+      await tx.homework.deleteMany({ where: { batch_id: id } }).catch(() => {});
+      await tx.studyMaterial.deleteMany({ where: { batch_id: id } }).catch(() => {});
+      
+      const tests = await tx.test.findMany({ where: { batch_id: id }, select: { id: true } });
+      const testIds = tests.map(t => t.id);
+      if (testIds.length > 0) {
+        await tx.testMark.deleteMany({ where: { test_id: { in: testIds } } });
+      }
+      await tx.test.deleteMany({ where: { batch_id: id } });
+
+      // 3. Delete batch
+      await tx.batch.delete({ where: { id } });
+    });
 
     if (req.user) {
       await createAuditLog(req.user.userId, 'DELETE_BATCH', 'Batch', id);

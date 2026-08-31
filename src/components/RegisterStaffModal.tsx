@@ -52,20 +52,21 @@ export const RegisterStaffModal: React.FC<RegisterStaffModalProps> = ({
 
   const defaultTypeId = staffTypeId || staffTypes[0]?.id || '';
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !designation.trim()) {
-      setErrorMsg('Please complete all required fields (Name, Phone, Designation).');
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!fullName.trim() || !phone.trim()) {
+      setErrorMsg('Please enter the employee Full Name and Phone Number.');
       return;
     }
 
     setIsSubmitting(true);
     setErrorMsg('');
 
-    const selectedType = staffTypes.find(t => t.id === defaultTypeId);
-    const generatedPrefix = selectedType?.code || 'STF';
+    const selectedType = staffTypes.find(t => t.id === defaultTypeId) || staffTypes[0];
+    const generatedPrefix = selectedType?.code || 'FAC';
     const tempStaffId = `${generatedPrefix}-2026-${Math.floor(100 + Math.random() * 900)}`;
     const tempPassword = `Acad#${Math.floor(1000 + Math.random() * 9000)}`;
+    const finalDesignation = designation.trim() || `${selectedType?.name || 'Faculty'} Lecturer`;
 
     const optimisticStaff = {
       id: `temp_${Date.now()}`,
@@ -75,14 +76,14 @@ export const RegisterStaffModal: React.FC<RegisterStaffModalProps> = ({
       phone: phone.trim(),
       email: email.trim() || `${fullName.toLowerCase().replace(/\s+/g, '.')}@academy.com`,
       gender,
-      staffTypeId: defaultTypeId,
+      staffTypeId: defaultTypeId || selectedType?.id || 'st_faculty',
       staffType: selectedType,
       role: selectedType?.name || 'Faculty',
-      designation: designation.trim(),
-      qualification: qualification.trim(),
+      designation: finalDesignation,
+      qualification: qualification.trim() || 'Master of Science',
       joiningDate,
       status: 'active',
-      baseSalary: Number(baseSalary) || 0,
+      baseSalary: Number(baseSalary) || 65000,
       salaryType,
       paymentMethod,
       emergencyName: emergencyName.trim(),
@@ -94,26 +95,22 @@ export const RegisterStaffModal: React.FC<RegisterStaffModalProps> = ({
       staffId: tempStaffId,
       fullName: fullName.trim(),
       phone: phone.trim(),
-      email: email.trim(),
+      email: email.trim() || `${fullName.toLowerCase().replace(/\s+/g, '.')}@academy.com`,
       role: selectedType?.name || 'Faculty',
-      designation: designation.trim(),
+      designation: finalDesignation,
       temporaryPassword: tempPassword,
       issuedAt: new Date().toISOString()
     };
 
-    // 0ms instant optimistic dispatch
-    onSuccess(optimisticStaff, credentialsData);
-    onClose();
-
-    // Background silent API call
+    // Direct API registration call
     try {
       const response = await api.registerStaff({
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
         gender,
-        staffTypeId: defaultTypeId,
-        designation: designation.trim(),
+        staffTypeId: defaultTypeId || selectedType?.id || 'st_faculty',
+        designation: finalDesignation,
         qualification: qualification.trim() || undefined,
         joiningDate,
         baseSalary: Number(baseSalary) || 0,
@@ -124,11 +121,31 @@ export const RegisterStaffModal: React.FC<RegisterStaffModalProps> = ({
         emergencyRelation: emergencyRelation.trim() || undefined
       });
 
-      if (response && response.credentials) {
-        // Updated with official backend-assigned credentials
-      }
+      const resData = response as any;
+      const createdStaff = resData?.staff ? resData.staff : {
+        ...optimisticStaff,
+        id: resData?.id || optimisticStaff.id,
+        staffId: resData?.staffId || resData?.staff_id || tempStaffId
+      };
+
+      const finalCredentials: StaffCredentialData = resData?.credentials ? {
+        staffId: resData.credentials.staffId || createdStaff.staffId || tempStaffId,
+        fullName: createdStaff.fullName,
+        phone: createdStaff.phone,
+        email: createdStaff.email,
+        role: createdStaff.role || selectedType?.name || 'Faculty',
+        designation: createdStaff.designation,
+        temporaryPassword: resData.credentials.temporaryPassword || tempPassword,
+        issuedAt: resData.credentials.issuedAt || new Date().toISOString()
+      } : credentialsData;
+
+      onSuccess(createdStaff, finalCredentials);
+      onClose();
     } catch (err: any) {
-      console.error('Background staff registration error:', err);
+      console.error('Staff registration error:', err);
+      setErrorMsg(err?.message || 'Failed to register staff member. Please verify phone number and email uniqueness.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

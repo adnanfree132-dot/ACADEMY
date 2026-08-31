@@ -294,7 +294,7 @@ export const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({ stud
               <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, letterSpacing: '0.02em' }}>{student.regNo}</span>
             </div>
             <h2 style={{ fontSize: 22, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.02em', margin: 0 }}>{student.name}</h2>
-            <p style={{ fontSize: 13, color: '#94A3B8', marginTop: 3, margin: 0 }}>{student.gradeBatch} 360° Profile</p>
+            <p style={{ fontSize: 13, color: '#94A3B8', marginTop: 3, margin: 0 }}>{student.gradeBatch} Profile</p>
           </div>
           <button 
             onClick={onClose} 
@@ -328,7 +328,7 @@ export const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({ stud
                 background: activeTab === tab ? '#0F172A' : 'transparent',
                 borderRadius: 8,
                 color: activeTab === tab ? '#FFFFFF' : '#64748B',
-                fontWeight: activeTab === tab ? 800 : 600,
+                fontWeight: 500,
                 fontSize: 11.5,
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
@@ -864,7 +864,7 @@ export const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({ stud
                                   borderRadius: 8,
                                   cursor: 'pointer',
                                   fontSize: 13,
-                                  fontWeight: isSelected ? 700 : 500,
+                                  fontWeight: 500,
                                   color: isSelected ? '#1D4ED8' : '#334155',
                                   background: isSelected ? '#EFF6FF' : 'transparent',
                                   display: 'flex',
@@ -962,7 +962,7 @@ export const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({ stud
                                   borderRadius: 8,
                                   cursor: 'pointer',
                                   fontSize: 13,
-                                  fontWeight: isSelected ? 700 : 500,
+                                  fontWeight: 500,
                                   color: isSelected ? '#1D4ED8' : '#334155',
                                   background: isSelected ? '#EFF6FF' : 'transparent',
                                   display: 'flex',

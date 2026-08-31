@@ -146,7 +146,7 @@ export const ModernSelect: React.FC<ModernSelectProps> = ({
                   padding: compact ? '7px 10px' : '8px 12px',
                   borderRadius: 7,
                   fontSize: compact ? 12 : 12.5,
-                  fontWeight: isSelected ? 600 : 500,
+                  fontWeight: 500,
                   color: isSelected ? '#1E40AF' : '#334155',
                   background: isSelected ? '#EFF6FF' : 'transparent',
                   cursor: 'pointer',

@@ -17,7 +17,8 @@ import {
   LogOut,
   Sparkles,
   ChevronRight,
-  DollarSign
+  DollarSign,
+  UserCheck
 } from 'lucide-react';
 import { getUnitCombinedLabel } from '../utils/academyModeHelper';
 
@@ -122,6 +123,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, onLog
                 <span>Attendance Portal</span>
               </div>
               {isTabActive('attendance') && <ChevronRight size={16} className="chevron" />}
+            </button>
+
+            <button 
+              className={getNavItemClass('staff_attendance')} 
+              onClick={() => onSelectTab('staff_attendance')}
+            >
+              <div className="nav-left">
+                <UserCheck size={18} />
+                <span>Staff Attendance</span>
+              </div>
+              {isTabActive('staff_attendance') && <ChevronRight size={16} className="chevron" />}
             </button>
 
             <button 

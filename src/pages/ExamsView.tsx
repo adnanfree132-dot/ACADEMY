@@ -245,7 +245,6 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
       }}>
         {/* Search Bar */}
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-          <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
           <input 
             type="text" 
             placeholder="Search assessments or subject..." 
@@ -254,7 +253,7 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
             style={{ 
               width: '100%', 
               height: 38, 
-              paddingLeft: 36, 
+              paddingLeft: 12, 
               paddingRight: 12, 
               borderRadius: 10, 
               border: '1px solid #CBD5E1', 

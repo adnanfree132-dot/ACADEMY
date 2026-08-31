@@ -111,13 +111,12 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({
       {/* Search Bar & Stats */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 400 }}>
-          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
           <input
             className="form-input"
             placeholder="Search subjects by name or code..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            style={{ paddingLeft: 40 }}
+            style={{ paddingLeft: 14 }}
           />
         </div>
         <div className="card" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, width: 'auto' }}>

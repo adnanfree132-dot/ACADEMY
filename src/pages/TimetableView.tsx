@@ -77,11 +77,15 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
       setTimetableSlots(initialSlots);
       setBatches(batchesData || []);
       setSubjects(subjectsData || []);
-      setTeachers(teachersData || []);
+      const activeTeachers = (teachersData || []).filter((t: any) => {
+        const st = (t.status || '').toLowerCase();
+        return st !== 'terminated' && st !== 'inactive' && st !== 'left' && st !== 'resigned';
+      });
+      setTeachers(activeTeachers);
 
       if (batchesData && batchesData.length > 0 && !formBatchId) setFormBatchId(batchesData[0].id);
       if (subjectsData && subjectsData.length > 0 && !formSubjectId) setFormSubjectId(subjectsData[0].id);
-      if (teachersData && teachersData.length > 0 && !formTeacherId) setFormTeacherId(teachersData[0].id);
+      if (activeTeachers.length > 0 && !formTeacherId) setFormTeacherId(activeTeachers[0].id);
     } catch (err) {
       console.error('Error loading timetable:', err);
     } finally {
@@ -263,7 +267,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
                 border: 'none',
                 background: isActive ? '#0F172A' : 'transparent',
                 color: isActive ? '#FFFFFF' : '#64748B',
-                fontWeight: isActive ? 800 : 600,
+                fontWeight: 600,
                 fontSize: 13,
                 cursor: 'pointer',
                 display: 'flex',
@@ -282,7 +286,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
                 borderRadius: 9999,
                 background: isActive ? 'rgba(255,255,255,0.2)' : '#F1F5F9',
                 color: isActive ? '#FFFFFF' : '#64748B',
-                fontWeight: 700
+                fontWeight: 600
               }}>
                 {count}
               </span>
@@ -304,7 +308,6 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
         boxShadow: '0 1px 3px rgba(15,23,42,0.02)'
       }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-          <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
           <input 
             type="text" 
             placeholder="Search subject, cohort, teacher, or room..." 
@@ -313,7 +316,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
             style={{ 
               width: '100%', 
               height: 38, 
-              paddingLeft: 36, 
+              paddingLeft: 12, 
               paddingRight: 12, 
               borderRadius: 10, 
               border: '1px solid #CBD5E1', 
@@ -364,11 +367,11 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
             >
               {/* Card Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span className="badge badge-primary" style={{ fontSize: 11, fontWeight: 700 }}>
+                <span className="badge badge-primary" style={{ fontSize: 11, fontWeight: 600 }}>
                   {slot.batch?.name || 'General Cohort'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Clock size={13} color="#64748B" /> {slot.start_time} – {slot.end_time}
                   </span>
                   <button
@@ -383,7 +386,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
 
               {/* Subject & Topic */}
               <div>
-                <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                <h3 style={{ fontSize: 14.5, fontWeight: 600, color: '#0F172A', margin: 0 }}>
                   {slot.subject?.name || slot.subject || 'Curriculum Subject'}
                 </h3>
                 {slot.topic && (

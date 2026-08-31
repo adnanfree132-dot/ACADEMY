@@ -366,7 +366,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 border: isSelected ? `1px solid ${tab.color}` : '1px solid transparent',
                 background: isSelected ? tab.bg : 'transparent',
                 color: isSelected ? tab.color : '#64748B',
-                fontWeight: isSelected ? 800 : 600,
+                fontWeight: 600,
                 fontSize: 12.5,
                 cursor: 'pointer',
                 display: 'inline-flex',
@@ -383,7 +383,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 borderRadius: 9999,
                 background: isSelected ? 'rgba(255,255,255,0.7)' : '#F1F5F9',
                 color: isSelected ? tab.color : '#64748B',
-                fontWeight: 700
+                fontWeight: 600
               }}>
                 {tab.count}
               </span>
@@ -395,7 +395,6 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       {/* Clean Minimal Search & Filter Bar */}
       <div style={{ display: 'flex', gap: 12, background: '#FFFFFF', padding: '8px 14px', borderRadius: 10, border: '1px solid #E2E8F0', alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 1px 2px rgba(15,23,42,0.02)' }}>
         <div style={{ display: 'flex', alignItems: 'center', background: '#F8FAFC', padding: '0 12px', borderRadius: 6, border: '1px solid #E2E8F0', flex: 1, minWidth: 240, height: 34 }}>
-          <Search size={14} color="#94A3B8" style={{ marginRight: 8 }} />
           <input
             type="text"
             placeholder="Search students by name, roll no, or parent..."
@@ -540,11 +539,11 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
                     <td style={{ textAlign: 'right', paddingRight: '14px', position: 'relative', zIndex: isRowActive ? 100 : 1 }}>
                       <div className="table-action-group" style={{ position: 'relative', zIndex: isRowActive ? 100 : 1 }}>
-                        {/* View 360 Profile */}
+                        {/* View Profile */}
                         <button 
                           className="btn-secondary btn-sm" 
                           onClick={() => setSelectedStudent(student)} 
-                          title="View 360° Profile"
+                          title="View Profile"
                         >
                           View
                         </button>
@@ -914,7 +913,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         )}
       </div>
 
-      {/* 360° Student Profile Drawer */}
+      {/* Student Profile Drawer */}
       <StudentProfileDrawer 
         student={selectedStudent} 
         onClose={() => setSelectedStudent(null)} 

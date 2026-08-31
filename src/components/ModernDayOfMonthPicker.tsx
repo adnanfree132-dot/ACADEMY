@@ -231,7 +231,7 @@ export const ModernDayOfMonthPicker: React.FC<ModernDayOfMonthPickerProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: 11.5,
-                      fontWeight: isSelected ? 800 : (isDefault ? 700 : 500),
+                      fontWeight: 500,
                       borderRadius: 6,
                       border: isDefault && !isSelected ? '1.5px dashed #3B82F6' : '1px solid transparent',
                       background: isSelected ? '#0F172A' : (isDefault ? '#EFF6FF' : 'transparent'),
