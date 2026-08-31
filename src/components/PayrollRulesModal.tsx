@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Check, 
   Calendar, 
   Clock, 
   TrendingDown, 
-  Sliders,
   Sparkles,
-  Zap,
   Award,
-  DollarSign,
   FileText,
-  Building,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  RefreshCw
+  Plus,
+  Edit2,
+  Trash2,
+  Bookmark,
+  Save,
+  RotateCcw
 } from 'lucide-react';
-import { ModernSelect } from './ModernSelect';
 import { api } from '../api/apiClient';
 
 export interface PayrollDeductionPolicy {
@@ -44,6 +44,32 @@ export interface PayrollDeductionPolicy {
   };
   rawPolicyText?: string;
 }
+
+export interface PolicyTemplate {
+  id: string;
+  name: string;
+  policyText: string;
+}
+
+const DEFAULT_TEMPLATES: PolicyTemplate[] = [
+  {
+    id: 'tmpl-1',
+    name: 'School / College Standard',
+    policyText: 'Standard school schedule: 26 working days. Teachers receive 2 paid leaves per month. 3 late arrivals equal 1 half-day deduction. Science teachers get 10% lab allowance. 2000 PKR bonus for 100% attendance.'
+  },
+  {
+    id: 'tmpl-2',
+    name: 'Strict Academy Policy',
+    policyText: 'Strict private academy policy: 30 days divisor. 1 paid leave per month. 3 lates equal 1 full day salary deduction. Unexcused absences deduct 150% daily wage. 3000 PKR attendance bonus.'
+  },
+  {
+    id: 'tmpl-3',
+    name: 'Coaching & Higher Ed',
+    policyText: 'Higher education & coaching center: Calendar days basis. 4 monthly leaves. Late arrivals have 500 PKR fixed penalty after 2 grace lates. Transport allowance is 3,000 PKR.'
+  }
+];
+
+const TEMPLATES_STORAGE_KEY = 'academy_payroll_policy_templates';
 
 export const DEFAULT_PAYROLL_POLICY: PayrollDeductionPolicy = {
   policyName: 'Standard Academic Policy',
@@ -77,7 +103,6 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
   currentPolicy = DEFAULT_PAYROLL_POLICY,
   onSavePolicy
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
   const [policy, setPolicy] = useState<PayrollDeductionPolicy>({
     ...DEFAULT_PAYROLL_POLICY,
     ...currentPolicy
@@ -88,16 +113,103 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
     'Teachers and staff work 26 standard days per month. Each employee is granted 2 paid casual leaves per month. 3 late arrivals result in 1 full day salary deduction. Science and laboratory teachers receive a 15% special allowance. Staff with 100% monthly attendance receive a 2,500 PKR attendance bonus.'
   );
 
+  // Dynamic Editable Templates State
+  const [templates, setTemplates] = useState<PolicyTemplate[]>(() => {
+    try {
+      const saved = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_TEMPLATES;
+  });
+
+  const [activeTemplateId, setActiveTemplateId] = useState<string>('tmpl-1');
+
+  // Template Editing / Adding Modal State
+  const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateFormName, setTemplateFormName] = useState<string>('');
+  const [templateFormText, setTemplateFormText] = useState<string>('');
+
   const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
   const [aiSuccessMsg, setAiSuccessMsg] = useState<string>('');
   const [aiErrorMsg, setAiErrorMsg] = useState<string>('');
 
+  // Persist templates to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+    } catch {}
+  }, [templates]);
+
   if (!isOpen) return null;
 
-  const handleApplyPreset = (text: string) => {
-    setPolicyInputText(text);
+  const handleSelectTemplate = (tmpl: PolicyTemplate) => {
+    setActiveTemplateId(tmpl.id);
+    setPolicyInputText(tmpl.policyText);
     setAiSuccessMsg('');
     setAiErrorMsg('');
+  };
+
+  const handleOpenAddTemplate = () => {
+    setEditingTemplateId(null);
+    setTemplateFormName('');
+    setTemplateFormText(policyInputText || '');
+    setIsEditingTemplate(true);
+  };
+
+  const handleOpenEditTemplate = (tmpl: PolicyTemplate, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTemplateId(tmpl.id);
+    setTemplateFormName(tmpl.name);
+    setTemplateFormText(tmpl.policyText);
+    setIsEditingTemplate(true);
+  };
+
+  const handleDeleteTemplate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (templates.length <= 1) {
+      alert('You must keep at least one policy template.');
+      return;
+    }
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+    if (activeTemplateId === id) {
+      handleSelectTemplate(updated[0]);
+    }
+  };
+
+  const handleSaveTemplateForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateFormName.trim() || !templateFormText.trim()) return;
+
+    if (editingTemplateId) {
+      // Edit existing
+      const updated = templates.map(t => 
+        t.id === editingTemplateId 
+          ? { ...t, name: templateFormName.trim(), policyText: templateFormText.trim() }
+          : t
+      );
+      setTemplates(updated);
+      if (activeTemplateId === editingTemplateId) {
+        setPolicyInputText(templateFormText.trim());
+      }
+    } else {
+      // Add new
+      const newId = `tmpl-${Date.now()}`;
+      const newTmpl: PolicyTemplate = {
+        id: newId,
+        name: templateFormName.trim(),
+        policyText: templateFormText.trim()
+      };
+      setTemplates([...templates, newTmpl]);
+      setActiveTemplateId(newId);
+      setPolicyInputText(newTmpl.policyText);
+    }
+
+    setIsEditingTemplate(false);
   };
 
   const handleRunAiParser = async () => {
@@ -135,7 +247,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
         setAiSuccessMsg('Cloudflare Workers AI parsed your policy into structured calculation rules.');
       }
     } catch (err: any) {
-      setAiErrorMsg(err.message || 'Unable to parse policy via AI. You can fine-tune rules in manual mode.');
+      setAiErrorMsg(err.message || 'Unable to parse policy via AI. Please check the text description.');
     } finally {
       setIsAiProcessing(false);
     }
@@ -187,7 +299,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, letterSpacing: '-0.01em' }}>
-                  AI Payroll Policy & Rule Engine
+                  AI Payroll Policy Engine
                 </h3>
                 <span
                   style={{
@@ -230,65 +342,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
           </button>
         </div>
 
-        {/* Island 2: Mode Selector Pill Island */}
-        <div
-          style={{
-            background: '#FFFFFF',
-            borderRadius: 14,
-            border: '1.5px solid #E2E8F0',
-            padding: '4px',
-            display: 'inline-flex',
-            gap: 4,
-            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-            alignSelf: 'flex-start'
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setActiveTab('ai')}
-            style={{
-              borderRadius: 10,
-              padding: '7px 14px',
-              fontSize: 12,
-              fontWeight: 700,
-              border: 'none',
-              background: activeTab === 'ai' ? '#0F172A' : 'transparent',
-              color: activeTab === 'ai' ? '#FFFFFF' : '#64748B',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'background-color 0.15s ease, color 0.15s ease'
-            }}
-          >
-            <Sparkles size={13} color={activeTab === 'ai' ? '#FFFFFF' : '#64748B'} />
-            AI Policy Document Parser
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('manual')}
-            style={{
-              borderRadius: 10,
-              padding: '7px 14px',
-              fontSize: 12,
-              fontWeight: 700,
-              border: 'none',
-              background: activeTab === 'manual' ? '#0F172A' : 'transparent',
-              color: activeTab === 'manual' ? '#FFFFFF' : '#64748B',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'background-color 0.15s ease, color 0.15s ease'
-            }}
-          >
-            <Sliders size={13} color={activeTab === 'manual' ? '#FFFFFF' : '#64748B'} />
-            Fine-Tune Calculation Rules
-          </button>
-        </div>
-
-        {/* Island 3: Form & Rules Configuration Card */}
+        {/* Island 2: Form & Rules Configuration Card */}
         <div
           style={{
             background: '#FFFFFF',
@@ -303,337 +357,337 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
             gap: 16
           }}
         >
-          {/* TAB 1: AI Policy Parser */}
-          {activeTab === 'ai' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              
-              {/* Quick Template Chips */}
-              <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
-                  Quick Policy Templates
+          {/* Dynamic Editable Policy Templates Section */}
+          <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1.5px solid #E2E8F0', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Bookmark size={13} color="#2563EB" /> Saved Policy Templates
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenAddTemplate}
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 9999,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#2563EB',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  cursor: 'pointer'
+                }}
+              >
+                <Plus size={12} /> Add Template
+              </button>
+            </div>
+
+            {/* Template Chips */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {templates.map(tmpl => {
+                const isSelected = activeTemplateId === tmpl.id;
+                return (
+                  <div
+                    key={tmpl.id}
+                    onClick={() => handleSelectTemplate(tmpl)}
+                    style={{
+                      background: isSelected ? '#0F172A' : '#FFFFFF',
+                      color: isSelected ? '#FFFFFF' : '#334155',
+                      border: isSelected ? '1.5px solid #0F172A' : '1px solid #CBD5E1',
+                      borderRadius: 9999,
+                      padding: '4px 10px 4px 12px',
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      boxShadow: isSelected ? '0 2px 6px rgba(15,23,42,0.15)' : '0 1px 2px rgba(15,23,42,0.04)',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>{tmpl.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 2 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEditTemplate(tmpl, e)}
+                        title="Edit Template Name & Text"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: isSelected ? '#94A3B8' : '#64748B',
+                          cursor: 'pointer',
+                          padding: 2,
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <Edit2 size={11} />
+                      </button>
+                      {templates.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
+                          title="Delete Template"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: isSelected ? '#F87171' : '#DC2626',
+                            cursor: 'pointer',
+                            padding: 2,
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Inline Template Editor Modal / Card */}
+          {isEditingTemplate && (
+            <div style={{ background: '#EFF6FF', borderRadius: 14, border: '1.5px solid #BFDBFE', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#1E40AF' }}>
+                  {editingTemplateId ? 'Edit Policy Template' : 'Create New Policy Template'}
                 </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('Standard school schedule: 26 working days. Teachers receive 2 paid leaves per month. 3 late arrivals equal 1 half-day deduction. Science teachers get 10% lab allowance. 2000 PKR bonus for 100% attendance.')}
-                    style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: 9999, padding: '5px 12px', fontSize: 11.5, fontWeight: 600, color: '#334155', cursor: 'pointer' }}
-                  >
-                    School / College Standard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('Strict private academy policy: 30 days divisor. 1 paid leave per month. 3 lates equal 1 full day salary deduction. Unexcused absences deduct 150% daily wage. 3000 PKR attendance bonus.')}
-                    style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: 9999, padding: '5px 12px', fontSize: 11.5, fontWeight: 600, color: '#334155', cursor: 'pointer' }}
-                  >
-                    Strict Academy Policy
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('Higher education & coaching center: Calendar days basis. 4 monthly leaves. Late arrivals have 500 PKR fixed penalty after 2 grace lates. Transport allowance is 3,000 PKR.')}
-                    style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: 9999, padding: '5px 12px', fontSize: 11.5, fontWeight: 600, color: '#334155', cursor: 'pointer' }}
-                  >
-                    Coaching & Higher Ed
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTemplate(false)}
+                  style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer' }}
+                >
+                  <X size={14} />
+                </button>
               </div>
 
-              {/* Policy Textarea */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>
-                  Paste or Describe Your Institute's Salary & Attendance Policy:
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#1E3A8A', textTransform: 'uppercase' }}>
+                  Template Name
                 </label>
-                <textarea
-                  rows={4}
-                  value={policyInputText}
-                  onChange={e => setPolicyInputText(e.target.value)}
-                  placeholder="Describe your working days, late arrival penalties, leave allowances, bonuses, and special allowances in plain English or Urdu..."
+                <input
+                  type="text"
+                  placeholder="e.g. Science Faculty Special, Strict Exam Month"
+                  value={templateFormName}
+                  onChange={e => setTemplateFormName(e.target.value)}
                   style={{
-                    borderRadius: 12,
-                    border: '1.5px solid #CBD5E1',
+                    height: 36,
+                    borderRadius: 8,
+                    border: '1px solid #93C5FD',
                     background: '#FFFFFF',
-                    padding: '10px 14px',
-                    fontSize: 13,
-                    fontWeight: 500,
+                    padding: '0 10px',
+                    fontSize: 12.5,
+                    fontWeight: 600,
                     color: '#0F172A',
-                    outline: 'none',
-                    lineHeight: 1.5,
-                    resize: 'vertical',
-                    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+                    outline: 'none'
                   }}
                 />
               </div>
 
-              {/* AI Trigger Button */}
-              <button
-                type="button"
-                disabled={isAiProcessing}
-                onClick={handleRunAiParser}
-                style={{
-                  height: 42,
-                  borderRadius: 10,
-                  border: 'none',
-                  background: isAiProcessing ? '#64748B' : '#2563EB',
-                  color: '#FFFFFF',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  cursor: isAiProcessing ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
-                  transition: 'background-color 0.15s ease'
-                }}
-              >
-                {isAiProcessing ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Parsing Policy via Cloudflare Workers AI...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={16} />
-                    <span>Analyze & Generate Payroll Rules</span>
-                  </>
-                )}
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#1E3A8A', textTransform: 'uppercase' }}>
+                  Policy Content / Rules
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Enter policy description..."
+                  value={templateFormText}
+                  onChange={e => setTemplateFormText(e.target.value)}
+                  style={{
+                    borderRadius: 8,
+                    border: '1px solid #93C5FD',
+                    background: '#FFFFFF',
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    color: '#0F172A',
+                    outline: 'none',
+                    lineHeight: 1.4
+                  }}
+                />
+              </div>
 
-              {/* AI Feedback Alerts */}
-              {aiSuccessMsg && (
-                <div style={{ background: '#ECFDF5', border: '1.5px solid #A7F3D0', borderRadius: 12, padding: '10px 14px', color: '#065F46', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckCircle2 size={16} color="#10B981" />
-                  <span>{aiSuccessMsg}</span>
-                </div>
-              )}
-              {aiErrorMsg && (
-                <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 12, padding: '10px 14px', color: '#991B1B', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AlertCircle size={16} color="#EF4444" />
-                  <span>{aiErrorMsg}</span>
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTemplate(false)}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 8,
+                    padding: '5px 12px',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: '#475569',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTemplateForm}
+                  style={{
+                    background: '#2563EB',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '5px 14px',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5
+                  }}
+                >
+                  <Save size={12} /> Save Template
+                </button>
+              </div>
+            </div>
+          )}
 
-              {/* Generated Rules Visual Inspection Cards */}
-              <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1.5px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <CheckCircle2 size={15} color="#10B981" />
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
-                      {policy.policyName || 'Active Extracted Rule Set'}
+          {/* Policy Textarea */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>
+              Institute Salary, Attendance & Penalty Policy Description:
+            </label>
+            <textarea
+              rows={4}
+              value={policyInputText}
+              onChange={e => setPolicyInputText(e.target.value)}
+              placeholder="Describe your working days, late arrival penalties, leave allowances, bonuses, and special allowances in plain English or Urdu..."
+              style={{
+                borderRadius: 12,
+                border: '1.5px solid #CBD5E1',
+                background: '#FFFFFF',
+                padding: '10px 14px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: '#0F172A',
+                outline: 'none',
+                lineHeight: 1.5,
+                resize: 'vertical',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+              }}
+            />
+          </div>
+
+          {/* AI Trigger Button */}
+          <button
+            type="button"
+            disabled={isAiProcessing}
+            onClick={handleRunAiParser}
+            style={{
+              height: 42,
+              borderRadius: 10,
+              border: 'none',
+              background: isAiProcessing ? '#64748B' : '#2563EB',
+              color: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              cursor: isAiProcessing ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+              transition: 'background-color 0.15s ease'
+            }}
+          >
+            {isAiProcessing ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Parsing Policy via Cloudflare Workers AI...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                <span>Analyze & Generate Payroll Rules</span>
+              </>
+            )}
+          </button>
+
+          {/* AI Feedback Alerts */}
+          {aiSuccessMsg && (
+            <div style={{ background: '#ECFDF5', border: '1.5px solid #A7F3D0', borderRadius: 12, padding: '10px 14px', color: '#065F46', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={16} color="#10B981" />
+              <span>{aiSuccessMsg}</span>
+            </div>
+          )}
+          {aiErrorMsg && (
+            <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 12, padding: '10px 14px', color: '#991B1B', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertCircle size={16} color="#EF4444" />
+              <span>{aiErrorMsg}</span>
+            </div>
+          )}
+
+          {/* Generated Rules Visual Inspection Cards */}
+          <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1.5px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={15} color="#10B981" />
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+                  {policy.policyName || 'Active Extracted Rule Set'}
+                </span>
+              </div>
+              <span className="badge badge-green" style={{ fontSize: 10.5, fontWeight: 700 }}>
+                Ready to Calculate
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: 4 }}>
+              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Daily Rate Basis</span>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
+                  {policy.workingDaysMode === 'fixed_26' ? '26 Days Divisor' : policy.workingDaysMode === 'fixed_30' ? '30 Days Divisor' : 'Calendar Days'}
+                </div>
+              </div>
+
+              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Late Penalties</span>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#F59E0B', marginTop: 2 }}>
+                  {policy.lateDeductionMode === 'ratio_3_to_1' ? '3 Lates = 1 Day' : policy.lateDeductionMode === 'ratio_3_to_half' ? '3 Lates = 0.5 Day' : policy.lateDeductionMode === 'fixed_amount' ? `PKR ${policy.latePenaltyAmount} / late` : 'No deduction'}
+                </div>
+              </div>
+
+              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Paid Leaves Quota</span>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#10B981', marginTop: 2 }}>
+                  {policy.paidLeaveAllowance || 2} Leaves / month
+                </div>
+              </div>
+
+              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Attendance Bonus</span>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#2563EB', marginTop: 2 }}>
+                  {policy.attendanceBonus?.enabled ? `PKR ${policy.attendanceBonus.amount || 2000}` : 'None'}
+                </div>
+              </div>
+            </div>
+
+            {policy.specialAllowances && policy.specialAllowances.length > 0 && (
+              <div style={{ marginTop: 6, background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Special Allowances</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {policy.specialAllowances.map((a, i) => (
+                    <span key={i} className="badge badge-indigo" style={{ fontSize: 11, fontWeight: 600 }}>
+                      {a.label}: {a.value}{a.type === 'percentage' ? '%' : ' PKR'} ({a.applies_to})
                     </span>
-                  </div>
-                  <span className="badge badge-green" style={{ fontSize: 10.5, fontWeight: 700 }}>
-                    Ready to Calculate
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: 4 }}>
-                  <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Daily Rate Basis</span>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', marginTop: 2 }}>
-                      {policy.workingDaysMode === 'fixed_26' ? '26 Days' : policy.workingDaysMode === 'fixed_30' ? '30 Days' : 'Calendar Days'}
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Late Penalties</span>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#F59E0B', marginTop: 2 }}>
-                      {policy.lateDeductionMode === 'ratio_3_to_1' ? '3 Lates = 1 Day' : policy.lateDeductionMode === 'ratio_3_to_half' ? '3 Lates = 0.5 Day' : policy.lateDeductionMode === 'fixed_amount' ? `PKR ${policy.latePenaltyAmount} / late` : 'No deduction'}
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Paid Leaves Quota</span>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#10B981', marginTop: 2 }}>
-                      {policy.paidLeaveAllowance || 2} Leaves / month
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Attendance Bonus</span>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2563EB', marginTop: 2 }}>
-                      {policy.attendanceBonus?.enabled ? `PKR ${policy.attendanceBonus.amount || 2000}` : 'None'}
-                    </div>
-                  </div>
-                </div>
-
-                {policy.specialAllowances && policy.specialAllowances.length > 0 && (
-                  <div style={{ marginTop: 6, background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '8px 12px' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Special Allowances</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                      {policy.specialAllowances.map((a, i) => (
-                        <span key={i} className="badge badge-indigo" style={{ fontSize: 11, fontWeight: 600 }}>
-                          {a.label}: {a.value}{a.type === 'percentage' ? '%' : ' PKR'} ({a.applies_to})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 2: Fine-Tune / Manual Adjustments */}
-          {activeTab === 'manual' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              
-              {/* Section 1: Working Days Basis */}
-              <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Calendar size={13} /> 1. Monthly Daily Rate Calculation Baseline
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize: 11.5 }}>Working Days Divisor</label>
-                  <ModernSelect
-                    value={policy.workingDaysMode}
-                    onChange={val => setPolicy(prev => ({ ...prev, workingDaysMode: val as any }))}
-                    compact
-                    options={[
-                      { value: 'fixed_26', label: '26 Working Days (Standard Academic / Corporate 6-Day Week)' },
-                      { value: 'fixed_30', label: '30 Days Fixed Divisor' },
-                      { value: 'calendar', label: 'Actual Calendar Days in Month (28, 29, 30, or 31 Days)' }
-                    ]}
-                    zIndex={1200}
-                  />
-                  <span style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                    Daily Wage Rate = Base Salary ÷ Working Days (e.g. PKR 65,000 ÷ 26 = PKR 2,500/day)
-                  </span>
+                  ))}
                 </div>
               </div>
+            )}
+          </div>
 
-              {/* Section 2: Late Arrival Penalty Rules */}
-              <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Clock size={13} /> 2. Late Arrival Penalty Policy
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize: 11.5 }}>Late Coming Rule</label>
-                  <ModernSelect
-                    value={policy.lateDeductionMode}
-                    onChange={val => setPolicy(prev => ({ ...prev, lateDeductionMode: val as any }))}
-                    compact
-                    options={[
-                      { value: 'ratio_3_to_1', label: '3 Late Arrivals = 1 Full Day Salary Deduction (Standard)' },
-                      { value: 'ratio_3_to_half', label: '3 Late Arrivals = 0.5 Day (Half Day) Salary Deduction' },
-                      { value: 'fixed_amount', label: 'Fixed Monetary Fine per Late Check-in' },
-                      { value: 'none', label: 'No Automatic Financial Deduction for Lates' }
-                    ]}
-                    zIndex={1150}
-                  />
-                </div>
-
-                {policy.lateDeductionMode === 'fixed_amount' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: 11.5 }}>Grace Lates Allowed (Free)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={policy.lateGraceCount}
-                        onChange={e => setPolicy(prev => ({ ...prev, lateGraceCount: Number(e.target.value) || 0 }))}
-                        style={{ height: 38, fontSize: 13, borderRadius: 10, border: '1px solid #CBD5E1', padding: '0 12px', background: '#FFFFFF' }}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: 11.5 }}>Fine per Late (PKR)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={policy.latePenaltyAmount}
-                        onChange={e => setPolicy(prev => ({ ...prev, latePenaltyAmount: Number(e.target.value) || 0 }))}
-                        style={{ height: 38, fontSize: 13, borderRadius: 10, border: '1px solid #CBD5E1', padding: '0 12px', background: '#FFFFFF' }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Section 3: Absence & Half-Day Rates */}
-              <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TrendingDown size={13} /> 3. Absence & Half-Day Deductions
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: 11.5 }}>Unexcused Absence Rate</label>
-                    <ModernSelect
-                      value={String(policy.unexcusedAbsenceRatio)}
-                      onChange={val => setPolicy(prev => ({ ...prev, unexcusedAbsenceRatio: Number(val) }))}
-                      compact
-                      options={[
-                        { value: '1', label: '100% of Daily Wage (1 Day Pay)' },
-                        { value: '1.5', label: '150% of Daily Wage (Penalty Rate)' },
-                        { value: '2', label: '200% of Daily Wage (Double Deduction)' }
-                      ]}
-                      zIndex={1100}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: 11.5 }}>Half-Day Rate</label>
-                    <ModernSelect
-                      value={String(policy.halfDayDeductionRatio)}
-                      onChange={val => setPolicy(prev => ({ ...prev, halfDayDeductionRatio: Number(val) }))}
-                      compact
-                      options={[
-                        { value: '0.5', label: '50% of Daily Wage (Half Day Pay)' },
-                        { value: '1', label: '100% of Daily Wage (Full Day Deduction)' },
-                        { value: '0', label: '0% (No Half-Day Penalty)' }
-                      ]}
-                      zIndex={1050}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 4: Paid Leaves Allowance & Bonus */}
-              <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#10B981', textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Award size={13} /> 4. Leave Allowance & Attendance Bonus
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: 11.5 }}>Monthly Paid Leaves Quota</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      value={policy.paidLeaveAllowance ?? 2}
-                      onChange={e => setPolicy(prev => ({ ...prev, paidLeaveAllowance: Number(e.target.value) || 0 }))}
-                      style={{ height: 38, fontSize: 13, borderRadius: 10, border: '1px solid #CBD5E1', padding: '0 12px', background: '#FFFFFF' }}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: 11.5 }}>100% Attendance Bonus (PKR)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={policy.attendanceBonus?.amount ?? 2000}
-                      onChange={e => setPolicy(prev => ({
-                        ...prev,
-                        attendanceBonus: {
-                          enabled: Number(e.target.value) > 0,
-                          amount: Number(e.target.value) || 0,
-                          condition: 'zero_absences'
-                        }
-                      }))}
-                      style={{ height: 38, fontSize: 13, borderRadius: 10, border: '1px solid #CBD5E1', padding: '0 12px', background: '#FFFFFF' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
         </div>
 
-        {/* Island 4: Floating Action Pill Row */}
+        {/* Island 3: Floating Action Pill Row */}
         <div
           style={{
             display: 'flex',
