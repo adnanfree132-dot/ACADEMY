@@ -609,6 +609,21 @@ export async function aiParsePayrollPolicyController(req: AuthenticatedRequest, 
     const paidLeavesMatch = lower.match(/(\d+)\s*(?:paid\s*leave|leave\s*free|casual)/);
     const paidLeaves = paidLeavesMatch ? parseInt(paidLeavesMatch[1], 10) : 2;
 
+    // Staff adjustments regex in fallback parser
+    const staffAdjustments: any[] = [];
+    const cutHalfMatch = lower.match(/(?:cut|deduct|reduce)\s+(?:half|50%|0\.5)\s*(?:salary|pay|compensation)?\s*(?:of|for|from)?\s*([a-z0-9_\-\s]+?)(?:[.,;\n]|$)/i);
+    if (cutHalfMatch) {
+      const staffName = cutHalfMatch[1].replace(/salary|pay|for|from|of/gi, '').trim();
+      if (staffName) {
+        staffAdjustments.push({
+          staffName,
+          type: 'deduction_percentage',
+          value: 50,
+          reason: `50% salary reduction requested for ${staffName}`
+        });
+      }
+    }
+
     const fallbackRules = {
       policy_name: 'Custom Academy Policy',
       summary: `Parsed standard policy: ${has30 ? '30' : '26'} standard working days, ${paidLeaves} monthly paid leaves, with ${isHalfRatio ? '3:0.5' : '3:1'} late ratio.`,
@@ -626,6 +641,8 @@ export async function aiParsePayrollPolicyController(req: AuthenticatedRequest, 
         condition: 'zero_absences'
       },
       specialAllowances: [],
+      staffAdjustments,
+      rawPolicyText: text,
       explanation: 'Policy parsed using institutional calculation engine.'
     };
 

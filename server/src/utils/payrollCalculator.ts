@@ -92,6 +92,13 @@ export interface PayrollDeductionRules {
     value: number;
     applies_to: string;
   }>;
+  staffAdjustments?: Array<{
+    staffName: string;
+    type: 'deduction_percentage' | 'deduction_fixed' | 'bonus_percentage' | 'bonus_fixed';
+    value: number;
+    reason?: string;
+  }>;
+  rawPolicyText?: string;
 }
 
 export interface CalculatedPayrollItem {
@@ -343,11 +350,48 @@ export function calculateStaffPayrollItem(
     }
   }
 
+  // Dynamic Staff-Specific Adjustments (e.g. "Cut half salary of Adnan", "Deduct 5000 fine from Ali")
+  let staffAdjustmentDeduction = 0;
+  let staffAdjustmentBonus = 0;
+  const staffFullName = (staffMember.full_name || staffMember.fullName || '').toLowerCase().trim();
+  const staffCodeLower = (staffMember.staff_id || staffMember.staffId || '').toLowerCase().trim();
+
+  if (rules?.staffAdjustments && rules.staffAdjustments.length > 0) {
+    for (const adj of rules.staffAdjustments) {
+      const targetName = (adj.staffName || '').toLowerCase().trim();
+      if (targetName && (staffFullName.includes(targetName) || targetName.includes(staffFullName) || staffCodeLower.includes(targetName))) {
+        if (adj.type === 'deduction_percentage') {
+          const cutRatio = Math.min(100, Math.max(0, adj.value || 50)) / 100;
+          staffAdjustmentDeduction += roundCurrency(baseSalary * cutRatio);
+        } else if (adj.type === 'deduction_fixed') {
+          staffAdjustmentDeduction += roundCurrency(adj.value || 0);
+        } else if (adj.type === 'bonus_percentage') {
+          const bonusRatio = Math.max(0, adj.value || 0) / 100;
+          staffAdjustmentBonus += roundCurrency(baseSalary * bonusRatio);
+        } else if (adj.type === 'bonus_fixed') {
+          staffAdjustmentBonus += roundCurrency(adj.value || 0);
+        }
+      }
+    }
+  }
+
+  // Heuristic safety match against raw policy text if staff adjustments array missed it
+  if (staffAdjustmentDeduction === 0 && rules?.rawPolicyText) {
+    const rawLower = rules.rawPolicyText.toLowerCase();
+    const firstWord = staffFullName.split(' ')[0];
+    if (firstWord && rawLower.includes(firstWord)) {
+      if (rawLower.includes(`cut half salary of ${firstWord}`) || rawLower.includes(`half salary of ${firstWord}`) || rawLower.includes(`cut half of ${firstWord}`) || rawLower.includes(`deduct half from ${firstWord}`) || rawLower.includes(`half ${firstWord}`)) {
+        staffAdjustmentDeduction += roundCurrency(baseSalary * 0.5);
+      }
+    }
+  }
+
   const grossSalary = roundCurrency(
-    baseSalary + houseRentAllowance + medicalAllowance + conveyanceAllowance + dynamicSpecialAllowance + attendanceBonusAmount
+    baseSalary + houseRentAllowance + medicalAllowance + conveyanceAllowance + dynamicSpecialAllowance + attendanceBonusAmount + staffAdjustmentBonus
   );
 
-  const statutoryDeductions = roundCurrency(taxDeduction + providentFund + otherDeductions);
+  const totalOtherDeductions = roundCurrency(otherDeductions + staffAdjustmentDeduction);
+  const statutoryDeductions = roundCurrency(taxDeduction + providentFund + totalOtherDeductions);
   const totalDeductions = roundCurrency(attendanceDeduction + statutoryDeductions);
 
   // Negative balance guard: Net cannot be negative

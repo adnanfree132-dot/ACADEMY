@@ -70,15 +70,40 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
     return DEFAULT_PAYROLL_POLICY;
   });
 
-  const handleSavePolicy = (newPolicy: PayrollDeductionPolicy) => {
+  const handleSavePolicy = async (newPolicy: PayrollDeductionPolicy) => {
     setDeductionPolicy(newPolicy);
     try {
       localStorage.setItem('payroll_deduction_policy', JSON.stringify(newPolicy));
     } catch {}
+
     setFeedbackMsg({
       type: 'success',
-      text: 'Payroll deduction policy updated successfully.'
+      text: 'AI payroll policy applied. Recalculating compensation packages...'
     });
+
+    const [yStr, mStr] = selectedPeriod.split('-');
+    const year = parseInt(yStr, 10);
+    const month = parseInt(mStr, 10);
+
+    try {
+      const result = await api.generateMonthlyPayrollBatch({
+        year,
+        month,
+        period: selectedPeriod,
+        notes: `Payroll batch updated with AI policy: ${newPolicy.policyName || 'Custom'}`,
+        rules: newPolicy
+      } as any);
+
+      if (result && result.payslips) {
+        setPayslips(result.payslips);
+        setFeedbackMsg({
+          type: 'success',
+          text: `Applied policy & computed ${result.payslips.length} compensation packages for ${selectedPeriod}.`
+        });
+      }
+    } catch (err: any) {
+      console.warn('Recalculation sync:', err);
+    }
   };
 
   // Month Period Options
@@ -152,7 +177,31 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
       const gross = base + hra + med + conv;
       const tax = Math.round(base * 0.05);
       const pf = Math.round(base * 0.03);
-      const statutory = tax + pf;
+
+      let staffCut = 0;
+      const sFullName = (s.full_name || s.fullName || '').toLowerCase();
+      const sCode = (s.staff_id || s.staffId || '').toLowerCase();
+      if (deductionPolicy?.staffAdjustments) {
+        for (const adj of deductionPolicy.staffAdjustments) {
+          const tName = (adj.staffName || '').toLowerCase().trim();
+          if (tName && (sFullName.includes(tName) || tName.includes(sFullName) || sCode.includes(tName))) {
+            if (adj.type === 'deduction_percentage') {
+              staffCut += Math.round((base * (adj.value || 50)) / 100);
+            } else if (adj.type === 'deduction_fixed') {
+              staffCut += (adj.value || 0);
+            }
+          }
+        }
+      }
+      if (staffCut === 0 && deductionPolicy?.rawPolicyText) {
+        const rawL = deductionPolicy.rawPolicyText.toLowerCase();
+        const fWord = sFullName.split(' ')[0];
+        if (fWord && (rawL.includes(`cut half salary of ${fWord}`) || rawL.includes(`half salary of ${fWord}`) || rawL.includes(`cut half of ${fWord}`) || rawL.includes(`half ${fWord}`))) {
+          staffCut += Math.round(base * 0.5);
+        }
+      }
+
+      const statutory = tax + pf + staffCut;
       const attDed = 0;
       const net = Math.max(0, gross - (attDed + statutory));
 
@@ -197,7 +246,31 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
       const gross = base + hra + med + conv;
       const tax = Math.round(base * 0.05);
       const pf = Math.round(base * 0.03);
-      const statutory = tax + pf;
+
+      let staffCut = 0;
+      const sFullName = (s.full_name || s.fullName || '').toLowerCase();
+      const sCode = (s.staff_id || s.staffId || '').toLowerCase();
+      if (deductionPolicy?.staffAdjustments) {
+        for (const adj of deductionPolicy.staffAdjustments) {
+          const tName = (adj.staffName || '').toLowerCase().trim();
+          if (tName && (sFullName.includes(tName) || tName.includes(sFullName) || sCode.includes(tName))) {
+            if (adj.type === 'deduction_percentage') {
+              staffCut += Math.round((base * (adj.value || 50)) / 100);
+            } else if (adj.type === 'deduction_fixed') {
+              staffCut += (adj.value || 0);
+            }
+          }
+        }
+      }
+      if (staffCut === 0 && deductionPolicy?.rawPolicyText) {
+        const rawL = deductionPolicy.rawPolicyText.toLowerCase();
+        const fWord = sFullName.split(' ')[0];
+        if (fWord && (rawL.includes(`cut half salary of ${fWord}`) || rawL.includes(`half salary of ${fWord}`) || rawL.includes(`cut half of ${fWord}`) || rawL.includes(`half ${fWord}`))) {
+          staffCut += Math.round(base * 0.5);
+        }
+      }
+
+      const statutory = tax + pf + staffCut;
       const attDed = 0;
       const net = Math.max(0, gross - (attDed + statutory));
 

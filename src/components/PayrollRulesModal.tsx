@@ -32,6 +32,12 @@ export interface PayrollDeductionPolicy {
     value: number;
     applies_to: string;
   }>;
+  staffAdjustments?: Array<{
+    staffName: string;
+    type: 'deduction_percentage' | 'deduction_fixed' | 'bonus_percentage' | 'bonus_fixed';
+    value: number;
+    reason?: string;
+  }>;
   attendanceBonus?: {
     enabled: boolean;
     amount: number;
@@ -236,6 +242,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
           paidLeaveAllowance: parsed.paidLeaveAllowance !== undefined ? parsed.paidLeaveAllowance : 2,
           attendanceBonus: parsed.attendanceBonus || { enabled: false, amount: 0, condition: 'none' },
           specialAllowances: parsed.specialAllowances || [],
+          staffAdjustments: parsed.staffAdjustments || [],
           rawPolicyText: policyInputText
         };
       } else {

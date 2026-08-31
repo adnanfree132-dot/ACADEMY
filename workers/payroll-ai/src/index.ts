@@ -32,8 +32,8 @@ export default {
         });
       }
 
-      const systemPrompt = `You are a specialized institutional payroll policy parser.
-Given an academy's natural language policy, convert it into an accurate, strict JSON object with this exact schema:
+      const systemPrompt = `You are a specialized institutional payroll policy parser and salary adjustment intelligence engine.
+Given an academy's natural language policy or custom executive prompt (including rules, bonuses, or specific staff salary cuts/fines/bonuses), convert it into an accurate, strict JSON object with this exact schema:
 
 {
   "policy_name": "Short descriptive name",
@@ -59,8 +59,18 @@ Given an academy's natural language policy, convert it into an accurate, strict 
       "applies_to": string
     }
   ],
-  "explanation": "Brief human explanation of how deductions and bonuses will be computed"
+  "staffAdjustments": [
+    {
+      "staffName": string (e.g. "Adnan", "Ali"),
+      "type": "deduction_percentage" | "deduction_fixed" | "bonus_percentage" | "bonus_fixed",
+      "value": number (for half salary use 50, for quarter use 25, or exact PKR number),
+      "reason": string
+    }
+  ],
+  "explanation": "Brief human explanation of how deductions, specific staff salary cuts, and bonuses will be computed"
 }
+
+IMPORTANT: If the user mentions any specific person or staff name (e.g. "cut half salary of Adnan", "deduct 5000 from Ali", "give bonus to Sarah"), ALWAYS add an item to the "staffAdjustments" array with their name, type, value, and reason.
 
 Respond ONLY with the JSON object. Do not include markdown codeblocks or conversational filler.`;
 
@@ -128,7 +138,7 @@ Respond ONLY with the JSON object. Do not include markdown codeblocks or convers
         const has30 = policyText.includes('30');
         const isHalf = policyText.toLowerCase().includes('half');
         parsedRules = {
-          policy_name: 'Standard Academy Policy',
+          policy_name: 'Custom Academy Policy',
           summary: 'Institutional attendance and salary deduction policy.',
           workingDaysMode: has30 ? 'fixed_30' : 'fixed_26',
           customWorkingDays: has30 ? 30 : 26,
@@ -138,10 +148,9 @@ Respond ONLY with the JSON object. Do not include markdown codeblocks or convers
           halfDayDeductionRatio: 0.5,
           unexcusedAbsenceRatio: 1.0,
           paidLeaveAllowance: 2,
-          attendanceBonus: { enabled: true, amount: 2500, condition: 'zero_absences' },
-          specialAllowances: [
-            { label: 'Special Allowance', type: 'percentage', value: 10, applies_to: 'All Faculty' }
-          ],
+          attendanceBonus: { enabled: false, amount: 0, condition: 'none' },
+          specialAllowances: [],
+          staffAdjustments: [],
           explanation: 'Extracted directly from policy description.'
         };
       }
@@ -155,6 +164,22 @@ Respond ONLY with the JSON object. Do not include markdown codeblocks or convers
       parsedRules.halfDayDeductionRatio = parsedRules.halfDayDeductionRatio !== undefined ? parsedRules.halfDayDeductionRatio : 0.5;
       parsedRules.unexcusedAbsenceRatio = parsedRules.unexcusedAbsenceRatio !== undefined ? parsedRules.unexcusedAbsenceRatio : 1.0;
       parsedRules.paidLeaveAllowance = parsedRules.paidLeaveAllowance !== undefined ? parsedRules.paidLeaveAllowance : 2;
+      parsedRules.staffAdjustments = Array.isArray(parsedRules.staffAdjustments) ? parsedRules.staffAdjustments : [];
+
+      // Heuristic fallback for specific staff adjustments if AI missed it
+      const lower = policyText.toLowerCase();
+      const cutHalfMatch = lower.match(/(?:cut|deduct|reduce)\s+(?:half|50%|0\.5)\s*(?:salary|pay|compensation)?\s*(?:of|for|from)?\s*([a-z0-9_\-\s]+?)(?:[.,;\n]|$)/i);
+      if (cutHalfMatch) {
+        const staffName = cutHalfMatch[1].replace(/salary|pay|for|from|of/gi, '').trim();
+        if (staffName && !parsedRules.staffAdjustments.some((a: any) => a.staffName?.toLowerCase().includes(staffName.toLowerCase()))) {
+          parsedRules.staffAdjustments.push({
+            staffName: staffName,
+            type: 'deduction_percentage',
+            value: 50,
+            reason: `50% salary reduction requested for ${staffName}`
+          });
+        }
+      }
 
       return new Response(JSON.stringify({ success: true, data: parsedRules }), {
         status: 200,
