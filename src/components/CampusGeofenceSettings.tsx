@@ -28,13 +28,6 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
   const [longitude, setLongitude] = useState<number>(74.358747);
   const [radiusMeters, setRadiusMeters] = useState<number>(150);
   
-  // Shift Timing & 5-State Policy Thresholds State
-  const [shiftStartTime, setShiftStartTime] = useState<string>('08:00');
-  const [shiftEndTime, setShiftEndTime] = useState<string>('16:00');
-  const [gracePeriodMinutes, setGracePeriodMinutes] = useState<number>(15);
-  const [halfDayLateCutoffMins, setHalfDayLateCutoffMins] = useState<number>(90);
-  const [halfDayMinHours, setHalfDayMinHours] = useState<number>(4.0);
-  const [absentMinHours, setAbsentMinHours] = useState<number>(2.0);
   const [enforceGeofence, setEnforceGeofence] = useState<boolean>(true);
 
   // Status & Feedback State
@@ -69,20 +62,6 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
           if (data.longitude !== undefined) setLongitude(Number(data.longitude));
           const rad = data.radius_meters !== undefined ? data.radius_meters : (data.radius !== undefined ? data.radius : 150);
           setRadiusMeters(Number(rad));
-          if (data.shift_start_time || data.shiftStartTime) setShiftStartTime(data.shift_start_time || data.shiftStartTime || '08:00');
-          if (data.shift_end_time || data.shiftEndTime) setShiftEndTime(data.shift_end_time || data.shiftEndTime || '16:00');
-          if (data.grace_period_minutes !== undefined || data.gracePeriodMinutes !== undefined) {
-            setGracePeriodMinutes(Number(data.grace_period_minutes ?? data.gracePeriodMinutes ?? 15));
-          }
-          if (data.half_day_late_cutoff_minutes !== undefined) {
-            setHalfDayLateCutoffMins(Number(data.half_day_late_cutoff_minutes));
-          }
-          if (data.half_day_min_hours !== undefined) {
-            setHalfDayMinHours(Number(data.half_day_min_hours));
-          }
-          if (data.absent_min_hours !== undefined) {
-            setAbsentMinHours(Number(data.absent_min_hours));
-          }
           if (data.is_active !== undefined) setEnforceGeofence(Boolean(data.is_active));
         }
       } catch (err: any) {
@@ -202,18 +181,12 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
       latitude,
       longitude,
       radius_meters: radiusMeters,
-      shift_start_time: shiftStartTime,
-      shift_end_time: shiftEndTime,
-      grace_period_minutes: gracePeriodMinutes,
-      half_day_late_cutoff_minutes: halfDayLateCutoffMins,
-      half_day_min_hours: halfDayMinHours,
-      absent_min_hours: absentMinHours,
       is_active: enforceGeofence
     };
 
     try {
       const updated = await api.saveGeofenceConfig(payload);
-      setSaveSuccessMsg('Campus geofence and multi-status attendance policy saved successfully.');
+      setSaveSuccessMsg('Campus geofence perimeter saved successfully.');
       if (onConfigSaved && updated) {
         onConfigSaved(updated);
       }
@@ -264,10 +237,10 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
           </div>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#FFFFFF', letterSpacing: '-0.02em' }}>
-              Campus Geofence & Multi-Status Attendance Policy
+              Campus Geofence & Location Perimeter
             </h2>
             <p style={{ fontSize: 13, color: '#94A3B8', margin: '4px 0 0 0' }}>
-              Configure physical boundaries, shift hours, and rules for Present, Late, Half-Day, Absent, and Leave.
+              Configure physical GPS boundaries and test device check-in verification radius
             </p>
           </div>
         </div>
@@ -540,225 +513,7 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
             </div>
           </div>
 
-          {/* Card 2: Shift Timings & Multi-State Policy Engine */}
-          <div 
-            style={{ 
-              background: '#FFFFFF', 
-              borderRadius: 16, 
-              border: '1.5px solid #E2E8F0', 
-              padding: '20px 22px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.03)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div 
-                  style={{ 
-                    width: 32, 
-                    height: 32, 
-                    borderRadius: 8, 
-                    background: '#F0FDF4', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    color: '#10B981'
-                  }}
-                >
-                  <Clock size={16} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                    Shift Timings & Attendance Rules
-                  </h3>
-                  <p style={{ fontSize: 11.5, color: '#64748B', margin: '2px 0 0 0' }}>
-                    Configurable thresholds for on-time, late, half-day, and absence calculations
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Shift Window Times */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Shift Start Time <span style={{ color: '#EF4444' }}>*</span>
-                </label>
-                <input
-                  type="time"
-                  value={shiftStartTime}
-                  onChange={e => setShiftStartTime(e.target.value)}
-                  required
-                  style={{
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    padding: '8px 14px',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#0F172A',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Shift End Time <span style={{ color: '#EF4444' }}>*</span>
-                </label>
-                <input
-                  type="time"
-                  value={shiftEndTime}
-                  onChange={e => setShiftEndTime(e.target.value)}
-                  required
-                  style={{
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    padding: '8px 14px',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#0F172A',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Clean Minimalist Policy Rule Blocks */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              
-              {/* Rule 1: Present */}
-              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="badge badge-green" style={{ fontWeight: 700 }}>
-                      Present
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>On-Time Arrival Grace</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
-                    Arrivals within grace window from shift start ({shiftStartTime || '08:00'})
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <input
-                    type="number"
-                    min="0"
-                    max="60"
-                    value={gracePeriodMinutes}
-                    onChange={e => setGracePeriodMinutes(parseInt(e.target.value, 10) || 0)}
-                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
-                  />
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>mins</span>
-                </div>
-              </div>
-
-              {/* Rule 2: Late Arrival */}
-              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="badge badge-amber" style={{ fontWeight: 700 }}>
-                      Late
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Grace to Late Cutoff</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
-                    From {gracePeriodMinutes}m up to maximum late threshold
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <input
-                    type="number"
-                    min="20"
-                    max="240"
-                    value={halfDayLateCutoffMins}
-                    onChange={e => setHalfDayLateCutoffMins(parseInt(e.target.value, 10) || 90)}
-                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
-                  />
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>mins</span>
-                </div>
-              </div>
-
-              {/* Rule 3: Half-Day */}
-              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="badge badge-blue" style={{ fontWeight: 700 }}>
-                      Half-Day
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Arrival &gt; {halfDayLateCutoffMins}m / Min Hours</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
-                    Calculates 0.5 unexcused absence deduction unit
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="1"
-                    max="10"
-                    value={halfDayMinHours}
-                    onChange={e => setHalfDayMinHours(parseFloat(e.target.value) || 4.0)}
-                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
-                  />
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>hrs</span>
-                </div>
-              </div>
-
-              {/* Rule 4: Absent */}
-              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="badge badge-red" style={{ fontWeight: 700 }}>
-                      Absent
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>No Check-In / Below Min Hours</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
-                    Calculates 1.0 unexcused absence deduction unit
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0.5"
-                    max="6"
-                    value={absentMinHours}
-                    onChange={e => setAbsentMinHours(parseFloat(e.target.value) || 2.0)}
-                    style={{ width: 76, height: 32, borderRadius: 8, border: '1.5px solid #CBD5E1', padding: '0 8px', fontSize: 13, fontWeight: 600, textAlign: 'center', background: '#FFFFFF', color: '#0F172A', outline: 'none' }}
-                  />
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748B', minWidth: 32 }}>hrs</span>
-                </div>
-              </div>
-
-              {/* Rule 5: Approved Leave */}
-              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="badge badge-gray" style={{ fontWeight: 700 }}>
-                      Excused Leave
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Official Approved Leave</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
-                    Exempted from payroll pro-rata absence deductions (0 deduction)
-                  </div>
-                </div>
-                <span className="badge badge-green" style={{ fontWeight: 700 }}>
-                  0 Deduction
-                </span>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Interactive Perimeter Tester & GPS Distance Calculation */}
+        {/* Card 2: Interactive Perimeter Tester & GPS Distance Calculation */}
         <div 
           style={{ 
             background: '#FFFFFF', 
@@ -985,6 +740,7 @@ export const CampusGeofenceSettings: React.FC<CampusGeofenceSettingsProps> = ({ 
               </div>
             </div>
           )}
+        </div>
         </div>
 
         {/* Form Submission Action Bar */}

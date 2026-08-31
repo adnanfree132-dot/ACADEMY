@@ -72,6 +72,7 @@ export interface AttendanceStats {
 }
 
 export interface PayrollDeductionRules {
+  policyName?: string;
   workingDaysMode?: 'calendar' | 'fixed_26' | 'fixed_30';
   customWorkingDays?: number;
   lateDeductionMode?: 'ratio_3_to_1' | 'ratio_3_to_half' | 'fixed_amount' | 'none';
@@ -79,6 +80,18 @@ export interface PayrollDeductionRules {
   latePenaltyAmount?: number;
   halfDayDeductionRatio?: number;
   unexcusedAbsenceRatio?: number;
+  paidLeaveAllowance?: number;
+  attendanceBonus?: {
+    enabled?: boolean;
+    amount?: number;
+    condition?: string;
+  };
+  specialAllowances?: Array<{
+    label: string;
+    type: 'percentage' | 'fixed';
+    value: number;
+    applies_to: string;
+  }>;
 }
 
 export interface CalculatedPayrollItem {
@@ -304,8 +317,34 @@ export function calculateStaffPayrollItem(
   const unexcusedUnits = absentDays + (halfDays * halfDayRatio);
   const attendanceDeduction = roundCurrency(absenceDeduction + halfDayDeduction + lateDeduction);
 
+  // Dynamic Special Allowances from AI Policy Rules
+  let dynamicSpecialAllowance = specialAllowance;
+  if (rules?.specialAllowances && rules.specialAllowances.length > 0) {
+    const staffRole = (staffMember.designation || staffMember.department || '').toLowerCase();
+    for (const allow of rules.specialAllowances) {
+      const applies = (allow.applies_to || 'all').toLowerCase();
+      if (applies === 'all' || applies.includes('all') || staffRole.includes(applies) || applies.includes(staffRole)) {
+        const added = allow.type === 'percentage'
+          ? roundCurrency((baseSalary * allow.value) / 100)
+          : roundCurrency(allow.value);
+        dynamicSpecialAllowance += added;
+      }
+    }
+  }
+
+  // Dynamic Attendance Bonus from AI Policy Rules
+  let attendanceBonusAmount = 0;
+  if (rules?.attendanceBonus?.enabled && (rules.attendanceBonus.amount || 0) > 0) {
+    const cond = rules.attendanceBonus.condition || 'zero_absences';
+    if (cond === 'zero_absences' && absentDays === 0 && halfDays === 0) {
+      attendanceBonusAmount = roundCurrency(rules.attendanceBonus.amount || 0);
+    } else if (cond === 'zero_lates_and_absences' && absentDays === 0 && halfDays === 0 && lateDays === 0) {
+      attendanceBonusAmount = roundCurrency(rules.attendanceBonus.amount || 0);
+    }
+  }
+
   const grossSalary = roundCurrency(
-    baseSalary + houseRentAllowance + medicalAllowance + conveyanceAllowance + specialAllowance
+    baseSalary + houseRentAllowance + medicalAllowance + conveyanceAllowance + dynamicSpecialAllowance + attendanceBonusAmount
   );
 
   const statutoryDeductions = roundCurrency(taxDeduction + providentFund + otherDeductions);

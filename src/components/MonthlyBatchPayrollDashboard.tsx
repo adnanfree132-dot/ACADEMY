@@ -26,7 +26,7 @@ import { SalaryDisbursementModal } from './SalaryDisbursementModal';
 import { DigitalPayslipModal } from './DigitalPayslipModal';
 import { StaffSalaryStructureModal } from './StaffSalaryStructureModal';
 import { PayrollRulesModal, PayrollDeductionPolicy, DEFAULT_PAYROLL_POLICY } from './PayrollRulesModal';
-import { Sliders } from 'lucide-react';
+import { Sliders, Sparkles } from 'lucide-react';
 
 interface MonthlyBatchPayrollDashboardProps {
   onNavigateToStructures?: () => void;
@@ -536,10 +536,23 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
             type="button" 
             className="btn-secondary" 
             onClick={() => setIsRulesModalOpen(true)}
-            style={{ height: 35, fontSize: 12, fontWeight: 700, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 5, background: '#FFFFFF' }}
-            title="Configure working days baseline and automated penalties for late arrival and unexcused leaves"
+            style={{
+              height: 35,
+              fontSize: 12,
+              fontWeight: 700,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#FFFFFF',
+              border: '1.5px solid #CBD5E1',
+              color: '#0F172A',
+              cursor: 'pointer'
+            }}
+            title="AI Payroll Policy & Custom Rule Engine (Cloudflare Workers AI)"
           >
-            <Sliders size={13} color="#2563EB" /> Deduction Rules
+            <Sparkles size={13} color="#2563EB" />
+            <span>AI Policy & Rules</span>
           </button>
 
           <button 

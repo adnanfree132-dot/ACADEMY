@@ -735,7 +735,12 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getPayslipDetails: (id: string) =>
-    fetchApi<any>(`/payroll/payslips/${id}`)
+    fetchApi<any>(`/payroll/payslips/${id}`),
+  aiParsePayrollPolicy: (policyText: string) =>
+    fetchApi<any>('/payroll/ai-parse-policy', {
+      method: 'POST',
+      body: JSON.stringify({ policyText })
+    })
 };
 
 

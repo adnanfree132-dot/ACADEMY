@@ -68,7 +68,8 @@ import {
   getPayrollBatches,
   getPayrollBatchById,
   disbursePayslip,
-  getPayslipDetails
+  getPayslipDetails,
+  aiParsePayrollPolicyController
 } from './controllers/payrollBatchController';
 import {
   calculateProRataFee,
@@ -145,6 +146,7 @@ router.post('/staff-salary-structures/:staffId', authenticateJwt, requireAdmin, 
 
 // Feature: 1-Click Monthly Batch Payroll & Payslips
 router.post('/payroll/generate-batch', authenticateJwt, requireAdmin, generateMonthlyPayrollBatch);
+router.post('/payroll/ai-parse-policy', authenticateJwt, requireAdmin, aiParsePayrollPolicyController);
 router.get('/payroll/batches', authenticateJwt, requireModulePermission('teachers', 'view_only'), getPayrollBatches);
 router.get('/payroll/batches/:batchId', authenticateJwt, requireModulePermission('teachers', 'view_only'), getPayrollBatchById);
 router.put('/payroll/payslips/:id/disburse', authenticateJwt, requireAdmin, disbursePayslip);
