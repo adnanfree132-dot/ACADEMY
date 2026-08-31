@@ -2,21 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Check, 
-  Calendar, 
-  Clock, 
-  TrendingDown, 
-  Sparkles,
-  Award,
-  FileText,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Plus,
-  Edit2,
-  Trash2,
-  Bookmark,
-  Save,
-  ShieldCheck
+  Sparkles, 
+  FileText, 
+  CheckCircle2, 
+  AlertCircle, 
+  Loader2, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  Bookmark, 
+  Save 
 } from 'lucide-react';
 import { api } from '../api/apiClient';
 
@@ -127,7 +122,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
 
   const [activeTemplateId, setActiveTemplateId] = useState<string>('tmpl-1');
 
-  // Template Editing / Adding Modal State
+  // Template Editing / Adding State
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateFormName, setTemplateFormName] = useState<string>('');
@@ -210,9 +205,10 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
     setIsEditingTemplate(false);
   };
 
-  const handleRunAiParser = async () => {
+  // Main Action: Analyze and Apply in One Click
+  const handleAnalyzeAndApply = async () => {
     if (!policyInputText.trim()) {
-      setAiErrorMsg('Please enter or select an institutional policy description to analyze.');
+      setAiErrorMsg('Please enter or select an institutional policy description.');
       return;
     }
 
@@ -224,11 +220,12 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
       const response = await api.aiParsePayrollPolicy(policyInputText);
       const parsed = response?.data || response;
 
+      let newPolicy: PayrollDeductionPolicy;
       if (parsed) {
-        setPolicy(prev => ({
-          ...prev,
-          policyName: parsed.policy_name || parsed.policyName || 'Analyzed Institutional Policy',
-          summary: parsed.summary || 'Policy rules extracted via AI calculation engine.',
+        newPolicy = {
+          ...policy,
+          policyName: parsed.policy_name || parsed.policyName || 'Custom Academy Policy',
+          summary: parsed.summary || 'Institutional attendance and salary deduction policy.',
           workingDaysMode: parsed.workingDaysMode || 'fixed_26',
           customWorkingDays: parsed.customWorkingDays || (parsed.workingDaysMode === 'fixed_30' ? 30 : 26),
           lateDeductionMode: parsed.lateDeductionMode || 'ratio_3_to_1',
@@ -240,24 +237,21 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
           attendanceBonus: parsed.attendanceBonus || { enabled: false, amount: 0, condition: 'none' },
           specialAllowances: parsed.specialAllowances || [],
           rawPolicyText: policyInputText
-        }));
-
-        setAiSuccessMsg('Institutional policy analyzed and converted into calculation rules.');
+        };
+      } else {
+        newPolicy = {
+          ...policy,
+          rawPolicyText: policyInputText
+        };
       }
+
+      setPolicy(newPolicy);
+      onSavePolicy(newPolicy);
+      onClose();
     } catch (err: any) {
-      setAiErrorMsg(err.message || 'Unable to analyze policy. Please check the text description.');
-    } finally {
+      setAiErrorMsg(err.message || 'Unable to process policy. Please try again.');
       setIsAiProcessing(false);
     }
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSavePolicy({
-      ...policy,
-      rawPolicyText: policyInputText
-    });
-    onClose();
   };
 
   return (
@@ -275,7 +269,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
       <div 
         className="floating-island-container" 
         style={{ 
-          maxWidth: 660,
+          maxWidth: 640,
           width: '100%',
           display: 'flex',
           flexDirection: 'column',
@@ -289,7 +283,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
           style={{
             background: '#0F172A',
             borderRadius: 16,
-            padding: '16px 22px',
+            padding: '18px 22px',
             color: '#FFFFFF',
             boxShadow: '0 12px 28px -4px rgba(15,23,42,0.35)',
             border: '1px solid rgba(255,255,255,0.1)',
@@ -301,8 +295,8 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
               style={{
-                width: 38,
-                height: 38,
+                width: 40,
+                height: 40,
                 borderRadius: '50%',
                 background: 'rgba(16, 185, 129, 0.15)',
                 border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -313,7 +307,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
                 flexShrink: 0
               }}
             >
-              <Sparkles size={19} />
+              <Sparkles size={20} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -370,8 +364,6 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
             border: '1px solid #E2E8F0',
             padding: '22px 24px',
             boxShadow: '0 12px 32px -4px rgba(15, 23, 42, 0.12)',
-            maxHeight: 'calc(84vh - 130px)',
-            overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: 16
@@ -418,7 +410,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
                       color: isSelected ? '#FFFFFF' : '#334155',
                       border: isSelected ? '1.5px solid #0F172A' : '1px solid #CBD5E1',
                       borderRadius: 9999,
-                      padding: '5px 10px 5px 14px',
+                      padding: '6px 12px',
                       fontSize: 12,
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -430,14 +422,14 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
                     }}
                   >
                     <span>{tmpl.name}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 2 }}>
                       {/* Edit Button */}
                       <button
                         type="button"
                         onClick={(e) => handleOpenEditTemplate(tmpl, e)}
                         title="Edit Template Name & Text"
                         style={{
-                          background: isSelected ? 'rgba(255,255,255,0.12)' : 'transparent',
+                          background: isSelected ? 'rgba(255,255,255,0.15)' : 'transparent',
                           border: 'none',
                           borderRadius: 4,
                           color: isSelected ? '#FFFFFF' : '#64748B',
@@ -459,7 +451,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
                           onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
                           title="Delete Template"
                           style={{
-                            background: isSelected ? 'rgba(255,255,255,0.12)' : 'transparent',
+                            background: isSelected ? 'rgba(255,255,255,0.15)' : 'transparent',
                             border: 'none',
                             borderRadius: 4,
                             color: isSelected ? '#FFFFFF' : '#64748B',
@@ -604,123 +596,73 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
                 color: '#0F172A',
                 outline: 'none',
                 lineHeight: 1.6,
-                minHeight: 100,
+                minHeight: 110,
                 resize: 'vertical',
                 boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
               }}
             />
           </div>
 
-          {/* Section 3: Prominent Bold AI Trigger Button */}
+          {/* Section 3: Prominent Bold High-Impact Action Button */}
           <button
             type="button"
             disabled={isAiProcessing}
-            onClick={handleRunAiParser}
+            onClick={handleAnalyzeAndApply}
             style={{
-              height: 48,
-              borderRadius: 12,
+              height: 56,
+              borderRadius: 14,
               border: 'none',
-              background: isAiProcessing ? '#64748B' : '#0F172A',
+              background: isAiProcessing 
+                ? '#475569' 
+                : 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
               color: '#FFFFFF',
-              fontSize: 14,
-              fontWeight: 700,
+              fontSize: 15,
+              fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 9,
+              gap: 12,
               cursor: isAiProcessing ? 'not-allowed' : 'pointer',
-              boxShadow: '0 6px 18px rgba(15, 23, 42, 0.22)',
-              transition: 'background-color 0.15s ease, transform 0.15s ease'
+              boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.35)',
+              transition: 'all 0.15s ease',
+              marginTop: 4
             }}
           >
             {isAiProcessing ? (
               <>
-                <Loader2 size={18} className="animate-spin" />
-                <span>Analyzing Institutional Policy & Generating Rules...</span>
+                <Loader2 size={20} className="animate-spin" color="#10B981" />
+                <span>Analyzing Policy & Generating Rules...</span>
               </>
             ) : (
               <>
-                <Sparkles size={18} color="#10B981" />
-                <span>Analyze & Generate Payroll Rules</span>
+                <div 
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Sparkles size={16} color="#10B981" />
+                </div>
+                <span>Analyze & Apply Policy to Payroll</span>
               </>
             )}
           </button>
 
-          {/* AI Feedback Alerts */}
-          {aiSuccessMsg && (
-            <div style={{ background: '#ECFDF5', border: '1.5px solid #A7F3D0', borderRadius: 12, padding: '11px 16px', color: '#065F46', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 9 }}>
-              <CheckCircle2 size={17} color="#10B981" />
-              <span>{aiSuccessMsg}</span>
-            </div>
-          )}
+          {/* Feedback Messages */}
           {aiErrorMsg && (
             <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 12, padding: '11px 16px', color: '#991B1B', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 9 }}>
               <AlertCircle size={17} color="#EF4444" />
               <span>{aiErrorMsg}</span>
             </div>
           )}
-
-          {/* Section 4: Generated Rules Visual Inspection Cards */}
-          <div style={{ background: '#F8FAFC', borderRadius: 14, border: '1.5px solid #E2E8F0', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <CheckCircle2 size={16} color="#10B981" />
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A' }}>
-                  {policy.policyName || 'Active Extracted Rule Set'}
-                </span>
-              </div>
-              <span className="badge badge-green" style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px' }}>
-                Ready to Calculate
-              </span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 2 }}>
-              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '10px 14px' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>Daily Rate Basis</span>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', marginTop: 4 }}>
-                  {policy.workingDaysMode === 'fixed_26' ? '26 Days Divisor' : policy.workingDaysMode === 'fixed_30' ? '30 Days Divisor' : 'Calendar Days'}
-                </div>
-              </div>
-
-              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '10px 14px' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>Late Penalties</span>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#D97706', marginTop: 4 }}>
-                  {policy.lateDeductionMode === 'ratio_3_to_1' ? '3 Lates = 1 Day' : policy.lateDeductionMode === 'ratio_3_to_half' ? '3 Lates = 0.5 Day' : policy.lateDeductionMode === 'fixed_amount' ? `PKR ${policy.latePenaltyAmount} / late` : 'No deduction'}
-                </div>
-              </div>
-
-              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '10px 14px' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>Paid Leaves Quota</span>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#10B981', marginTop: 4 }}>
-                  {policy.paidLeaveAllowance || 2} Leaves / month
-                </div>
-              </div>
-
-              <div style={{ background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '10px 14px' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>Attendance Bonus</span>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2563EB', marginTop: 4 }}>
-                  {policy.attendanceBonus?.enabled ? `PKR ${policy.attendanceBonus.amount || 2000}` : 'None'}
-                </div>
-              </div>
-            </div>
-
-            {policy.specialAllowances && policy.specialAllowances.length > 0 && (
-              <div style={{ marginTop: 2, background: '#FFFFFF', borderRadius: 10, border: '1px solid #E2E8F0', padding: '10px 14px' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>Special Departmental Allowances</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                  {policy.specialAllowances.map((a, i) => (
-                    <span key={i} className="badge badge-indigo" style={{ fontSize: 11.5, fontWeight: 600 }}>
-                      {a.label}: {a.value}{a.type === 'percentage' ? '%' : ' PKR'} ({a.applies_to})
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
         </div>
 
-        {/* Island 3: Floating Action Pill Row */}
+        {/* Island 3: Cancel Action Button */}
         <div
           style={{
             display: 'flex',
@@ -735,7 +677,7 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
             style={{
               borderRadius: 9999,
               height: 42,
-              padding: '0 22px',
+              padding: '0 24px',
               border: '1px solid #CBD5E1',
               background: '#FFFFFF',
               color: '#334155',
@@ -747,28 +689,6 @@ export const PayrollRulesModal: React.FC<PayrollRulesModalProps> = ({
             }}
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            style={{
-              borderRadius: 9999,
-              height: 42,
-              padding: '0 26px',
-              border: 'none',
-              background: '#0F172A',
-              color: '#FFFFFF',
-              fontSize: 13,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              boxShadow: '0 6px 16px rgba(15, 23, 42, 0.28)',
-              transition: 'background-color 0.15s ease'
-            }}
-          >
-            <Check size={16} /> Save & Apply to Academy Payroll
           </button>
         </div>
       </div>
