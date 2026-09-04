@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { sendSuccess, sendError } from '../common/envelope';
 import { AuthenticatedRequest, generateTemporaryPassword } from '../auth';
 import { createAuditLog } from '../common/audit';
