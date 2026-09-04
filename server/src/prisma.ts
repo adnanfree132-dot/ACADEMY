@@ -51,8 +51,16 @@ export const prisma: PrismaClient =
   process.env.CLOUDFLARE_WORKER === '1'
     ? (new Proxy({} as PrismaClient, {
         get(_target, prop) {
-          const store = prismaAls.getStore();
-          return ((store || createPrisma()) as any)[prop];
+          const store = prismaAls.getStore() || createPrisma();
+          if (prop === '$transaction') {
+            return async (arg: unknown, options?: unknown) => {
+              if (typeof arg === 'function') {
+                return (arg as (tx: PrismaClient) => Promise<unknown>)(store);
+              }
+              return (store as any).$transaction(arg, options);
+            };
+          }
+          return (store as any)[prop];
         }
       }) as PrismaClient)
     : localPrisma;
