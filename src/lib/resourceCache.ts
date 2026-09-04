@@ -2,7 +2,7 @@ type CacheEntry<T> = { data: T; updatedAt: number };
 
 const memory = new Map<string, CacheEntry<unknown>>();
 const PERSIST_PREFIX = 'academy.cache.';
-const SNAPSHOT_KEY = 'academy.bootstrap.v2';
+const SNAPSHOT_KEY = 'academy.bootstrap.v3';
 const API_PREFIX = 'academy.api.';
 
 function persistRead<T>(key: string): T | undefined {

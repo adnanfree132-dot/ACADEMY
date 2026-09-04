@@ -72,12 +72,22 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
   const epochAtStart = currentEpoch(endpoint);
 
   const exec = (async () => {
-  try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const attempt = async (): Promise<Response> => {
+    return fetch(`${BASE_URL}${endpoint}`, {
       cache: 'no-store',
       ...options,
       headers
     });
+  };
+  try {
+    let response: Response;
+    try {
+      response = await attempt();
+    } catch (first) {
+      if (!isGet) throw first;
+      await new Promise(r => setTimeout(r, 400));
+      response = await attempt();
+    }
 
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {

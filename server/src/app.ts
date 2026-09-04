@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import routes from './routes';
+import { attachRequestPrisma } from './prisma';
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 app.use(cors({ origin: '*' }));
+app.use(attachRequestPrisma);
 app.use((req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return next();
