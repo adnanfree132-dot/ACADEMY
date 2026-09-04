@@ -10,9 +10,6 @@ CLOUDFLARE_WORKER = "1"
 NODE_ENV = "production"
 PORT = "5000"
 
-[limits]
-cpu_ms = 30000
-
 [alias]
 "iconv-lite" = "./src/iconv-stub.js"
 "pg-cloudflare" = "./node_modules/pg-cloudflare/dist/index.js"
