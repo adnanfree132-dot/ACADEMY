@@ -117,7 +117,10 @@ export function App() {
       run(() => api.getSettings(), (backendSettings) => {
         applyAcademySettings(backendSettings);
         if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
-      }),
+      })
+    ]);
+
+    await Promise.all([
       run(() => api.getNotifications(), (backendNotifications) => {
         if (!Array.isArray(backendNotifications)) return;
         setNotifications(backendNotifications);
@@ -283,30 +286,32 @@ export function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    refreshDataFromBackend();
     const quiet = (p: Promise<any>) => p.catch(() => null);
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    let y = now.getFullYear();
-    let m = now.getMonth();
-    if (m === 0) { m = 12; y -= 1; }
-    const priorMonth = `${y}-${String(m).padStart(2, '0')}`;
-    void Promise.all([
-      quiet(api.getHomework()),
-      quiet(api.getStudyMaterials()),
-      quiet(api.getTests()),
-      quiet(api.getTimetableSlots()),
-      quiet(api.getLeaves()),
-      quiet(api.getInvoices()),
-      quiet(api.getExpenses()),
-      quiet(api.getConductDesk()),
-      quiet(api.getWhatsAppTemplates()),
-      quiet(api.getWhatsAppLogs()),
-      quiet(api.getStaffTypes()),
-      quiet(api.getClasses()),
-      quiet(api.getLiveStaffPayrollRegister({ month_period: priorMonth })),
-      quiet(api.getStaffAttendanceRoster({ date: today }))
-    ]);
+    void (async () => {
+      await refreshDataFromBackend();
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      let y = now.getFullYear();
+      let m = now.getMonth();
+      if (m === 0) { m = 12; y -= 1; }
+      const priorMonth = `${y}-${String(m).padStart(2, '0')}`;
+      await Promise.all([
+        quiet(api.getHomework()),
+        quiet(api.getStudyMaterials()),
+        quiet(api.getTests()),
+        quiet(api.getTimetableSlots()),
+        quiet(api.getLeaves()),
+        quiet(api.getInvoices()),
+        quiet(api.getExpenses()),
+        quiet(api.getConductDesk()),
+        quiet(api.getWhatsAppTemplates()),
+        quiet(api.getWhatsAppLogs()),
+        quiet(api.getStaffTypes()),
+        quiet(api.getClasses()),
+        quiet(api.getLiveStaffPayrollRegister({ month_period: priorMonth })),
+        quiet(api.getStaffAttendanceRoster({ date: today }))
+      ]);
+    })();
   }, [isAuthenticated]);
 
   useEffect(() => {
