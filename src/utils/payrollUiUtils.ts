@@ -8,12 +8,33 @@ export function roundCurrency(amount: number): number {
   return Math.round(amount * 100) / 100;
 }
 
+let _currentCurrency = '';
+
+export function getGlobalCurrencySymbol(): string {
+  if (_currentCurrency) return _currentCurrency;
+  try {
+    const cached = localStorage.getItem('currencySymbol');
+    if (cached && cached.trim()) {
+      _currentCurrency = cached.trim();
+      return _currentCurrency;
+    }
+  } catch (e) {}
+  return 'Rs.';
+}
+
+export function setGlobalCurrencySymbol(symbol: string) {
+  if (symbol && symbol.trim()) {
+    _currentCurrency = symbol.trim();
+    try {
+      localStorage.setItem('currencySymbol', _currentCurrency);
+    } catch (e) {}
+  }
+}
+
 export function formatCurrencyPKR(amount: number | null | undefined): string {
-  if (amount === null || amount === undefined || isNaN(amount)) return 'PKR 0';
-  return 'PKR ' + amount.toLocaleString('en-US', {
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2
-  });
+  const sym = getGlobalCurrencySymbol();
+  if (amount === null || amount === undefined || isNaN(amount)) return `${sym} 0`;
+  return `${sym} ` + Math.round(amount).toLocaleString('en-US');
 }
 
 export function formatNumberOnly(amount: number | null | undefined): string {

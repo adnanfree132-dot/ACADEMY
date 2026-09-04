@@ -16,13 +16,15 @@ import {
   Clock,
   DollarSign
 } from 'lucide-react';
-import { api } from '../api/apiClient';
+import { api, peekApiCache } from '../api/apiClient';
+import { useApiCacheSync } from '../lib/useApiCacheSync';
 import { exportToCSV } from '../utils/csvExporter';
 import { RecordFeeModal } from '../components/RecordFeeModal';
 import { FeeSlipModal, FeeSlipData } from '../components/FeeSlipModal';
 import { StudentLedgerModal } from '../components/StudentLedgerModal';
-import { MonthlyBatchPayrollDashboard } from '../components/MonthlyBatchPayrollDashboard';
 import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
+import { showToast } from '../lib/toast';
+import { formatCurrencyPKR } from '../utils/payrollUiUtils';
 
 interface FeeManagementViewProps {
   students: Student[];
@@ -37,9 +39,10 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
   onOpenCreateModal,
   onAddPayment
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'ledgers' | 'invoices' | 'defaulters' | 'history' | 'payroll' | 'fee_heads'>('ledgers');
+  const [activeSubTab, setActiveSubTab] = useState<'ledgers' | 'invoices' | 'defaulters' | 'history' | 'dayend'>('ledgers');
+  const [dayEnd, setDayEnd] = useState<any>(null);
   const [search, setSearch] = useState('');
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>(() => peekApiCache<any[]>('/fees/invoices') || []);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genMessage, setGenMessage] = useState('');
@@ -52,7 +55,7 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
   const [selectedSlipData, setSelectedSlipData] = useState<FeeSlipData | null>(null);
 
   const fetchInvoices = async () => {
-    setLoadingInvoices(true);
+    if (invoices.length === 0) setLoadingInvoices(true);
     try {
       const invs = await api.getInvoices();
       setInvoices(invs || []);
@@ -66,6 +69,12 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
   useEffect(() => {
     fetchInvoices();
   }, []);
+  useApiCacheSync<any[]>('/fees/invoices', rows => { if (Array.isArray(rows)) setInvoices(rows); });
+
+  useEffect(() => {
+    if (activeSubTab !== 'dayend') return;
+    api.getFeeDayEnd().then(setDayEnd).catch(() => setDayEnd(null));
+  }, [activeSubTab, transactions.length]);
 
   const handleGenerateInvoices = async () => {
     setIsGenerating(true);
@@ -75,7 +84,7 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
       fetchInvoices();
       setTimeout(() => setGenMessage(''), 4000);
     } catch (err: any) {
-      alert(`Error generating invoices: ${err.message}`);
+      showToast(err.message || 'Could not generate invoices.', 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -133,7 +142,17 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
   const totalAssigned = students.reduce((sum, s) => sum + (s.totalFee || 0), 0);
   const totalCollected = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalOverdue = students.reduce((sum, s) => sum + (s.dueBalance || 0), 0);
-  const defaultersList = students.filter(s => s.isDefaulter);
+  const defaultersList = students.filter(s => s.isDefaulter || (s.dueBalance || 0) > 0);
+  const agingOf = (dueDate?: string) => {
+    if (!dueDate) return 0;
+    const days = Math.floor((Date.now() - new Date(dueDate).getTime()) / 86400000);
+    return Math.max(0, days);
+  };
+  const agingBuckets = {
+    d30: defaultersList.filter(s => agingOf(s.dueDate) <= 30).length,
+    d60: defaultersList.filter(s => agingOf(s.dueDate) > 30 && agingOf(s.dueDate) <= 60).length,
+    d90: defaultersList.filter(s => agingOf(s.dueDate) > 60).length
+  };
 
   const filteredStudents = students.filter(s => 
     (s.name || '').toLowerCase().includes(search.toLowerCase()) || 
@@ -179,7 +198,7 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
       fetchInvoices();
       setTimeout(() => setGenMessage(''), 4000);
     } catch (err: any) {
-      alert(`Error syncing installments: ${err.message}`);
+      showToast(err.message || 'Could not sync installments.', 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -287,19 +306,11 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
         </button>
 
         <button 
-          className={`btn-secondary btn-sm ${activeSubTab === 'payroll' ? 'btn-primary' : ''}`}
-          onClick={() => setActiveSubTab('payroll')}
+          className={`btn-secondary btn-sm ${activeSubTab === 'dayend' ? 'btn-primary' : ''}`}
+          onClick={() => setActiveSubTab('dayend')}
           style={{ whiteSpace: 'nowrap' }}
         >
-          <DollarSign size={15} /> Staff Payroll & Salaries
-        </button>
-
-        <button 
-          className={`btn-secondary btn-sm ${activeSubTab === 'fee_heads' ? 'btn-primary' : ''}`}
-          onClick={() => setActiveSubTab('fee_heads')}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          <Layers size={15} /> Fee Heads & Catalog
+          <Clock size={15} /> Day-end close
         </button>
       </div>
 
@@ -494,6 +505,11 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
       {/* Tab 3: Defaulters List */}
       {activeSubTab === 'defaulters' && (
         <div className="data-table-container">
+          <div style={{ display: 'flex', gap: 10, padding: 12, flexWrap: 'wrap' }}>
+            <span className="badge badge-amber">0–30 days: {agingBuckets.d30}</span>
+            <span className="badge badge-red">31–60 days: {agingBuckets.d60}</span>
+            <span className="badge badge-red">61+ days: {agingBuckets.d90}</span>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -593,6 +609,23 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
                     >
                       <Printer size={13} /> Printable Receipt
                     </button>
+                    <button
+                      className="btn-secondary btn-sm"
+                      style={{ marginLeft: 6 }}
+                      onClick={async () => {
+                        const reason = window.prompt('Void reason (required)');
+                        if (!reason) return;
+                        try {
+                          await api.voidFeePayment(t.id, reason);
+                          showToast('Receipt voided.', 'success');
+                          fetchInvoices();
+                        } catch (err: any) {
+                          showToast(err.message || 'Could not void.', 'error');
+                        }
+                      }}
+                    >
+                      Void
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -601,78 +634,26 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
         </div>
       )}
 
-      {/* Tab 5: Staff Payroll & Salaries */}
-      {activeSubTab === 'payroll' && (
-        <MonthlyBatchPayrollDashboard />
-      )}
-
-      {/* Tab 6: Fee Heads & Structure Catalog */}
-      {activeSubTab === 'fee_heads' && (
-        <div className="data-table-container">
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC' }}>
-            <div>
-              <h4 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>Standard Institutional Fee Heads Catalog</h4>
-              <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0 0' }}>
-                Configured institutional fee components available across student admission and billing flows
-              </p>
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', background: '#DCFCE7', padding: '4px 10px', borderRadius: 9999 }}>
-              Active in Registration Form Dropdowns
-            </span>
-          </div>
-
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Fee Head / Component</th>
-                <th>Category / Billing Type</th>
-                <th>Typical Frequency</th>
-                <th>Standard Suggested Base</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { name: 'Monthly Tuition Fee', type: 'Tuition / Academic', freq: 'Monthly (Anchor Cycle)', base: 'PKR 5,000 / month' },
-                { name: 'Admission Fee', type: 'One-Time Enrollment', freq: 'At Admission', base: 'PKR 2,000' },
-                { name: 'Registration Fee', type: 'Institutional Registration', freq: 'At Admission / Annual', base: 'PKR 1,000' },
-                { name: 'Books & Course Material', type: 'Academic Supplies', freq: 'One-Time / Semester', base: 'PKR 1,500' },
-                { name: 'ID Card & Student Kit', type: 'Administrative', freq: 'At Admission', base: 'PKR 500' },
-                { name: 'Lab & Computer Charges', type: 'Facility & Equipment', freq: 'Monthly / One-Time', base: 'PKR 1,000' },
-                { name: 'Examination Fee', type: 'Assessments & Tests', freq: 'Per Term / Exam', base: 'PKR 1,500' },
-                { name: 'Security Deposit (Refundable)', type: 'Deposit', freq: 'At Admission (Refundable)', base: 'PKR 3,000' },
-                { name: 'Uniform & Accessories', type: 'Attire', freq: 'At Admission', base: 'PKR 2,500' },
-                { name: 'Misc / Emergency Fund', type: 'Auxiliary', freq: 'Ad-hoc', base: 'As Applicable' }
-              ].map((fh, idx) => (
-                <tr key={idx}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 8,
-                        background: '#EFF6FF',
-                        border: '1px solid #BFDBFE',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#2563EB',
-                        fontWeight: 800,
-                        fontSize: 11
-                      }}>
-                        {idx + 1}
-                      </div>
-                      <span style={{ fontWeight: 800, color: '#0F172A' }}>{fh.name}</span>
-                    </div>
-                  </td>
-                  <td><span className="badge badge-gray">{fh.type}</span></td>
-                  <td><span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>{fh.freq}</span></td>
-                  <td><span style={{ fontSize: 12.5, fontWeight: 700, color: '#16A34A' }}>{fh.base}</span></td>
-                  <td><span className="badge badge-green">Active</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {activeSubTab === 'dayend' && (
+        <div className="card" style={{ padding: 20 }}>
+          <h3 style={{ margin: '0 0 8px' }}>Today’s collections</h3>
+          <p style={{ color: '#64748B', fontSize: 13, marginTop: 0 }}>Cash desk close. Payroll lives in Staff Payroll, not here.</p>
+          {dayEnd ? (
+            <>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#16A34A' }}>{formatCurrencyPKR(dayEnd.total || 0)}</div>
+              <div style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>{dayEnd.receiptCount || 0} live receipts · {dayEnd.pendingChequeCount || 0} pending cheques · {dayEnd.voidedCount || 0} voided</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {Object.entries(dayEnd.byMethod || {}).map(([method, amt]) => (
+                  <span key={method} className="badge badge-gray">{method}: {formatCurrencyPKR(Number(amt))}</span>
+                ))}
+              </div>
+              <button className="btn-secondary" style={{ marginTop: 16 }} onClick={() => window.print()}>
+                <Printer size={14} /> Print day-end
+              </button>
+            </>
+          ) : (
+            <p>No day-end data yet.</p>
+          )}
         </div>
       )}
 

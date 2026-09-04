@@ -39,7 +39,7 @@ export const CreateModal: React.FC<CreateModalProps> = ({
   const [gender, setGender] = useState<'Male' | 'Female'>('Male');
   const [batchSelect, setBatchSelect] = useState(batches[0]?.name || 'Grade 10 - Sec A');
   const [totalFee, setTotalFee] = useState('12000');
-  const [dueDate, setDueDate] = useState('2026-09-05');
+  const [dueDate, setDueDate] = useState('');
 
   // Payment Form State
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || 'stu-1');
@@ -57,7 +57,7 @@ export const CreateModal: React.FC<CreateModalProps> = ({
   const [batchName, setBatchName] = useState('');
   const [classLevel, setClassLevel] = useState('Grade 10');
   const [batchTiming, setBatchTiming] = useState('14:00 - 16:00');
-  const [batchRoom, setBatchRoom] = useState('Room 101');
+  const [batchRoom, setBatchRoom] = useState('');
   const [batchCapacity, setBatchCapacity] = useState('30');
 
   if (!isOpen) return null;
@@ -82,7 +82,7 @@ export const CreateModal: React.FC<CreateModalProps> = ({
       gender,
       status: 'Active',
       totalFee: Number(totalFee) || 10000,
-      dueDate: dueDate || '2026-09-05'
+      dueDate: dueDate || ''
     });
 
     setCredentialSlipData({

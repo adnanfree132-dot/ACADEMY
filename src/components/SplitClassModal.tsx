@@ -15,7 +15,7 @@ export const SplitClassModal: React.FC<SplitClassModalProps> = ({
   onSaved
 }) => {
   const [newBatchName, setNewBatchName] = useState(`${batch.name} - Sec B`);
-  const [newRoom, setNewRoom] = useState(`${batch.room || 'Room 101'} B`);
+  const [newRoom, setNewRoom] = useState(batch.room ? `${batch.room} B` : '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSplit = (e: React.FormEvent) => {

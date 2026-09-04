@@ -97,6 +97,8 @@ export interface PayrollDeductionRules {
     type: 'deduction_percentage' | 'deduction_fixed' | 'bonus_percentage' | 'bonus_fixed';
     value: number;
     reason?: string;
+    tag?: string;
+    label?: string;
   }>;
   rawPolicyText?: string;
 }
@@ -140,6 +142,12 @@ export interface CalculatedPayrollItem {
   otherDeductions: number;
   statutoryDeductions: number;
   totalDeductions: number;
+
+  // Itemized Transparency (Spec 012)
+  customDeductions?: any[];
+  customEarnings?: any[];
+  custom_deductions_json?: string;
+  custom_earnings_json?: string;
 
   // Net Pay
   netPayable: number;
@@ -353,23 +361,93 @@ export function calculateStaffPayrollItem(
   // Dynamic Staff-Specific Adjustments (e.g. "Cut half salary of Adnan", "Deduct 5000 fine from Ali")
   let staffAdjustmentDeduction = 0;
   let staffAdjustmentBonus = 0;
+  const customDeductions: any[] = [];
+  const customEarnings: any[] = [];
   const staffFullName = (staffMember.full_name || staffMember.fullName || '').toLowerCase().trim();
   const staffCodeLower = (staffMember.staff_id || staffMember.staffId || '').toLowerCase().trim();
+
+  // Non-name attendance terms to prevent regex/LLM hallucinated sentence matching
+  const NON_NAME_TOKENS = new Set(['day', 'days', 'late', 'lates', 'absence', 'absences', 'leave', 'leaves', 'grace', 'pay', 'salary', 'deduction', 'fine', 'penalty']);
 
   if (rules?.staffAdjustments && rules.staffAdjustments.length > 0) {
     for (const adj of rules.staffAdjustments) {
       const targetName = (adj.staffName || '').toLowerCase().trim();
-      if (targetName && (staffFullName.includes(targetName) || targetName.includes(staffFullName) || staffCodeLower.includes(targetName))) {
+      if (!targetName || targetName.length < 2 || targetName.length > 40) continue;
+
+      // Reject if targetName is composed entirely of attendance keywords
+      const tokens = targetName.split(/\s+/);
+      const isPureAttendanceText = tokens.every(tok => NON_NAME_TOKENS.has(tok));
+      if (isPureAttendanceText) continue;
+
+      const cleanTarget = targetName.replace(/[-\s]/g, '');
+      const cleanStaffCode = staffCodeLower.replace(/[-\s]/g, '');
+      const cleanFullName = staffFullName.replace(/[-\s]/g, '');
+
+      // Precise word-boundary name matching (exact match, prefix/suffix word, token match, or staff code match)
+      const isNameMatched = 
+        targetName === staffFullName ||
+        cleanTarget === cleanFullName ||
+        staffFullName.startsWith(targetName + ' ') ||
+        staffFullName.endsWith(' ' + targetName) ||
+        staffFullName.includes(' ' + targetName + ' ') ||
+        (tokens.length === 1 && staffFullName.split(' ').includes(targetName)) ||
+        (staffCodeLower && (
+          staffCodeLower === targetName ||
+          staffCodeLower.includes(targetName) ||
+          targetName.includes(staffCodeLower) ||
+          cleanStaffCode === cleanTarget ||
+          cleanTarget.includes(cleanStaffCode)
+        ));
+
+      if (isNameMatched) {
         if (adj.type === 'deduction_percentage') {
           const cutRatio = Math.min(100, Math.max(0, adj.value || 50)) / 100;
-          staffAdjustmentDeduction += roundCurrency(baseSalary * cutRatio);
+          const cutAmount = roundCurrency(baseSalary * cutRatio);
+          staffAdjustmentDeduction += cutAmount;
+          customDeductions.push({
+            tag: adj.tag || (adj.value === 50 ? 'HALF_MONTH_SALARY' : 'SALARY_CUT'),
+            label: adj.label || (adj.value === 50 ? 'Disciplinary Half-Month Pay Cut (50%)' : `Salary Cut (${adj.value}%)`),
+            amount: cutAmount,
+            percentage: adj.value || 50,
+            type: 'deduction',
+            reason: adj.reason || (adj.value === 50 ? 'Counted half of month per institutional memo' : 'Policy adjustment'),
+            applied_to: staffMember.staff_id || staffMember.staffId
+          });
         } else if (adj.type === 'deduction_fixed') {
-          staffAdjustmentDeduction += roundCurrency(adj.value || 0);
+          const cutAmount = roundCurrency(adj.value || 0);
+          staffAdjustmentDeduction += cutAmount;
+          customDeductions.push({
+            tag: adj.tag || 'ADVANCE_SALARY',
+            label: adj.label || 'Salary Advance Recovery',
+            amount: cutAmount,
+            type: 'deduction',
+            reason: adj.reason || 'Deduction applied per institutional memo',
+            applied_to: staffMember.staff_id || staffMember.staffId
+          });
         } else if (adj.type === 'bonus_percentage') {
           const bonusRatio = Math.max(0, adj.value || 0) / 100;
-          staffAdjustmentBonus += roundCurrency(baseSalary * bonusRatio);
+          const earnAmount = roundCurrency(baseSalary * bonusRatio);
+          staffAdjustmentBonus += earnAmount;
+          customEarnings.push({
+            tag: adj.tag || 'LAB_ALLOWANCE',
+            label: adj.label || `Special Allowance (${adj.value}%)`,
+            amount: earnAmount,
+            percentage: adj.value,
+            type: 'earning',
+            reason: adj.reason || 'Performance allowance',
+            applied_to: staffMember.staff_id || staffMember.staffId
+          });
         } else if (adj.type === 'bonus_fixed') {
-          staffAdjustmentBonus += roundCurrency(adj.value || 0);
+          const earnAmount = roundCurrency(adj.value || 0);
+          staffAdjustmentBonus += earnAmount;
+          customEarnings.push({
+            tag: adj.tag || 'SPECIAL_BONUS',
+            label: adj.label || 'Special Bonus',
+            amount: earnAmount,
+            type: 'earning',
+            reason: adj.reason || 'Bonus awarded per policy',
+            applied_to: staffMember.staff_id || staffMember.staffId
+          });
         }
       }
     }
@@ -378,11 +456,26 @@ export function calculateStaffPayrollItem(
   // Heuristic safety match against raw policy text if staff adjustments array missed it
   if (staffAdjustmentDeduction === 0 && rules?.rawPolicyText) {
     const rawLower = rules.rawPolicyText.toLowerCase();
+    const cleanRaw = rawLower.replace(/[-\s]/g, '');
+    const cleanStaffCode = staffCodeLower.replace(/[-\s]/g, '');
     const firstWord = staffFullName.split(' ')[0];
-    if (firstWord && rawLower.includes(firstWord)) {
-      if (rawLower.includes(`cut half salary of ${firstWord}`) || rawLower.includes(`half salary of ${firstWord}`) || rawLower.includes(`cut half of ${firstWord}`) || rawLower.includes(`deduct half from ${firstWord}`) || rawLower.includes(`half ${firstWord}`)) {
-        staffAdjustmentDeduction += roundCurrency(baseSalary * 0.5);
-      }
+
+    const mentionsHalf = rawLower.includes('half') || rawLower.includes('50%') || rawLower.includes('counted half') || rawLower.includes('0.5');
+    const mentionsThisStaff = (staffCodeLower && (rawLower.includes(staffCodeLower) || cleanRaw.includes(cleanStaffCode))) ||
+                              (firstWord && firstWord.length >= 3 && !NON_NAME_TOKENS.has(firstWord) && rawLower.includes(firstWord));
+
+    if (mentionsThisStaff && mentionsHalf) {
+      const cut = roundCurrency(baseSalary * 0.5);
+      staffAdjustmentDeduction += cut;
+      customDeductions.push({
+        tag: 'HALF_MONTH_SALARY',
+        label: 'Disciplinary Half-Month Pay Cut (50%)',
+        amount: cut,
+        percentage: 50,
+        type: 'deduction',
+        reason: 'Counted half of month per institutional memo',
+        applied_to: staffMember.staff_id || staffMember.staffId
+      });
     }
   }
 
@@ -433,13 +526,17 @@ export function calculateStaffPayrollItem(
     houseRentAllowance,
     medicalAllowance,
     conveyanceAllowance,
-    specialAllowance,
+    specialAllowance: dynamicSpecialAllowance,
     grossSalary,
     taxDeduction,
     providentFund,
-    otherDeductions,
+    otherDeductions: totalOtherDeductions,
     statutoryDeductions,
     totalDeductions,
+    customDeductions,
+    customEarnings,
+    custom_deductions_json: JSON.stringify(customDeductions),
+    custom_earnings_json: JSON.stringify(customEarnings),
     netPayable,
     netPayableWords,
     paymentMethod,

@@ -32,6 +32,8 @@ import { StaffStatusModal } from '../components/StaffStatusModal';
 import { DeleteStaffModal } from '../components/DeleteStaffModal';
 import { StaffDetailDrawer } from '../components/StaffDetailDrawer';
 import { api } from '../api/apiClient';
+import { showToast } from '../lib/toast';
+import { removeIdsFromCaches } from '../lib/resourceCache';
 
 interface TeachersViewProps {
   teachers: Teacher[];
@@ -80,6 +82,7 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
   const [activeStaffForStatus, setActiveStaffForStatus] = useState<any | null>(null);
   const [selectedStaffForDrawer, setSelectedStaffForDrawer] = useState<any | null>(null);
   const [activeDropdownStaffId, setActiveDropdownStaffId] = useState<string | null>(null);
+  const [activeContactStaffId, setActiveContactStaffId] = useState<string | null>(null);
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
 
   // Filters & State (Active staff by default)
@@ -224,11 +227,14 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
     setIsCredentialSlipOpen(true);
   };
 
-  // Handle staff deletion (0ms instant optimistic UI reflection like student section)
-  const handleConfirmDeleteStaff = (id: string, mode: 'soft' | 'hard') => {
+  const handleConfirmDeleteStaff = async (id: string, mode: 'soft' | 'hard') => {
+    const target = staffList.find(s => s.id === id);
+    const snapshot = staffList;
+    const relatedIds = [id, target?.teacher_id, target?.teacherId, target?.user_id, target?.userId].filter(Boolean);
+
     if (mode === 'hard') {
-      setStaffList(prev => prev.filter(s => s.id !== id));
-      if (onDeleteTeacher) onDeleteTeacher(id);
+      removeIdsFromCaches(relatedIds);
+      setStaffList(prev => prev.filter(s => s.id !== id && s.teacher_id !== id && s.teacherId !== id));
     } else {
       setStaffList(prev =>
         prev.map(s =>
@@ -251,8 +257,13 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
       }
     }
 
-    // Silent background API execution
-    api.deleteStaff(id, mode).catch(err => console.error('Delete staff error in background:', err));
+    try {
+      await api.deleteStaff(id, mode);
+      showToast(mode === 'hard' ? 'Staff member deleted.' : 'Staff member archived.', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Could not delete this staff member. They were restored.', 'error');
+      setStaffList(snapshot);
+    }
   };
 
   // Handle password reset
@@ -974,11 +985,124 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
                     {staff.email || 'No email registered'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
-                  <Phone size={12} color="#64748B" style={{ flexShrink: 0 }} />
-                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                    {staff.phone || 'No phone registered'}
-                  </span>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
+                    <Phone size={12} color="#64748B" style={{ flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                      {staff.phone || 'No phone registered'}
+                    </span>
+                  </div>
+                  {staff.phone && (
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setActiveContactStaffId(activeContactStaffId === staff.id ? null : staff.id);
+                        }}
+                        title="Call / WhatsApp Contact Options"
+                        style={{
+                          background: activeContactStaffId === staff.id ? '#EFF6FF' : '#F8FAFC',
+                          border: activeContactStaffId === staff.id ? '1px solid #BFDBFE' : '1px solid #E2E8F0',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: 10.5,
+                          fontWeight: 600,
+                          color: '#2563EB',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Phone size={10} color="#2563EB" /> Contact
+                      </button>
+
+                      {activeContactStaffId === staff.id && (
+                        <>
+                          <div
+                            style={{ position: 'fixed', inset: 0, zIndex: 1210, background: 'transparent' }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setActiveContactStaffId(null);
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 'calc(100% + 6px)',
+                              right: 0,
+                              width: 170,
+                              background: '#FFFFFF',
+                              borderRadius: 10,
+                              border: '1px solid #E2E8F0',
+                              boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.15)',
+                              padding: 5,
+                              zIndex: 1220,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 3
+                            }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cleanPhone = (staff.phone || '').replace(/\D/g, '');
+                                window.open(`https://api.whatsapp.com/send/?phone=${cleanPhone}`, '_blank');
+                                setActiveContactStaffId(null);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#16A34A',
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textAlign: 'left'
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#F0FDF4')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <MessageSquare size={14} color="#16A34A" /> WhatsApp Chat
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cleanPhone = (staff.phone || '').replace(/\D/g, '');
+                                window.location.href = `tel:${cleanPhone}`;
+                                setActiveContactStaffId(null);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#2563EB',
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textAlign: 'left'
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#EFF6FF')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <Phone size={14} color="#2563EB" /> Mobile Call
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

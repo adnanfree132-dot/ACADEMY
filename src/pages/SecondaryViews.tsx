@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, FileText, Calendar as CalendarIcon, Settings, Plus, Download, Clock, MapPin, CheckCircle2, User, BookOpen, X, Upload, Building2, Image as ImageIcon, Palette, Sliders, Sparkles, ShieldCheck, ChevronRight, GraduationCap, UserSquare2, Pencil, Trash2, CreditCard, Compass } from 'lucide-react';
+import { Award, FileText, Calendar as CalendarIcon, Settings, Plus, Download, Clock, MapPin, CheckCircle2, User, BookOpen, X, Upload, Building2, Image as ImageIcon, Palette, Sliders, Sparkles, ShieldCheck, ChevronRight, GraduationCap, UserSquare2, Pencil, Trash2, CreditCard, Compass, History } from 'lucide-react';
 import { api } from '../api/apiClient';
 import { exportToCSV } from '../utils/csvExporter';
 import { compressAndResizeImage } from '../utils/imageResizer';
@@ -7,6 +7,8 @@ import { MarksheetEntryModal } from '../components/MarksheetEntryModal';
 import { ModernSelect } from '../components/ModernSelect';
 import { Student } from '../types';
 import { CampusGeofenceSettings } from '../components/CampusGeofenceSettings';
+import { setGlobalCurrencySymbol } from '../utils/payrollUiUtils';
+import { applyAcademySettings } from '../lib/academySettings';
 
 
 /* ==========================================================================
@@ -24,142 +26,17 @@ export { ExamsManagementView, ExamsManagementView as ExamsView } from './ExamsVi
 /* ==========================================================================
    3. Homework & Study Notes Manager (Connected to Express API)
    ========================================================================== */
-export const HomeworkView: React.FC = () => {
-  const [homeworkList, setHomeworkList] = useState<any[]>([]);
-  const [materialsList, setMaterialsList] = useState<any[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-
-  const fetchData = async () => {
-    try {
-      const [hw, sm] = await Promise.all([
-        api.getHomework().catch(() => []),
-        api.getStudyMaterials().catch(() => [])
-      ]);
-      if (Array.isArray(hw)) setHomeworkList(hw);
-      if (Array.isArray(sm)) setMaterialsList(sm);
-    } catch (err) {
-      console.error('Error fetching homework:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleCreateHomework = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    try {
-      await api.createHomework({ title, description });
-      setIsModalOpen(false);
-      setTitle('');
-      setDescription('');
-      fetchData();
-    } catch (err) {
-      console.error('Error creating homework:', err);
-    }
-  };
-
-  const handleExportCSV = () => {
-    exportToCSV('Homework_Assignments', homeworkList.map(h => ({
-      Title: h.title,
-      Description: h.description,
-      Batch: h.batch?.name || 'All Batches',
-      DueDate: h.due_date,
-      CreatedOn: h.created_at
-    })));
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Homework & Study Materials</h2>
-          <p style={{ fontSize: 13, color: '#64748B' }}>Class assignments, homework tasks, and downloadable PDF notes</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn-secondary" onClick={handleExportCSV}>
-            <Download size={16} /> Export CSV
-          </button>
-          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={16} /> Upload Notes / Assignment
-          </button>
-        </div>
-      </div>
-
-      {homeworkList.length > 0 || materialsList.length > 0 ? (
-        <div className="card-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-          {homeworkList.map((item, index) => (
-            <div key={index} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="badge badge-primary">{item.batch?.name || 'Grade 10'}</span>
-                <span style={{ fontSize: 12, color: '#64748B' }}>Due: {item.due_date}</span>
-              </div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{item.title}</h3>
-              <p style={{ fontSize: 13, color: '#64748B' }}>{item.description || 'No detailed instructions provided.'}</p>
-              
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#16A34A' }}>✓ 8/12 Submitted</span>
-                <button
-                  type="button"
-                  onClick={() => alert(`Submission tracker for "${item.title}": 8 Submitted, 3 Pending, 1 Late.`)}
-                  style={{ fontSize: 11, color: '#0F172A', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 6, padding: '4px 8px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
-                  <FileText size={12} color="#475569" /> Track Submissions
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-          <FileText size={44} color="#94A3B8" style={{ marginBottom: 12 }} />
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>No Homework or Study Materials Uploaded</h3>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Click "Upload Notes / Assignment" above to add course materials.</p>
-        </div>
-      )}
-
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800 }}>Create Homework Assignment</h3>
-              <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCreateHomework} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div className="form-group">
-                <label className="form-label">Title / Topic</label>
-                <input className="form-input" placeholder="e.g. Chapter 4 Practice Questions" value={title} onChange={e => setTitle(e.target.value)} required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Instructions / Notes</label>
-                <textarea className="form-input" placeholder="Enter assignment details..." value={description} onChange={e => setDescription(e.target.value)} rows={3} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">Post Assignment</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+export { HomeworkView } from './HomeworkView';
 
 /* ==========================================================================
    4. Settings View (Connected to Express Settings API)
    ========================================================================== */
 export const SettingsView: React.FC = () => {
-  const [subTab, setSubTab] = useState<'branding' | 'assets' | 'idcard' | 'customizer' | 'geofence'>('branding');
+  const [subTab, setSubTab] = useState<'branding' | 'assets' | 'idcard' | 'customizer' | 'geofence' | 'audit'>('branding');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [academyName, setAcademyName] = useState('AcademiaPro Management OS');
   const [academicSession, setAcademicSession] = useState('Session 2026-2027');
-  const [currencySymbol, setCurrencySymbol] = useState('$');
+  const [currencySymbol, setCurrencySymbol] = useState('Rs');
   const [gracePeriod, setGracePeriod] = useState('5');
   const [principalName, setPrincipalName] = useState('Dr. S. A. Khan');
   const [academyAddress, setAcademyAddress] = useState('Campus 1, Academic Zone');
@@ -241,10 +118,14 @@ export const SettingsView: React.FC = () => {
     if (localTeacher) { try { setCustomTeacherFields(JSON.parse(localTeacher)); } catch (e) {} }
     if (localClass) { try { setCustomClassFields(JSON.parse(localClass)); } catch (e) {} }
 
+    api.getAuditLogs().then(rows => { if (Array.isArray(rows)) setAuditLogs(rows); }).catch(() => {});
     api.getSettings().then(settings => {
       if (settings?.academyName) setAcademyName(settings.academyName);
       if (settings?.academicSession) setAcademicSession(settings.academicSession);
-      if (settings?.currencySymbol) setCurrencySymbol(settings.currencySymbol);
+      if (settings?.currencySymbol) {
+        setCurrencySymbol(settings.currencySymbol);
+        setGlobalCurrencySymbol(settings.currencySymbol);
+      }
       if (settings?.gracePeriod) setGracePeriod(String(settings.gracePeriod));
       if (settings?.principalName) setPrincipalName(settings.principalName);
       if (settings?.academyAddress) setAcademyAddress(settings.academyAddress);
@@ -253,6 +134,7 @@ export const SettingsView: React.FC = () => {
       if (settings?.signatureUrl) setSignatureUrl(settings.signatureUrl);
       if (settings?.themePrimary) setThemePrimary(settings.themePrimary);
       if (settings?.themeSecondary) setThemeSecondary(settings.themeSecondary);
+      applyAcademySettings(settings);
       if (settings?.academyMode) {
         setAcademyModeState(settings.academyMode as any);
         localStorage.setItem('academyMode', settings.academyMode);
@@ -309,6 +191,15 @@ export const SettingsView: React.FC = () => {
       setTimeout(() => {
         setIsSaved(false);
       }, 3000);
+
+      applyAcademySettings({
+        themePrimary,
+        themeSecondary,
+        currencySymbol,
+        academicSession,
+        academyName
+      });
+      setGlobalCurrencySymbol(currencySymbol);
 
       Promise.all([
         api.saveSetting('academyName', academyName),
@@ -529,6 +420,45 @@ export const SettingsView: React.FC = () => {
             </div>
             <ChevronRight size={14} color={subTab === 'geofence' ? '#FFFFFF' : '#94A3B8'} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSubTab('audit');
+              api.getAuditLogs().then(rows => { if (Array.isArray(rows)) setAuditLogs(rows); }).catch(() => {});
+            }}
+            style={{
+              padding: '9px 12px',
+              borderRadius: 10,
+              border: subTab === 'audit' ? 'none' : '1px solid #E2E8F0',
+              background: subTab === 'audit' ? '#0F172A' : '#FFFFFF',
+              color: subTab === 'audit' ? '#FFFFFF' : '#334155',
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: subTab === 'audit' ? '0 4px 12px -2px rgba(15,23,42,0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                border: subTab === 'audit' ? '1px solid rgba(255,255,255,0.25)' : '1px solid #CBD5E1',
+                borderRadius: 6,
+                padding: '3px 5px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <History size={15} color={subTab === 'audit' ? '#FFFFFF' : '#475569'} />
+              </div>
+              <span>Activity log</span>
+            </div>
+            <ChevronRight size={14} color={subTab === 'audit' ? '#FFFFFF' : '#94A3B8'} />
+          </button>
         </div>
 
         {/* Right Active Settings Configuration Panel */}
@@ -677,12 +607,12 @@ export const SettingsView: React.FC = () => {
                 <div>
                   <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Primary Color (Accent)</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <input type="color" value={themePrimary} onChange={e => setThemePrimary(e.target.value)} style={{ width: 44, height: 36, border: 'none', borderRadius: 8, cursor: 'pointer', padding: 0 }} />
+                    <input type="color" value={themePrimary} onChange={e => { setThemePrimary(e.target.value); applyAcademySettings({ themePrimary: e.target.value, themeSecondary, currencySymbol, academicSession, academyName }); }} style={{ width: 44, height: 36, border: 'none', borderRadius: 8, cursor: 'pointer', padding: 0 }} />
                     <input className="form-input" value={themePrimary} onChange={e => setThemePrimary(e.target.value)} style={{ fontSize: 12, fontFamily: 'monospace', textTransform: 'uppercase' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {primaryPresets.map(c => (
-                      <button key={c} type="button" onClick={() => setThemePrimary(c)} title={c}
+                      <button key={c} type="button" onClick={() => { setThemePrimary(c); applyAcademySettings({ themePrimary: c, themeSecondary, currencySymbol, academicSession, academyName }); }} title={c}
                         style={{ width: 28, height: 28, borderRadius: 8, background: c, border: themePrimary === c ? '3px solid #0F172A' : '2px solid #CBD5E1', cursor: 'pointer', boxShadow: themePrimary === c ? '0 0 0 2px #FFF, 0 0 0 4px ' + c : 'none' }}
                       />
                     ))}
@@ -692,12 +622,12 @@ export const SettingsView: React.FC = () => {
                 <div>
                   <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Secondary Color (Dark)</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <input type="color" value={themeSecondary} onChange={e => setThemeSecondary(e.target.value)} style={{ width: 44, height: 36, border: 'none', borderRadius: 8, cursor: 'pointer', padding: 0 }} />
+                    <input type="color" value={themeSecondary} onChange={e => { setThemeSecondary(e.target.value); applyAcademySettings({ themePrimary, themeSecondary: e.target.value, currencySymbol, academicSession, academyName }); }} style={{ width: 44, height: 36, border: 'none', borderRadius: 8, cursor: 'pointer', padding: 0 }} />
                     <input className="form-input" value={themeSecondary} onChange={e => setThemeSecondary(e.target.value)} style={{ fontSize: 12, fontFamily: 'monospace', textTransform: 'uppercase' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {secondaryPresets.map(c => (
-                      <button key={c} type="button" onClick={() => setThemeSecondary(c)} title={c}
+                      <button key={c} type="button" onClick={() => { setThemeSecondary(c); applyAcademySettings({ themePrimary, themeSecondary: c, currencySymbol, academicSession, academyName }); }} title={c}
                         style={{ width: 28, height: 28, borderRadius: 8, background: c, border: themeSecondary === c ? '3px solid #FFF' : '2px solid #475569', cursor: 'pointer', boxShadow: themeSecondary === c ? '0 0 0 2px #FFF, 0 0 0 4px ' + c : 'none' }}
                       />
                     ))}
@@ -1231,7 +1161,38 @@ export const SettingsView: React.FC = () => {
           <CampusGeofenceSettings />
         )}
 
-        {subTab !== 'geofence' && (
+        {subTab === 'audit' && (
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 6px' }}>Activity log</h3>
+            <p style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>Last 100 staff actions. This is the real audit trail, not a demo feed.</p>
+            <div className="table-responsive">
+              <table className="data-table" style={{ fontSize: 12.5 }}>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Who</th>
+                    <th>Action</th>
+                    <th>Entity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.length === 0 ? (
+                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, color: '#94A3B8' }}>No audit rows yet.</td></tr>
+                  ) : auditLogs.map((row: any) => (
+                    <tr key={row.id}>
+                      <td>{row.created_at ? new Date(row.created_at).toLocaleString() : ''}</td>
+                      <td>{row.user?.full_name || row.user_id}</td>
+                      <td><strong>{row.action}</strong></td>
+                      <td>{row.entity}{row.entity_id ? ` · ${String(row.entity_id).slice(0, 8)}` : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {subTab !== 'geofence' && subTab !== 'audit' && (
           <button 
             type="button"
             className="btn-primary" 

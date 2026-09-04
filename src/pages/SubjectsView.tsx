@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Subject } from '../types';
 import { BookOpen, Plus, Pencil, Trash2, X, Search, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { showToast } from '../lib/toast';
+import { api } from '../api/apiClient';
 
 interface SubjectsViewProps {
   subjects: Subject[];
@@ -74,13 +76,11 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!subjectToDelete) return;
     const targetId = subjectToDelete.id;
     setSubjectToDelete(null);
-    if (onDeleteSubject) {
-      onDeleteSubject(targetId);
-    }
+    if (onDeleteSubject) onDeleteSubject(targetId);
   };
 
   // Color palette for subject cards
@@ -159,6 +159,9 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({
                       }}>
                         {subject.code}
                       </span>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+                        {subject.batchCount || 0} batches · {subject.testCount || 0} tests · {subject.homeworkCount || 0} homework
+                      </div>
                     </div>
                   </div>
                 </div>

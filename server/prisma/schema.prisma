@@ -95,6 +95,8 @@ model Teacher {
   studyMaterials StudyMaterial[]
   staffMember   StaffMember?
   timetableSlots TimetableSlot[]
+  substitutesAsOriginal   BatchSubstitute[] @relation("SubstituteOriginalTeacher")
+  substitutesAsCover      BatchSubstitute[] @relation("SubstituteCoverTeacher")
 }
 
 model Batch {
@@ -109,6 +111,7 @@ model Batch {
   start_time           String
   end_time             String
   capacity             Int      @default(30)
+  room                 String?
   is_active            Boolean  @default(true)
   course_type          String   @default("monthly") // monthly, fixed_course
   total_fee            Float?
@@ -125,6 +128,8 @@ model Batch {
   feeStructures  FeeStructure[]
   conductLogs    ConductLog[]
   timetableSlots TimetableSlot[]
+  waitlist       BatchWaitlist[]
+  substitutes    BatchSubstitute[]
 }
 
 model BatchSubject {
@@ -136,6 +141,37 @@ model BatchSubject {
   teacher    Teacher @relation(fields: [teacher_id], references: [id])
 
   @@id([batch_id, subject_id])
+}
+
+model BatchWaitlist {
+  id         String   @id @default(uuid())
+  batch_id   String
+  batch      Batch    @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  student_id String
+  student    Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  position   Int
+  reason     String?
+  created_at DateTime @default(now())
+
+  @@unique([batch_id, student_id])
+  @@index([batch_id, position])
+}
+
+model BatchSubstitute {
+  id                     String   @id @default(uuid())
+  batch_id               String
+  batch                  Batch    @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  original_teacher_id    String?
+  originalTeacher        Teacher? @relation("SubstituteOriginalTeacher", fields: [original_teacher_id], references: [id], onDelete: SetNull)
+  substitute_teacher_id  String
+  substituteTeacher      Teacher  @relation("SubstituteCoverTeacher", fields: [substitute_teacher_id], references: [id])
+  from_date              String
+  to_date                String
+  reason                 String?
+  created_at             DateTime @default(now())
+
+  @@index([batch_id])
+  @@index([from_date, to_date])
 }
 
 model Student {
@@ -166,12 +202,14 @@ model Student {
   attendances  Attendance[]
   leaves       Leave[]
   testMarks    TestMark[]
+  homeworkSubmissions HomeworkSubmission[]
   feeInvoices  FeeInvoice[]
   feePayments  FeePayment[]
   feePlan      StudentFeePlan?
   conductLogs  ConductLog[]
   parentStudents ParentStudent[]
   statusHistory StudentStatusHistory[]
+  waitlistEntries BatchWaitlist[]
 }
 
 model Enrollment {
@@ -231,6 +269,21 @@ model Homework {
   due_date       String
   attachment_url String?
   created_at     DateTime @default(now())
+  submissions    HomeworkSubmission[]
+}
+
+model HomeworkSubmission {
+  id           String    @id @default(uuid())
+  homework_id  String
+  homework     Homework  @relation(fields: [homework_id], references: [id], onDelete: Cascade)
+  student_id   String
+  student      Student   @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  status       String    @default("pending") // pending, submitted, late, done
+  note         String?
+  submitted_at DateTime?
+
+  @@unique([homework_id, student_id])
+  @@index([homework_id])
 }
 
 model StudyMaterial {
@@ -268,6 +321,7 @@ model TestMark {
   student    Student @relation(fields: [student_id], references: [id])
   marks      Float
   remark     String?
+  status     String  @default("scored") // scored, absent, exempt
 
   @@id([test_id, student_id])
 }
@@ -342,27 +396,34 @@ model FeeInvoice {
 }
 
 model FeePayment {
-  id         String      @id @default(uuid())
-  invoice_id String?
-  invoice    FeeInvoice? @relation(fields: [invoice_id], references: [id])
-  student_id String
-  student    Student     @relation(fields: [student_id], references: [id])
-  amount     Float
-  method     String      // cash, upi, bank, card, cheque
-  receipt_no String      @unique
-  note       String?
-  paid_at    DateTime    @default(now())
-  recorded_by String
+  id              String      @id @default(uuid())
+  invoice_id      String?
+  invoice         FeeInvoice? @relation(fields: [invoice_id], references: [id])
+  student_id      String
+  student         Student     @relation(fields: [student_id], references: [id])
+  amount          Float
+  method          String      // cash, upi, bank, card, cheque, jazzcash, easypaisa
+  receipt_no      String      @unique
+  note            String?
+  paid_at         DateTime    @default(now())
+  recorded_by     String
+  voided_at       DateTime?
+  void_reason     String?
+  cleared_status  String      @default("cleared") // cleared, pending, bounced
+  credit_applied  Float       @default(0)
 }
 
 model Announcement {
-  id         String   @id @default(uuid())
-  title      String
-  body       String
-  audience   String   // all, students, parents, teachers, batch
-  batch_id   String?
-  created_by String
-  created_at DateTime @default(now())
+  id            String    @id @default(uuid())
+  title         String
+  body          String
+  audience      String    // all, students, parents, teachers, batch
+  batch_id      String?
+  pinned        Boolean   @default(false)
+  urgent        Boolean   @default(false)
+  scheduled_for DateTime?
+  created_by    String
+  created_at    DateTime  @default(now())
 }
 
 model Notification {
@@ -379,15 +440,30 @@ model Notification {
 }
 
 model Inquiry {
-  id            String   @id @default(uuid())
-  name          String
-  phone         String
+  id             String   @id @default(uuid())
+  name           String
+  phone          String
   class_interest String
-  source        String   @default("walk_in")
-  status        String   @default("new") // new, contacted, interested, demo, admitted, not_interested
-  follow_up_on  String?
-  notes         String?
-  created_at    DateTime @default(now())
+  source         String   @default("walk_in")
+  status         String   @default("new") // new, contacted, trial, converted, lost
+  follow_up_on   String?
+  notes          String?
+  parent_name    String?
+  student_id     String?
+  lost_reason    String?
+  created_at     DateTime @default(now())
+  followUps      InquiryFollowUp[]
+}
+
+model InquiryFollowUp {
+  id           String   @id @default(uuid())
+  inquiry_id   String
+  inquiry      Inquiry  @relation(fields: [inquiry_id], references: [id], onDelete: Cascade)
+  note         String
+  follow_up_on String?
+  created_at   DateTime @default(now())
+
+  @@index([inquiry_id])
 }
 
 model AuditLog {
@@ -549,6 +625,9 @@ model StaffMember {
   documents           StaffDocument[]
   salaryPayments      StaffSalaryPayment[]
   salaryStructure     StaffSalaryStructure?
+  salaryAdjustments   StaffSalaryAdjustment[]
+  salaryDisbursements StaffSalaryDisbursement[]
+  expenses            Expense[]
 
   @@index([staff_type_id])
   @@index([status])
@@ -772,7 +851,10 @@ model StaffSalaryPayment {
   slip_url                    String?
   notes                       String?
   remarks                     String?
+  custom_deductions_json      String?       // JSON stringified array of itemized deduction lines
+  custom_earnings_json        String?       // JSON stringified array of itemized earning lines
   status                      String        @default("paid") // pending, paid, partial, cancelled
+  is_published                Boolean       @default(false)
   created_at                  DateTime      @default(now())
   updated_at                  DateTime      @updatedAt
 
@@ -783,6 +865,56 @@ model StaffSalaryPayment {
   @@index([status])
   @@index([disbursed_by_user_id])
   @@index([payslip_number])
+}
+
+model SalaryHead {
+  id          String   @id @default(uuid())
+  title       String   // e.g. "Late Arrival", "Advance Salary", "Overtime", "Bonus"
+  type        String   // "deduction" | "earning"
+  amount      Float    @default(0) // Default amount
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@index([type])
+  @@index([is_active])
+}
+
+model PayrollComponentTag {
+  id                String   @id @default(uuid())
+  tag_code          String   @unique // e.g. "HALF_MONTH_SALARY", "ADVANCE_SALARY", "LAB_ALLOWANCE"
+  display_label     String   // e.g. "Disciplinary Half-Month Pay Cut"
+  type              String   // "deduction" | "earning"
+  calculation_type  String   // "percentage_of_base" | "fixed_amount" | "per_day"
+  default_value     Float    @default(0) // e.g. 50 (for 50%), 5000 (PKR)
+  reason_template   String?  // e.g. "Deduction applied per institutional policy memo"
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@index([is_active])
+  @@index([type])
+  @@index([tag_code])
+}
+
+model StaffSalaryAdjustment {
+  id              String       @id @default(uuid())
+  staff_member_id String
+  staffMember     StaffMember  @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  month_period    String       // e.g. "2026-08"
+  type            String       // "deduction" | "earning"
+  category        String       // e.g. "Late Fine", "Advance Recovery", "Extra Classes", "Disciplinary Fine", "Bonus"
+  unit_amount     Float        // e.g. 2000
+  quantity        Float        @default(1) // e.g. 5
+  total_amount    Float        // unit_amount * quantity e.g. 10000
+  reason          String?      // e.g. "5 days late arrival"
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@index([staff_member_id])
+  @@index([month_period])
+  @@index([type])
 }
 
 model TimetableSlot {
@@ -799,10 +931,68 @@ model TimetableSlot {
   teacher    Teacher? @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
   topic      String?
   created_at DateTime @default(now())
+  exceptions TimetableException[]
 
   @@index([day, start_time, room])
   @@index([day, start_time, teacher_id])
   @@index([batch_id])
+}
+
+model TimetableException {
+  id                     String        @id @default(uuid())
+  slot_id                String
+  slot                   TimetableSlot @relation(fields: [slot_id], references: [id], onDelete: Cascade)
+  date                   String
+  type                   String        // cancelled | substituted
+  substitute_teacher_id  String?
+  created_at             DateTime      @default(now())
+
+  @@unique([slot_id, date])
+}
+
+model Expense {
+  id               String                    @id @default(uuid())
+  category         String                    // "Salaries", "Utilities", "Rent", "Maintenance", "Supplies", "Miscellaneous"
+  title            String                    // e.g. "August 2026 Salary - John Doe", "Campus Electricity Bill"
+  amount           Float                     @default(0)
+  expense_date     DateTime                  @default(now())
+  payment_method   String                    @default("cash") // "cash" | "bank_transfer" | "cheque" | "online"
+  reference_number String?                   // Check #, receipt #
+  payee_name       String?                   // Staff name, utility company, landlord
+  staff_member_id  String?
+  month_period     String?                   // e.g. "2026-08"
+  notes            String?
+  created_at       DateTime                  @default(now())
+  updated_at       DateTime                  @updatedAt
+
+  staffMember      StaffMember?              @relation(fields: [staff_member_id], references: [id], onDelete: SetNull)
+  disbursements    StaffSalaryDisbursement[]
+
+  @@index([category])
+  @@index([expense_date])
+  @@index([month_period])
+  @@index([staff_member_id])
+}
+
+model StaffSalaryDisbursement {
+  id               String       @id @default(uuid())
+  staff_member_id  String
+  month_period     String       // e.g. "2026-08"
+  amount           Float        @default(0)
+  payment_method   String       @default("cash") // "cash" | "bank_transfer" | "cheque"
+  disbursed_at     DateTime     @default(now())
+  reference_number String?
+  notes            String?
+  expense_id       String?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  staffMember      StaffMember  @relation(fields: [staff_member_id], references: [id], onDelete: Cascade)
+  expense          Expense?     @relation(fields: [expense_id], references: [id], onDelete: SetNull)
+
+  @@index([staff_member_id])
+  @@index([month_period])
+  @@index([disbursed_at])
 }
 
 

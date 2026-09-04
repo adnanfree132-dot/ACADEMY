@@ -17,8 +17,10 @@ import {
   Calendar,
   DollarSign,
   UserCheck,
-  GitBranch
+  GitBranch,
+  Printer
 } from 'lucide-react';
+import { showToast } from '../lib/toast';
 import { CreateBatchModal } from '../components/CreateBatchModal';
 import { EnrollStudentModal } from '../components/EnrollStudentModal';
 import { SubstituteTeacherModal } from '../components/SubstituteTeacherModal';
@@ -59,12 +61,18 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
 
   const [isCreateBatchModalOpen, setIsCreateBatchModalOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
+  const [batchToDelete, setBatchToDelete] = useState<Batch | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'soft' | 'hard'>('soft');
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [enrollModalBatch, setEnrollModalBatch] = useState<Batch | null>(null);
   const [manageSubjectsBatch, setManageSubjectsBatch] = useState<Batch | null>(null);
   const [substituteBatch, setSubstituteBatch] = useState<Batch | null>(null);
   const [splitBatchState, setSplitBatchState] = useState<Batch | null>(null);
   const [syllabusBatchState, setSyllabusBatchState] = useState<Batch | null>(null);
+  const [waitlist, setWaitlist] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [newClassName, setNewClassName] = useState('');
+  const [classFilter, setClassFilter] = useState('ALL');
 
   // Edit Form State
   const [editName, setEditName] = useState('');
@@ -92,7 +100,7 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
     setEditTeacherId(matchedTeacher?.id || '');
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBatch) return;
 
@@ -113,31 +121,58 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
       onEditBatch(updated);
     }
 
-    if (editTeacherId) {
-      api.updateBatch(editingBatch.id, {
-        teacherId: editTeacherId,
+    try {
+      await api.updateBatch(editingBatch.id, {
+        teacherId: editTeacherId || undefined,
         name: editName.trim(),
         capacity: Number(editCapacity),
         timing: editTiming.trim(),
         room: editRoom.trim()
-      }).catch(() => {});
+      });
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.warn('Error updating batch in background:', err);
     }
 
     setEditingBatch(null);
   };
 
+  const confirmDeleteBatch = async () => {
+    if (!batchToDelete) return;
+    const target = batchToDelete;
+    setBatchToDelete(null);
+
+    if (onDeleteBatch) {
+      onDeleteBatch(target.id);
+    }
+
+    try {
+      await api.deleteBatch(target.id);
+    } catch (err) {
+      console.warn('Error deleting batch in background:', err);
+      if (onRefresh) onRefresh();
+    }
+  };
+
+  useEffect(() => {
+    api.getClasses().then(rows => { if (Array.isArray(rows)) setClasses(rows); }).catch(() => {});
+  }, [batches.length]);
+
   const openBatchDetail = async (batch: Batch) => {
     setSelectedBatch(batch);
     try {
-      const [enrolledStudents, batchSubs] = await Promise.all([
+      const [enrolledStudents, batchSubs, waitRows] = await Promise.all([
         api.getBatchStudents(batch.id).catch(() => []),
-        api.getBatchSubjects(batch.id).catch(() => [])
+        api.getBatchSubjects(batch.id).catch(() => []),
+        api.getBatchWaitlist(batch.id).catch(() => [])
       ]);
       setBatchStudents(Array.isArray(enrolledStudents) ? enrolledStudents : []);
       setBatchSubjects(Array.isArray(batchSubs) ? batchSubs : []);
+      setWaitlist(Array.isArray(waitRows) ? waitRows : []);
     } catch {
       setBatchStudents([]);
       setBatchSubjects([]);
+      setWaitlist([]);
     }
   };
 
@@ -151,12 +186,30 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
     if (onRefresh) onRefresh();
 
     // 2. Background sync
-    api.enrollStudentInBatch(batchId, payload).then(() => {
+    api.enrollStudentInBatch(batchId, payload).then((res: any) => {
+      if (res?.waitlisted) {
+        showToast('Batch is full. Student was added to the waitlist.', 'info');
+      } else {
+        showToast('Student enrolled.', 'success');
+      }
       if (currBatch && currBatch.id === batchId) {
         openBatchDetail(currBatch);
       }
       if (onRefresh) onRefresh();
-    }).catch(err => console.error('Error enrolling student in background:', err));
+    }).catch(async (err: any) => {
+      if (err?.message && String(err.message).toLowerCase().includes('capacity')) {
+        try {
+          await api.addBatchWaitlist(batchId, { studentId: payload.studentId, reason: 'Capacity full' });
+          showToast('Batch is full. Student was added to the waitlist.', 'info');
+          if (currBatch && currBatch.id === batchId) openBatchDetail(currBatch);
+          return;
+        } catch (waitErr: any) {
+          showToast(waitErr.message || err.message, 'error');
+          return;
+        }
+      }
+      showToast(err.message || 'Could not enroll student.', 'error');
+    });
   };
 
   const handleRemoveStudent = (studentId: string) => {
@@ -226,9 +279,46 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
         </div>
       </div>
 
+      <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <strong style={{ fontSize: 13 }}>Classes</strong>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newClassName.trim()) return;
+              try {
+                const created = await api.createClass({ name: newClassName.trim() });
+                setClasses(prev => [...prev, created]);
+                setNewClassName('');
+                showToast('Class created.', 'success');
+              } catch (err: any) {
+                showToast(err.message || 'Could not create class.', 'error');
+              }
+            }}
+            style={{ display: 'flex', gap: 8 }}
+          >
+            <input className="form-input" placeholder="New class name" value={newClassName} onChange={e => setNewClassName(e.target.value)} style={{ minWidth: 180 }} />
+            <button className="btn-secondary" type="submit">Add class</button>
+          </form>
+        </div>
+        <div className="mobile-filter-scroll-bar">
+          <button type="button" className={classFilter === 'ALL' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setClassFilter('ALL')}>All</button>
+          {classes.map((cls: any) => (
+            <button
+              key={cls.id}
+              type="button"
+              className={classFilter === cls.name ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+              onClick={() => setClassFilter(cls.name)}
+            >
+              {cls.name}{cls._count?.batches != null ? ` (${cls._count.batches})` : ''}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Batch Cards Grid */}
       <div className="card-grid-3">
-        {batches.map(batch => (
+        {batches.filter(batch => classFilter === 'ALL' || batch.classLevel === classFilter || (batch as any).class?.name === classFilter).map(batch => (
           <div
             key={batch.id}
             className="card"
@@ -311,11 +401,7 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                   type="button"
                   className="table-icon-btn danger"
                   title="Delete Class"
-                  onClick={() => {
-                    if (window.confirm(`Are you sure you want to delete ${batch.name}?`)) {
-                      if (onDeleteBatch) onDeleteBatch(batch.id);
-                    }
-                  }}
+                  onClick={() => setBatchToDelete(batch)}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -357,8 +443,14 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                 </div>
               ) : null}
 
+              {batch.room ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={13} color="#64748B" /> {batch.room}
+                </div>
+              ) : null}
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Users size={13} color="#64748B" /> {batch.studentsCount || 0} Enrolled Students
+                <Users size={13} color="#64748B" /> {batch.studentsCount || 0}/{batch.capacity || batch.maxCapacity || '—'} enrolled
               </div>
             </div>
 
@@ -424,12 +516,36 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                 <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
                   <Users size={15} color="#475569" /> Enrolled Students ({batchStudents.length})
                 </h4>
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={() => setEnrollModalBatch(selectedBatch)}
-                >
-                  <UserPlus size={14} /> Enroll Student
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => {
+                      const lines = [
+                        selectedBatch.name,
+                        `Teacher: ${selectedBatch.teacherName || selectedBatch.instructor || 'Unassigned'}`,
+                        selectedBatch.room ? `Room: ${selectedBatch.room}` : '',
+                        '',
+                        ...batchStudents.map((enrollment: any, idx: number) => {
+                          const stu = enrollment.student || enrollment || {};
+                          return `${idx + 1}. ${stu.full_name || stu.name || ''}  ${stu.admission_no || ''}  ${stu.phone || ''}`;
+                        })
+                      ].filter(Boolean);
+                      const w = window.open('', '_blank');
+                      if (!w) return;
+                      w.document.write(`<pre style="font-family:sans-serif;padding:24px">${lines.join('\n')}</pre>`);
+                      w.document.close();
+                      w.print();
+                    }}
+                  >
+                    <Printer size={14} /> Print roster
+                  </button>
+                  <button
+                    className="btn-primary btn-sm"
+                    onClick={() => setEnrollModalBatch(selectedBatch)}
+                  >
+                    <UserPlus size={14} /> Enroll Student
+                  </button>
+                </div>
               </div>
 
               {/* Students Table */}
@@ -487,6 +603,33 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
                   <p style={{ fontSize: 12, margin: 0, marginTop: 4 }}>Click "Enroll Student" above to add students with installment schedules.</p>
                 </div>
               )}
+
+              <div style={{ marginTop: 20 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: '0 0 8px' }}>Waitlist ({waitlist.length})</h4>
+                {waitlist.length === 0 ? (
+                  <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Empty. Full batches add new enrollments here instead of inventing seats.</p>
+                ) : waitlist.map((row: any) => (
+                  <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '8px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
+                    <span>#{row.position} {row.student?.full_name} {row.student?.phone ? `· ${row.student.phone}` : ''}</span>
+                    <span style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn-secondary btn-sm" onClick={async () => {
+                        try {
+                          await api.promoteWaitlist(selectedBatch.id, row.student_id);
+                          showToast('Seat given. Student enrolled.', 'success');
+                          openBatchDetail(selectedBatch);
+                          if (onRefresh) onRefresh();
+                        } catch (err: any) {
+                          showToast(err.message || 'Could not promote.', 'error');
+                        }
+                      }}>Promote</button>
+                      <button className="btn-secondary btn-sm" onClick={async () => {
+                        await api.removeWaitlist(selectedBatch.id, row.student_id);
+                        setWaitlist(prev => prev.filter(w => w.id !== row.id));
+                      }}>Remove</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -513,76 +656,339 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
         />
       )}
 
-      {manageSubjectsBatch && (
-        <div className="modal-backdrop" onClick={() => setManageSubjectsBatch(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <BookOpen size={20} color="#10B981" /> Manage Subjects — {manageSubjectsBatch.name}
-              </h3>
-              <button className="modal-close-btn" onClick={() => setManageSubjectsBatch(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                <X size={18} />
+      {/* 1. Edit Batch Modal (Floating Island Architecture) */}
+      {editingBatch && (
+        <div className="floating-island-overlay" onClick={() => setEditingBatch(null)}>
+          <div className="floating-island-container" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
+            {/* Island 1: Floating Dark Navy Header Card */}
+            <div className="island-header-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10B981'
+                }}>
+                  <Pencil size={18} />
+                </div>
+                <div>
+                  <h3 className="island-header-title">Edit Class & Batch</h3>
+                  <p className="island-header-sub">
+                    {editingBatch.name} • Modify schedule, room, instructor & capacity
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="island-close-btn"
+                onClick={() => setEditingBatch(null)}
+              >
+                <X size={16} />
               </button>
             </div>
 
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>Currently Assigned</h4>
-              {batchSubjectsForManage.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {batchSubjectsForManage.map((bs: any) => (
-                    <div key={bs.subject?.id} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0'
-                    }}>
-                      <div>
-                        <span style={{ fontWeight: 600, color: '#0F172A', fontSize: 13.5 }}>{bs.subject?.name}</span>
-                        <span style={{ fontSize: 11, color: '#64748B', marginLeft: 8 }}>({bs.subject?.code})</span>
-                        <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                          Teacher: <span style={{ fontWeight: 600, color: '#334155' }}>{bs.teacher?.user?.full_name || 'Unassigned'}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveSubject(bs.subject?.id)}
-                        style={{
-                          padding: '4px 8px', borderRadius: 6, border: '1px solid #FECACA',
-                          background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 11,
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
-                        }}
-                      >
-                        <Trash2 size={11} /> Remove
-                      </button>
+            {/* Island 3: Floating White Scrollable Form Card */}
+            <div className="island-content-card">
+              <form id="edit-batch-form" onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                      Class / Batch Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      placeholder="e.g. Grade 10 - Mathematics"
+                      required
+                      style={{ width: '100%', borderRadius: 10, border: '1px solid #CBD5E1', padding: '8px 14px', fontSize: 13 }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                        Room / Hall
+                      </label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={editRoom}
+                        onChange={e => setEditRoom(e.target.value)}
+                        placeholder="e.g. Room 102 / Lab 1"
+                        style={{ width: '100%', borderRadius: 10, border: '1px solid #CBD5E1', padding: '8px 14px', fontSize: 13 }}
+                      />
                     </div>
-                  ))}
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                        Max Student Capacity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        className="input"
+                        value={editCapacity}
+                        onChange={e => setEditCapacity(e.target.value)}
+                        placeholder="30"
+                        style={{ width: '100%', borderRadius: 10, border: '1px solid #CBD5E1', padding: '8px 14px', fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                      Class Schedule / Timing
+                    </label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={editTiming}
+                      onChange={e => setEditTiming(e.target.value)}
+                      placeholder="e.g. Mon, Wed, Fri 09:00 AM - 10:30 AM"
+                      style={{ width: '100%', borderRadius: 10, border: '1px solid #CBD5E1', padding: '8px 14px', fontSize: 13 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                      Primary Assigned Instructor
+                    </label>
+                    <ModernSelect
+                      value={editTeacherId}
+                      onChange={setEditTeacherId}
+                      placeholder="Select Instructor..."
+                      options={[
+                        { value: '', label: 'Unassigned' },
+                        ...activeTeachers.map(t => ({ value: t.id, label: `${t.name} (${t.qualification || 'Faculty'})` }))
+                      ]}
+                    />
+                  </div>
                 </div>
-              ) : (
-                <p style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No subjects assigned yet.</p>
-              )}
+              </form>
             </div>
 
-            <div style={{ marginTop: 20, borderTop: '1px solid #E2E8F0', paddingTop: 16 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>Assign New Subject</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <ModernSelect
-                  value={assignSubjectId}
-                  onChange={setAssignSubjectId}
-                  placeholder="Select Subject..."
-                  options={subjects.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
-                />
-                <ModernSelect
-                  value={assignTeacherId}
-                  onChange={setAssignTeacherId}
-                  placeholder="Select Teacher..."
-                  options={activeTeachers.map(t => ({ value: t.id, label: t.name }))}
-                />
-                <button
-                  className="btn-primary"
-                  onClick={handleAssignSubject}
-                  disabled={!assignSubjectId || !assignTeacherId}
-                  style={{ justifyContent: 'center' }}
-                >
-                  Assign Subject & Teacher
-                </button>
+            {/* Island 4: Floating Action Pill Row */}
+            <div className="island-action-row">
+              <button
+                type="button"
+                className="island-btn-cancel"
+                onClick={() => setEditingBatch(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-batch-form"
+                className="island-btn-action"
+                style={{ background: '#0F172A', color: '#FFFFFF' }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Delete Batch Confirmation Modal (Floating Island Architecture) */}
+      {batchToDelete && (
+        <div className="floating-island-overlay" onClick={() => setBatchToDelete(null)}>
+          <div className="floating-island-container" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            {/* Island 1: Floating Header Card */}
+            <div className="island-header-card danger">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#EF4444'
+                }}>
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3 className="island-header-title">Delete Class Batch</h3>
+                  <p className="island-header-sub">
+                    {batchToDelete.name} • Class & Batch Removal
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                className="island-close-btn"
+                onClick={() => setBatchToDelete(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Island 2: Notice Card */}
+            <div style={{
+              background: '#FFF1F2',
+              borderRadius: 14,
+              border: '1px solid #FECDD3',
+              padding: '12px 16px',
+              fontSize: 12,
+              color: '#9F1239',
+              lineHeight: 1.45
+            }}>
+              <strong>Warning:</strong> Deleting this batch will unassign associated subject assignments and schedules. Any enrolled students will have their enrollment record removed.
+            </div>
+
+            {/* Island 3: Content Card */}
+            <div className="island-content-card">
+              <p style={{ fontSize: 13, color: '#334155', margin: 0, lineHeight: 1.5 }}>
+                Are you sure you want to permanently remove <strong>{batchToDelete.name}</strong>? This operation will remove the class from student enrollments and schedules.
+              </p>
+            </div>
+
+            {/* Island 4: Floating Action Pill Row */}
+            <div className="island-action-row">
+              <button
+                type="button"
+                className="island-btn-cancel"
+                onClick={() => setBatchToDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="island-btn-action"
+                style={{ background: '#DC2626', color: '#FFFFFF' }}
+                onClick={confirmDeleteBatch}
+              >
+                Delete Batch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Manage Subjects Modal (Floating Island Architecture) */}
+      {manageSubjectsBatch && (
+        <div className="floating-island-overlay" onClick={() => setManageSubjectsBatch(null)}>
+          <div className="floating-island-container" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
+            {/* Island 1: Floating Header Card */}
+            <div className="island-header-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10B981'
+                }}>
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <h3 className="island-header-title">Manage Subjects</h3>
+                  <p className="island-header-sub">
+                    {manageSubjectsBatch.name} • Curriculum & Teacher Assignments
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="island-close-btn"
+                onClick={() => setManageSubjectsBatch(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Island 3: Content Card */}
+            <div className="island-content-card">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <h4 style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Currently Assigned ({batchSubjectsForManage.length})
+                  </h4>
+                  {batchSubjectsForManage.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {batchSubjectsForManage.map((bs: any) => (
+                        <div key={bs.subject?.id} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0'
+                        }}>
+                          <div>
+                            <span style={{ fontWeight: 600, color: '#0F172A', fontSize: 13.5 }}>{bs.subject?.name}</span>
+                            <span style={{ fontSize: 11, color: '#64748B', marginLeft: 8 }}>({bs.subject?.code})</span>
+                            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                              Teacher: <span style={{ fontWeight: 600, color: '#334155' }}>{bs.teacher?.user?.full_name || 'Unassigned'}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSubject(bs.subject?.id)}
+                            style={{
+                              padding: '5px 10px', borderRadius: 6, border: '1px solid #FECACA',
+                              background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 11,
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                          >
+                            <Trash2 size={12} /> Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', margin: 0 }}>No subjects assigned yet.</p>
+                  )}
+                </div>
+
+                <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 14, border: '1px solid #E2E8F0' }}>
+                  <h4 style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>Assign New Subject</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <ModernSelect
+                      value={assignSubjectId}
+                      onChange={setAssignSubjectId}
+                      placeholder="Select Subject..."
+                      options={subjects.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                    />
+                    <ModernSelect
+                      value={assignTeacherId}
+                      onChange={setAssignTeacherId}
+                      placeholder="Select Teacher..."
+                      options={activeTeachers.map(t => ({ value: t.id, label: t.name }))}
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={handleAssignSubject}
+                      disabled={!assignSubjectId || !assignTeacherId}
+                      style={{ justifyContent: 'center', borderRadius: 10, height: 38 }}
+                    >
+                      Assign Subject & Teacher
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Island 4: Floating Action Pill Row */}
+            <div className="island-action-row">
+              <button
+                type="button"
+                className="island-btn-action"
+                style={{ background: '#0F172A', color: '#FFFFFF' }}
+                onClick={() => setManageSubjectsBatch(null)}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

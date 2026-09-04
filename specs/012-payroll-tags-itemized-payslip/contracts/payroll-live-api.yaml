@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: Academy Pro OS - Live Staff Payroll & Multi-Tranche Disbursement API
+  version: 1.0.0
+  description: Endpoints for direct staff payroll register, installment disbursements, and payment logs.
+paths:
+  /api/v1/payroll/live-register:
+    get:
+      summary: Retrieve active staff payroll register with prior-month attendance & payment balances
+      parameters:
+        - name: month_period
+          in: query
+          schema:
+            type: string
+            example: "2026-08"
+        - name: staff_type
+          in: query
+          schema:
+            type: string
+            example: "all"
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Live staff list with base salaries, adjustments, net payable, paid, pending, and attendance badges
+
+  /api/v1/payroll/disbursements:
+    post:
+      summary: Disburse partial or full salary payment to a staff member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staff_member_id, month_period, amount]
+              properties:
+                staff_member_id:
+                  type: string
+                month_period:
+                  type: string
+                  example: "2026-08"
+                amount:
+                  type: number
+                  example: 20000
+                payment_method:
+                  type: string
+                  enum: [cash, bank_transfer, cheque]
+                  default: cash
+                reference_number:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Disbursement recorded and automatically posted to Expenses under Salaries
+
+  /api/v1/payroll/disbursements/{staffId}/{monthPeriod}:
+    get:
+      summary: Retrieve installment disbursement history for a staff member for a specific month
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: monthPeriod
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of past installments with timestamps, amounts, and payment modes
+
+  /api/v1/payroll/disbursements/{id}:
+    delete:
+      summary: Void or revert an installment disbursement (automatically removes linked expense)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Disbursement removed and pending balance restored

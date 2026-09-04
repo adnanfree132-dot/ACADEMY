@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Bell, X, User, Settings, LogOut, UserPlus, CreditCard, UserSquare2, GraduationCap, Users, BookOpen } from 'lucide-react';
+import { Plus, Search, Bell, X, Settings, LogOut, UserPlus, CreditCard, UserSquare2, GraduationCap, Users, BookOpen } from 'lucide-react';
 import { Student, Teacher, Batch, TabType } from '../types';
 
 interface HeaderProps {
   userName?: string;
+  userRole?: string;
   onOpenCreateModal?: () => void;
   onOpenAction?: (type: 'student' | 'fee' | 'teacher' | 'batch') => void;
   onSearch: (query: string) => void;
@@ -12,10 +13,15 @@ interface HeaderProps {
   teachers?: Teacher[];
   batches?: Batch[];
   onNavigate?: (tab: TabType, query?: string) => void;
+  notifications?: Array<{ id: string; title: string; body?: string; is_read?: boolean; created_at?: string; type?: string }>;
+  unreadCount?: number;
+  onMarkNotificationRead?: (id: string) => void;
+  onMarkAllNotificationsRead?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   userName = 'Admin',
+  userRole = 'Admin',
   onOpenCreateModal,
   onOpenAction,
   onSearch,
@@ -23,12 +29,18 @@ export const Header: React.FC<HeaderProps> = ({
   students = [],
   teachers = [],
   batches = [],
-  onNavigate
+  onNavigate,
+  notifications = [],
+  unreadCount = 0,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead
 }) => {
   const [query, setQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const initials = (userName || 'A').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || 'A';
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Global Keyboard Shortcut ⌘K / Ctrl+K
@@ -43,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
         setShowSearchDropdown(false);
         setShowCreateDropdown(false);
         setShowProfileMenu(false);
+        setShowNotifications(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -361,30 +374,56 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Notifications Icon Button */}
-        <button className="btn-icon bell-btn" title="Notifications" onClick={() => alert('No new notifications')}>
-          <Bell size={18} />
-          <span className="notification-dot"></span>
-        </button>
-
-        {/* User Profile Avatar with Dropdown */}
         <div style={{ position: 'relative' }}>
-          <div className="user-avatar" onClick={() => setShowProfileMenu(!showProfileMenu)} title="User Profile">
-            <img 
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" 
-              alt="User Avatar" 
-            />
+          <button className="btn-icon bell-btn" title="Notifications" onClick={() => { setShowNotifications(v => !v); setShowProfileMenu(false); setShowCreateDropdown(false); }}>
+            <Bell size={18} />
+            {unreadCount > 0 && <span className="notification-dot"></span>}
+          </button>
+          {showNotifications && (
+            <div className="profile-dropdown-menu" style={{ width: 340, right: 0, padding: 0 }} onMouseLeave={() => setShowNotifications(false)}>
+              <div className="profile-menu-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
+                <strong>Inbox</strong>
+                {unreadCount > 0 && onMarkAllNotificationsRead && (
+                  <button type="button" className="btn-secondary btn-sm" onClick={onMarkAllNotificationsRead}>Mark all read</button>
+                )}
+              </div>
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: 16, fontSize: 13, color: '#64748B' }}>No notifications yet. New announcements land here.</div>
+                ) : notifications.slice(0, 20).map(n => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => {
+                      if (!n.is_read && onMarkNotificationRead) onMarkNotificationRead(n.id);
+                      setShowNotifications(false);
+                      if (onNavigate) onNavigate(n.type === 'announcement' ? 'announcements' : 'dashboard');
+                    }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none', background: n.is_read ? '#FFFFFF' : '#F8FAFC', cursor: 'pointer', borderTop: '1px solid #F1F5F9' }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: n.is_read ? 600 : 800, color: '#0F172A' }}>{n.title}</div>
+                    {n.body && <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{n.body.slice(0, 110)}</div>}
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{n.created_at ? new Date(n.created_at).toLocaleString() : ''}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <div className="user-avatar" onClick={() => setShowProfileMenu(!showProfileMenu)} title="User Profile" style={{ background: '#0F172A', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
+            {initials}
           </div>
 
           {showProfileMenu && (
             <div className="profile-dropdown-menu" onMouseLeave={() => setShowProfileMenu(false)}>
               <div className="profile-menu-header">
-                <strong>Dilan S.</strong>
-                <span style={{ fontSize: 11, color: '#64748B' }}>Academy Administrator</span>
+                <strong>{userName}</strong>
+                <span style={{ fontSize: 11, color: '#64748B' }}>{userRole}</span>
               </div>
               <div className="profile-menu-divider"></div>
-              <button className="profile-menu-item" onClick={() => setShowProfileMenu(false)}><User size={15} /> My Profile</button>
-              <button className="profile-menu-item" onClick={() => setShowProfileMenu(false)}><Settings size={15} /> Account Settings</button>
+              <button className="profile-menu-item" onClick={() => { setShowProfileMenu(false); if (onNavigate) onNavigate('settings'); }}><Settings size={15} /> Academy settings</button>
               <div className="profile-menu-divider"></div>
               <button className="profile-menu-item text-red" onClick={() => { setShowProfileMenu(false); if (onLogout) onLogout(); }}><LogOut size={15} /> Sign Out</button>
             </div>

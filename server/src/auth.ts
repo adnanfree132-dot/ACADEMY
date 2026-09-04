@@ -174,20 +174,12 @@ export function resolveStaffPermissions(
 export async function authenticateJwt(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // Default to admin for seamless local development if header missing
-    req.user = { userId: 'admin-id', role: 'admin', fullName: 'Academy Admin' };
-    return next();
+    return sendError(res, 'Authentication required', 401);
   }
 
   const token = authHeader.split(' ')[1];
-  if (!token || token === 'null' || token === 'undefined') {
-    req.user = { userId: 'admin-id', role: 'admin', fullName: 'Academy Admin' };
-    return next();
-  }
-
-  if (token.startsWith('demo-session-token')) {
-    req.user = { userId: 'admin-id', role: 'admin', fullName: 'Academy Admin' };
-    return next();
+  if (!token || token === 'null' || token === 'undefined' || token.startsWith('demo-session-token')) {
+    return sendError(res, 'Authentication required', 401);
   }
 
   try {

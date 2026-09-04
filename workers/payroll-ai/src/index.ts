@@ -149,34 +149,85 @@ Respond ONLY with the JSON object. Do not include markdown codeblocks or convers
           unexcusedAbsenceRatio: 1.0,
           paidLeaveAllowance: 2,
           attendanceBonus: { enabled: false, amount: 0, condition: 'none' },
-          specialAllowances: [],
-          staffAdjustments: [],
-          explanation: 'Extracted directly from policy description.'
-        };
+      } else if (aiResponse && typeof aiResponse.response === 'string') {
+        try {
+          const cleaned = aiResponse.response.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+          parsedRules = JSON.parse(cleaned);
+        } catch (parseErr) {
+          console.error('Failed to parse AI JSON response:', parseErr, aiResponse.response);
+        }
       }
 
-      // Ensure defaults for any missing fields
+      // Default fallback if AI parsing completely failed
+      if (!parsedRules || typeof parsedRules !== 'object') {
+        parsedRules = {};
+      }
+
+      // Normalize output schema
+      parsedRules.policy_name = parsedRules.policy_name || parsedRules.policyName || 'Custom Academy Policy';
+      parsedRules.summary = parsedRules.summary || 'Institutional attendance and deduction rules.';
       parsedRules.workingDaysMode = parsedRules.workingDaysMode || 'fixed_26';
       parsedRules.customWorkingDays = parsedRules.customWorkingDays || (parsedRules.workingDaysMode === 'fixed_30' ? 30 : 26);
       parsedRules.lateDeductionMode = parsedRules.lateDeductionMode || 'ratio_3_to_1';
       parsedRules.lateGraceCount = parsedRules.lateGraceCount !== undefined ? parsedRules.lateGraceCount : 2;
-      parsedRules.latePenaltyAmount = parsedRules.latePenaltyAmount !== undefined ? parsedRules.latePenaltyAmount : 500;
+      parsedRules.latePenaltyAmount = parsedRules.latePenaltyAmount || 0;
       parsedRules.halfDayDeductionRatio = parsedRules.halfDayDeductionRatio !== undefined ? parsedRules.halfDayDeductionRatio : 0.5;
       parsedRules.unexcusedAbsenceRatio = parsedRules.unexcusedAbsenceRatio !== undefined ? parsedRules.unexcusedAbsenceRatio : 1.0;
       parsedRules.paidLeaveAllowance = parsedRules.paidLeaveAllowance !== undefined ? parsedRules.paidLeaveAllowance : 2;
       parsedRules.staffAdjustments = Array.isArray(parsedRules.staffAdjustments) ? parsedRules.staffAdjustments : [];
 
-      // Heuristic fallback for specific staff adjustments if AI missed it
+      // Normalize half salary adjustments
       const lower = policyText.toLowerCase();
-      const cutHalfMatch = lower.match(/(?:cut|deduct|reduce)\s+(?:half|50%|0\.5)\s*(?:salary|pay|compensation)?\s*(?:of|for|from)?\s*([a-z0-9_\-\s]+?)(?:[.,;\n]|$)/i);
-      if (cutHalfMatch) {
-        const staffName = cutHalfMatch[1].replace(/salary|pay|for|from|of/gi, '').trim();
-        if (staffName && !parsedRules.staffAdjustments.some((a: any) => a.staffName?.toLowerCase().includes(staffName.toLowerCase()))) {
-          parsedRules.staffAdjustments.push({
-            staffName: staffName,
+      parsedRules.staffAdjustments = parsedRules.staffAdjustments.map((adj: any) => {
+        const reasonLower = (adj.reason || '').toLowerCase();
+        const isHalfRequested = reasonLower.includes('half') || reasonLower.includes('50%') || reasonLower.includes('0.5') ||
+                                lower.includes('counted half') || lower.includes('half of that month') ||
+                                lower.includes('salay is counted half') || lower.includes('salary is counted half');
+        if (isHalfRequested && (adj.type === 'deduction_fixed' || adj.value !== 50)) {
+          return {
+            ...adj,
             type: 'deduction_percentage',
             value: 50,
-            reason: `50% salary reduction requested for ${staffName}`
+            reason: adj.reason || '50% half salary deduction'
+          };
+        }
+        return adj;
+      });
+
+      // Staff code pattern check (e.g. FAC-2026-050)
+      const staffCodeMatch = policyText.match(/\b([A-Za-z]{2,5}-\d{2,4}-\d{2,4}|FAC-\d{3,4}|STF-\d{3,4}|EMP-\d{3,4})\b/i);
+      if (staffCodeMatch) {
+        const code = staffCodeMatch[1].toUpperCase();
+        const mentionsHalf = lower.includes('half') || lower.includes('50%') || lower.includes('counted half') || lower.includes('0.5');
+        if (mentionsHalf) {
+          const existingIdx = parsedRules.staffAdjustments.findIndex((a: any) => (a.staffName || '').toUpperCase() === code);
+          if (existingIdx >= 0) {
+            parsedRules.staffAdjustments[existingIdx].type = 'deduction_percentage';
+            parsedRules.staffAdjustments[existingIdx].value = 50;
+          } else {
+            parsedRules.staffAdjustments.push({
+              staffName: code,
+              type: 'deduction_percentage',
+              value: 50,
+              reason: `50% half salary deduction requested for ${code}`
+            });
+          }
+        }
+      }
+
+      // Heuristic fallback for specific staff name adjustments if AI missed it
+      const nonNameTokens = new Set(['day', 'days', 'late', 'lates', 'absence', 'absences', 'leave', 'leaves', 'grace', 'pay', 'salary', 'salay', 'salry', 'deduction', 'fine', 'penalty']);
+      const cutHalfMatch = lower.match(/(?:cut|deduct|reduce)\s+(?:half|50%|0\.5)\s*(?:salary|pay|compensation)?\s+(?:of|from)\s+([a-zA-Z\s]{2,25}?)(?:\s+(?:for|due|because|as|on)|[.,;\n]|$)/i);
+      if (cutHalfMatch) {
+        const candidateName = cutHalfMatch[1].replace(/salary|pay|for|from|of/gi, '').trim();
+        const tokens = candidateName.toLowerCase().split(/\s+/);
+        const isInvalid = tokens.every(tok => nonNameTokens.has(tok));
+        if (candidateName && !isInvalid && candidateName.length >= 2 && !parsedRules.staffAdjustments.some((a: any) => a.staffName?.toLowerCase().includes(candidateName.toLowerCase()))) {
+          parsedRules.staffAdjustments.push({
+            staffName: candidateName,
+            type: 'deduction_percentage',
+            value: 50,
+            reason: `50% salary reduction requested for ${candidateName}`
           });
         }
       }

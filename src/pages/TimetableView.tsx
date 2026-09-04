@@ -14,11 +14,16 @@ import {
   Layers,
   Sparkles,
   Search,
-  Filter
+  Filter,
+  Pencil,
+  Copy
 } from 'lucide-react';
-import { api } from '../api/apiClient';
+import { api, peekApiCache } from '../api/apiClient';
+import { useApiCacheSync } from '../lib/useApiCacheSync';
 import { Batch, Subject, Teacher } from '../types';
 import { ModernSelect } from '../components/ModernSelect';
+import { timeRangesOverlap } from '../lib/timeOverlap';
+import { showToast } from '../lib/toast';
 
 interface TimetableViewProps {
   batches?: Batch[];
@@ -32,11 +37,11 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
   teachers: propTeachers 
 }) => {
   const [selectedDay, setSelectedDay] = useState<string>('Monday');
-  const [timetableSlots, setTimetableSlots] = useState<any[]>([]);
-  const [batches, setBatches] = useState<Batch[]>(propBatches || []);
-  const [subjects, setSubjects] = useState<Subject[]>(propSubjects || []);
-  const [teachers, setTeachers] = useState<Teacher[]>(propTeachers || []);
-  const [loading, setLoading] = useState(true);
+  const [timetableSlots, setTimetableSlots] = useState<any[]>(() => peekApiCache<any[]>('/timetable') || []);
+  const [batches, setBatches] = useState<Batch[]>(propBatches || peekApiCache<any[]>('/batches') || []);
+  const [subjects, setSubjects] = useState<Subject[]>(propSubjects || peekApiCache<any[]>('/subjects') || []);
+  const [teachers, setTeachers] = useState<Teacher[]>(propTeachers || peekApiCache<any[]>('/teachers') || []);
+  const [loading, setLoading] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,18 +54,20 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
   const [formBatchId, setFormBatchId] = useState('');
   const [formSubjectId, setFormSubjectId] = useState('');
   const [formTeacherId, setFormTeacherId] = useState('');
-  const [formRoom, setFormRoom] = useState('Room 101');
+  const [formRoom, setFormRoom] = useState('');
   const [formStartTime, setFormStartTime] = useState('09:00 AM');
   const [formEndTime, setFormEndTime] = useState('10:30 AM');
   const [formTopic, setFormTopic] = useState('');
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'teacher' | 'room'>('day');
+  const [copyTargets, setCopyTargets] = useState<string[]>([]);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const fetchInitialData = async () => {
     try {
-      setLoading(true);
       const [slotsData, batchesData, subjectsData, teachersData] = await Promise.all([
         api.getTimetableSlots().catch(() => []),
         api.getBatches().catch(() => []),
@@ -68,13 +75,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
         api.getTeachers().catch(() => [])
       ]);
 
-      const initialSlots = (slotsData && slotsData.length > 0) ? slotsData : [
-        { id: 'synth-1', day: 'Monday', start_time: '09:00 AM', end_time: '10:30 AM', room: 'Room 101', topic: 'Algebraic Foundations', batch: { name: 'Grade 10 - Sec A' }, subject: { name: 'Mathematics' }, teacher: { user: { full_name: 'Prof. Ahmed Khan' } } },
-        { id: 'synth-2', day: 'Monday', start_time: '11:00 AM', end_time: '12:30 PM', room: 'Physics Lab 2', topic: 'Mechanics & Newton Laws', batch: { name: 'Grade 11 - Pre-Eng' }, subject: { name: 'Physics' }, teacher: { user: { full_name: 'Dr. Fatima Tariq' } } },
-        { id: 'synth-3', day: 'Tuesday', start_time: '09:00 AM', end_time: '10:30 AM', room: 'Chem Lab 1', topic: 'Hydrocarbons & Organic Reactions', batch: { name: 'Grade 10 - Sec B' }, subject: { name: 'Chemistry' }, teacher: { user: { full_name: 'Prof. Sarah Ali' } } }
-      ];
-
-      setTimetableSlots(initialSlots);
+      setTimetableSlots(Array.isArray(slotsData) ? slotsData : []);
       setBatches(batchesData || []);
       setSubjects(subjectsData || []);
       const activeTeachers = (teachersData || []).filter((t: any) => {
@@ -96,6 +97,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
   useEffect(() => {
     fetchInitialData();
   }, []);
+  useApiCacheSync<any[]>('/timetable', rows => { if (Array.isArray(rows)) setTimetableSlots(rows); });
 
   // Filtered slots for selected day and filters
   const daySlots = timetableSlots.filter(s => s.day === selectedDay);
@@ -122,37 +124,50 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
       startTime: formStartTime,
       endTime: formEndTime,
       room: formRoom.trim(),
-      batchId: formBatchId || (batches[0]?.id || ''),
-      subjectId: formSubjectId || (subjects[0]?.id || undefined),
-      teacherId: formTeacherId || (teachers[0]?.id || undefined),
+      batchId: formBatchId,
+      subjectId: formSubjectId || undefined,
+      teacherId: formTeacherId || undefined,
       topic: formTopic.trim() || undefined
     };
 
-    // Client-side quick conflict check
-    const localConflict = timetableSlots.find(s => 
-      s.day === formDay && 
-      s.start_time === formStartTime && 
-      s.room.toLowerCase() === formRoom.trim().toLowerCase()
+    if (!payload.batchId) {
+      setConflictError('Pick a batch. The timetable does not invent one.');
+      return;
+    }
+
+    const localConflict = timetableSlots.find(s =>
+      s.id !== editingSlotId &&
+      s.day === formDay &&
+      (
+        (formRoom.trim() && s.room && s.room.toLowerCase() === formRoom.trim().toLowerCase() &&
+          timeRangesOverlap(formStartTime, formEndTime, s.start_time, s.end_time)) ||
+        (formTeacherId && (s.teacher_id === formTeacherId || s.teacher?.id === formTeacherId) &&
+          timeRangesOverlap(formStartTime, formEndTime, s.start_time, s.end_time))
+      )
     );
 
     if (localConflict) {
-      setConflictError(`Room double-booking conflict: "${formRoom}" is already reserved for "${localConflict.batch?.name}" at ${formStartTime} on ${formDay}.`);
+      setConflictError(`Clash with "${localConflict.batch?.name}" (${localConflict.start_time}–${localConflict.end_time}) on ${formDay}.`);
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const res = await api.createTimetableSlot(payload);
-      
-      // 0ms Optimistic UI update
-      setTimetableSlots(prev => [res || { ...payload, id: `slot-${Date.now()}` }, ...prev]);
+      if (editingSlotId) {
+        const res = await api.updateTimetableSlot(editingSlotId, payload);
+        setTimetableSlots(prev => prev.map(s => s.id === editingSlotId ? (res || { ...s, ...payload }) : s));
+        showToast('Slot updated.', 'success');
+      } else {
+        const res = await api.createTimetableSlot(payload);
+        setTimetableSlots(prev => [res || { ...payload, id: `slot-${Date.now()}` }, ...prev]);
+        showToast('Slot added.', 'success');
+      }
       setIsAddSlotOpen(false);
+      setEditingSlotId(null);
       setFormTopic('');
       setConflictError(null);
-      fetchInitialData();
     } catch (err: any) {
-      const errorMsg = err.message || 'Failed to schedule class slot. Please check for scheduling conflicts.';
-      setConflictError(errorMsg);
+      setConflictError(err.message || 'Could not save slot.');
     } finally {
       setIsSubmitting(false);
     }
@@ -174,6 +189,19 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
   const classesTodayCount = daySlots.length;
   const facultyOnDutyCount = new Set(daySlots.map(s => s.teacher_id || s.teacher?.id).filter(Boolean)).size;
   const roomsInUseCount = new Set(daySlots.map(s => s.room).filter(Boolean)).size;
+  const conflictCount = timetableSlots.reduce((count, slot, idx) => {
+    const clash = timetableSlots.some((other, j) =>
+      j !== idx &&
+      other.day === slot.day &&
+      (
+        (slot.room && other.room && slot.room.toLowerCase() === other.room.toLowerCase() &&
+          timeRangesOverlap(slot.start_time, slot.end_time, other.start_time, other.end_time)) ||
+        (slot.teacher_id && other.teacher_id && slot.teacher_id === other.teacher_id &&
+          timeRangesOverlap(slot.start_time, slot.end_time, other.start_time, other.end_time))
+      )
+    );
+    return count + (clash ? 1 : 0);
+  }, 0);
 
   const batchOptions = [
     { value: 'ALL', label: 'All Cohorts' },
@@ -204,11 +232,27 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
             Conflict-free weekly schedule matrix, room allocation, and faculty collision solver
           </p>
         </div>
-        <div className="header-action-bar">
+        <div className="header-action-bar" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn-secondary"
+            onClick={async () => {
+              const targets = copyTargets.length ? copyTargets : daysOfWeek.filter(d => d !== selectedDay);
+              try {
+                const res = await api.copyTimetableDay(selectedDay, targets);
+                showToast(`Copied ${res.createdCount || 0} slot(s). Skipped ${res.skippedCount || 0} clash(es).`, 'success');
+                fetchInitialData();
+              } catch (err: any) {
+                showToast(err.message || 'Copy failed.', 'error');
+              }
+            }}
+          >
+            <Copy size={16} /> Copy {selectedDay} to other days
+          </button>
           <button 
             className="btn-primary" 
             onClick={() => {
               setFormDay(selectedDay);
+              setEditingSlotId(null);
               setConflictError(null);
               setIsAddSlotOpen(true);
             }}
@@ -234,9 +278,22 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
           <div style={{ fontSize: 22, fontWeight: 900, color: '#2563EB', marginTop: 2 }}>{facultyOnDutyCount} Teachers</div>
         </div>
         <div style={{ background: '#FFFFFF', padding: '14px 16px', borderRadius: 14, border: '1px solid #E2E8F0', boxShadow: '0 2px 6px rgba(15,23,42,0.03)' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#86198F', textTransform: 'uppercase' }}>Schedule Integrity</span>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#A21CAF', marginTop: 2 }}>100% Conflict-Free</div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#86198F', textTransform: 'uppercase' }}>Range clashes</span>
+          <div style={{ fontSize: 22, fontWeight: 900, color: conflictCount ? '#DC2626' : '#15803D', marginTop: 2 }}>{conflictCount ? `${conflictCount} found` : 'None'}</div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        {(['day', 'week'] as const).map(mode => (
+          <button
+            key={mode}
+            type="button"
+            className={viewMode === mode ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+            onClick={() => setViewMode(mode)}
+          >
+            {mode === 'day' ? 'Day' : 'Week grid'}
+          </button>
+        ))}
       </div>
 
       {/* Weekday Navigation Bar (Rule 15 Navy Solid Pill standard) */}
@@ -347,8 +404,46 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
         </div>
       </div>
 
+      {viewMode === 'week' && (
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                {daysOfWeek.map(day => <th key={day}>{day}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(new Set(timetableSlots.map(s => `${s.start_time}|${s.end_time}`))).sort().map(key => {
+                const [start, end] = key.split('|');
+                return (
+                  <tr key={key}>
+                    <td style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>{start}–{end}</td>
+                    {daysOfWeek.map(day => {
+                      const cell = timetableSlots.filter(s => s.day === day && s.start_time === start && s.end_time === end);
+                      return (
+                        <td key={day} style={{ fontSize: 12, verticalAlign: 'top' }}>
+                          {cell.map(s => (
+                            <div key={s.id} style={{ marginBottom: 6 }}>
+                              <strong>{s.batch?.name || 'Batch'}</strong>
+                              <div>{s.subject?.name || ''}</div>
+                              <div style={{ color: '#64748B' }}>{s.room || ''} {s.teacher?.user?.full_name || ''}</div>
+                            </div>
+                          ))}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {timetableSlots.length === 0 && <p style={{ padding: 16, color: '#64748B' }}>No weekly slots yet.</p>}
+        </div>
+      )}
+
       {/* Timetable Schedule Grid */}
-      {filteredSlots.length > 0 ? (
+      {viewMode === 'day' && filteredSlots.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
           {filteredSlots.map((slot) => (
             <div 
@@ -374,6 +469,25 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
                   <span style={{ fontSize: 12, fontWeight: 500, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Clock size={13} color="#64748B" /> {slot.start_time} – {slot.end_time}
                   </span>
+                  <button
+                    onClick={() => {
+                      setEditingSlotId(slot.id);
+                      setFormDay(slot.day);
+                      setFormBatchId(slot.batch_id || slot.batch?.id || '');
+                      setFormSubjectId(slot.subject_id || slot.subject?.id || '');
+                      setFormTeacherId(slot.teacher_id || slot.teacher?.id || '');
+                      setFormRoom(slot.room || '');
+                      setFormStartTime(slot.start_time);
+                      setFormEndTime(slot.end_time);
+                      setFormTopic(slot.topic || '');
+                      setConflictError(null);
+                      setIsAddSlotOpen(true);
+                    }}
+                    style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', padding: 2 }}
+                    title="Edit slot"
+                  >
+                    <Pencil size={13} />
+                  </button>
                   <button
                     onClick={() => handleDeleteSlot(slot.id)}
                     style={{ background: 'transparent', border: 'none', color: '#DC2626', cursor: 'pointer', padding: 2 }}
@@ -418,7 +532,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
             </div>
           ))}
         </div>
-      ) : (
+      ) : viewMode === 'day' ? (
         <div style={{ textAlign: 'center', padding: 48, background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', color: '#94A3B8' }}>
           <Clock size={40} color="#CBD5E1" style={{ marginBottom: 8, display: 'block', margin: '0 auto 8px auto' }} />
           <strong style={{ fontSize: 15, color: '#0F172A' }}>No Classes Scheduled for {selectedDay}</strong>
@@ -426,7 +540,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
             Click "Add Schedule Slot" above to schedule a class for this weekday.
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* 4-Island Floating Architecture: Add Schedule Slot Modal */}
       {isAddSlotOpen && (
@@ -468,7 +582,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
                 </div>
                 <div>
                   <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em' }}>
-                    Schedule Class Slot
+                    {editingSlotId ? 'Edit class slot' : 'Schedule Class Slot'}
                   </h3>
                   <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '2px 0 0 0' }}>
                     Assign cohort, subject, room & faculty with automated conflict validation

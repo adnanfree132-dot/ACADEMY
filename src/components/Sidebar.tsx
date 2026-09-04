@@ -18,7 +18,8 @@ import {
   Sparkles,
   ChevronRight,
   DollarSign,
-  UserCheck
+  UserCheck,
+  Receipt
 } from 'lucide-react';
 import { getUnitCombinedLabel } from '../utils/academyModeHelper';
 
@@ -168,6 +169,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, onLog
             </button>
 
             <button 
+              className={getNavItemClass('expenses')} 
+              onClick={() => onSelectTab('expenses')}
+            >
+              <div className="nav-left">
+                <Receipt size={18} />
+                <span>Expenses</span>
+              </div>
+              {isTabActive('expenses') && <ChevronRight size={16} className="chevron" />}
+            </button>
+
+            <button 
               className={getNavItemClass('exams')} 
               onClick={() => onSelectTab('exams')}
             >
@@ -187,6 +199,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, onLog
                 <span>Homework & Study</span>
               </div>
               {isTabActive('homework') && <ChevronRight size={16} className="chevron" />}
+            </button>
+
+            <button 
+              className={getNavItemClass('leaves')} 
+              onClick={() => onSelectTab('leaves')}
+            >
+              <div className="nav-left">
+                <Calendar size={18} />
+                <span>Student Leave</span>
+              </div>
+              {isTabActive('leaves') && <ChevronRight size={16} className="chevron" />}
+            </button>
+
+            <button 
+              className={getNavItemClass('conduct')} 
+              onClick={() => onSelectTab('conduct')}
+            >
+              <div className="nav-left">
+                <UserCheck size={18} />
+                <span>Conduct</span>
+              </div>
+              {isTabActive('conduct') && <ChevronRight size={16} className="chevron" />}
             </button>
 
             <button 

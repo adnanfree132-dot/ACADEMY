@@ -1,6 +1,18 @@
 // API Client helper connecting React state to Express REST API (/api/v1)
+import { Expense, ExpenseSummary, StaffSalaryDisbursement, LiveStaffPayrollRow } from '../types';
+import {
+  peekApiCache,
+  writeApiCache,
+  bumpEpoch,
+  currentEpoch,
+  unmarkDeleted,
+  removeIdFromCaches,
+  filterDeleted
+} from '../lib/resourceCache';
 
 const BASE_URL = '/api/v1';
+
+export { peekApiCache };
 
 function buildQueryString(params?: Record<string, any>): string {
   if (!params) return '';
@@ -14,6 +26,15 @@ function buildQueryString(params?: Record<string, any>): string {
   return qs ? `?${qs}` : '';
 }
 
+const inflightGets = new Map<string, Promise<any>>();
+
+function entityIdFromEndpoint(endpoint: string): string | undefined {
+  const last = String(endpoint).split('?')[0].split('/').filter(Boolean).pop();
+  if (!last) return undefined;
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(last) || /^[0-9a-f-]{36}$/i.test(last)) return last;
+  return undefined;
+}
+
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -25,6 +46,23 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
+  const entityId = entityIdFromEndpoint(endpoint);
+
+  if (!isGet) {
+    bumpEpoch(endpoint);
+    const softDelete = method === 'DELETE' && /[?&]mode=soft\b/.test(endpoint);
+    if (method === 'DELETE' && entityId && !softDelete) removeIdFromCaches(entityId);
+  }
+
+  if (isGet && inflightGets.has(endpoint)) {
+    return inflightGets.get(endpoint) as Promise<T>;
+  }
+
+  const epochAtStart = currentEpoch(endpoint);
+
+  const exec = (async () => {
   try {
     const response = await fetch(`${BASE_URL}${endpoint}`, {
       cache: 'no-store',
@@ -42,40 +80,50 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       if (response.status === 401) {
         localStorage.removeItem('token');
       }
+      if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) unmarkDeleted(entityId);
       throw new Error(json.error || 'API request failed');
+    }
+
+    if (isGet && json.data !== undefined) {
+      const stale = currentEpoch(endpoint) !== epochAtStart;
+      if (stale) {
+        const cached = peekApiCache<T>(endpoint);
+        return (cached !== undefined ? filterDeleted(cached) : filterDeleted(json.data)) as T;
+      }
+      const cleaned = filterDeleted(json.data);
+      writeApiCache(endpoint, cleaned);
+      return cleaned;
     }
 
     return json.data;
   } catch (err: any) {
+    if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) unmarkDeleted(entityId);
     throw err;
   }
+  })();
+
+  if (isGet) {
+    inflightGets.set(endpoint, exec);
+    exec.finally(() => inflightGets.delete(endpoint));
+  }
+  return exec;
 }
 
 export const api = {
-  // Auth (with offline / Netlify static fallback)
-  login: async (credentials: { email?: string; phone?: string; password: string }) => {
-    try {
-      return await fetchApi<{ user: any; token: string }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(credentials)
-      });
-    } catch (err) {
-      // Fallback for static hosting demo (Netlify, Vercel, GitHub Pages)
-      console.warn('Backend API not reachable. Logging in with client session.');
-      return {
-        user: {
-          id: 'admin-1',
-          name: 'Principal Dilan',
-          email: credentials.email || 'admin@academiapro.edu',
-          role: 'admin'
-        },
-        token: 'demo-session-token-' + Date.now()
-      };
-    }
-  },
+  login: (credentials: { email?: string; phone?: string; password: string }) =>
+    fetchApi<{ user: any; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials)
+    }),
 
   // Dashboard
-  getDashboard: () => fetchApi<{ overview: any }>('/dashboard'),
+  getDashboard: () => fetchApi<any>('/dashboard'),
+
+  getNotifications: () => fetchApi<any[]>('/notifications'),
+  markNotificationRead: (id: string) =>
+    fetchApi<any>(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllNotificationsRead: () =>
+    fetchApi<any>('/notifications/read-all', { method: 'POST' }),
 
   // Students
   getStudents: (params?: { q?: string; status?: string }) => {
@@ -182,6 +230,12 @@ export const api = {
 
   // Academic Structure
   getClasses: () => fetchApi<any[]>('/classes'),
+  createClass: (data: { name: string }) =>
+    fetchApi<any>('/classes', { method: 'POST', body: JSON.stringify(data) }),
+  updateClass: (id: string, data: { name?: string; is_active?: boolean }) =>
+    fetchApi<any>(`/classes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteClass: (id: string) =>
+    fetchApi<any>(`/classes/${id}`, { method: 'DELETE' }),
   getBatches: () => fetchApi<any[]>('/batches'),
   createBatch: (data: any) => 
     fetchApi<any>('/batches', {
@@ -197,6 +251,20 @@ export const api = {
     fetchApi<any>(`/batches/${id}`, {
       method: 'DELETE'
     }),
+  archiveBatch: (id: string) =>
+    fetchApi<any>(`/batches/${id}/archive`, { method: 'POST' }),
+  getBatchWaitlist: (batchId: string) =>
+    fetchApi<any[]>(`/batches/${batchId}/waitlist`),
+  addBatchWaitlist: (batchId: string, data: { studentId: string; reason?: string }) =>
+    fetchApi<any>(`/batches/${batchId}/waitlist`, { method: 'POST', body: JSON.stringify(data) }),
+  promoteWaitlist: (batchId: string, studentId: string) =>
+    fetchApi<any>(`/batches/${batchId}/waitlist/promote`, { method: 'POST', body: JSON.stringify({ studentId }) }),
+  removeWaitlist: (batchId: string, studentId: string) =>
+    fetchApi<any>(`/batches/${batchId}/waitlist/${studentId}`, { method: 'DELETE' }),
+  getBatchSubstitutes: (batchId: string) =>
+    fetchApi<any[]>(`/batches/${batchId}/substitutes`),
+  copyTimetableDay: (fromDay: string, toDays: string[]) =>
+    fetchApi<any>('/timetable/copy-day', { method: 'POST', body: JSON.stringify({ fromDay, toDays }) }),
 
 
   // Attendance
@@ -243,6 +311,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  deleteStudyMaterial: (id: string) =>
+    fetchApi<any>(`/study-materials/${id}`, { method: 'DELETE' }),
 
   // Exams & Assessment Tests
   getTests: () => fetchApi<any[]>('/tests'),
@@ -275,6 +345,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  updateTimetableSlot: (id: string, data: any) =>
+    fetchApi<any>(`/timetable/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
   deleteTimetableSlot: (id: string) =>
     fetchApi<any>(`/timetable/${id}`, {
       method: 'DELETE'
@@ -297,6 +372,17 @@ export const api = {
     fetchApi<any>('/whatsapp/dispatch-absence-alerts', {
       method: 'POST'
     }),
+  dispatchFeeReminders: () =>
+    fetchApi<any>('/whatsapp/dispatch-fee-reminders', {
+      method: 'POST'
+    }),
+  previewWhatsApp: (params: { templateCode: string; studentId?: string; inquiryId?: string }) => {
+    const qs = new URLSearchParams();
+    qs.set('templateCode', params.templateCode);
+    if (params.studentId) qs.set('studentId', params.studentId);
+    if (params.inquiryId) qs.set('inquiryId', params.inquiryId);
+    return fetchApi<any>(`/whatsapp/preview?${qs.toString()}`);
+  },
 
   // Announcements & Inquiries
   getAnnouncements: () => fetchApi<any[]>('/announcements'),
@@ -305,6 +391,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  updateAnnouncement: (id: string, data: any) =>
+    fetchApi<any>(`/announcements/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  deleteAnnouncement: (id: string) =>
+    fetchApi<any>(`/announcements/${id}`, { method: 'DELETE' }),
 
   getInquiries: () => fetchApi<any[]>('/inquiries'),
   createInquiry: (data: any) =>
@@ -312,6 +405,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  updateInquiry: (id: string, data: any) =>
+    fetchApi<any>(`/inquiries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  addInquiryFollowUp: (id: string, data: { note: string; followUpDate?: string }) =>
+    fetchApi<any>(`/inquiries/${id}/follow-ups`, { method: 'POST', body: JSON.stringify(data) }),
+  findInquiryDuplicates: (phone: string) =>
+    fetchApi<any>(`/inquiries/duplicates?phone=${encodeURIComponent(phone)}`),
+  getFeeDayEnd: (date?: string) =>
+    fetchApi<any>(`/fees/day-end${date ? `?date=${date}` : ''}`),
+  voidFeePayment: (id: string, reason: string) =>
+    fetchApi<any>(`/fees/payments/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  setChequeStatus: (id: string, status: 'cleared' | 'bounced') =>
+    fetchApi<any>(`/fees/payments/${id}/cheque`, { method: 'POST', body: JSON.stringify({ status }) }),
 
   // Audit Logs & System Settings
   getAuditLogs: () => fetchApi<any[]>('/audit-logs'),
@@ -439,7 +544,13 @@ export const api = {
       body: JSON.stringify(data)
     }),
 
-  getHomeworkSubmissions: (homeworkId: string) => fetchApi<any[]>(`/homework/${homeworkId}/submissions`),
+  getHomeworkSubmissions: (homeworkId: string) => fetchApi<any>(`/homework/${homeworkId}/submissions`),
+  saveHomeworkSubmissions: (homeworkId: string, entries: Array<{ studentId: string; status: string; note?: string }>) =>
+    fetchApi<any>(`/homework/${homeworkId}/submissions`, {
+      method: 'POST',
+      body: JSON.stringify({ entries })
+    }),
+  getTestRoster: (testId: string) => fetchApi<any>(`/tests/${testId}/roster`),
   markHomeworkSubmission: (homeworkId: string, data: { studentId: string; status: 'submitted' | 'late' | 'pending'; remarks?: string }) =>
     fetchApi<any>(`/homework/${homeworkId}/submissions`, {
       method: 'POST',
@@ -447,6 +558,8 @@ export const api = {
     }),
 
   // Student Conduct & Behavior Logs (M16 RBAC)
+  getConductDesk: (params?: { q?: string; category?: string; severity?: string; studentId?: string }) =>
+    fetchApi<{ logs: any[]; summary: any }>(`/conduct-logs${buildQueryString(params)}`),
   getStudentConductLogs: (studentId: string) => fetchApi<any[]>(`/students/${studentId}/conduct-logs`),
   createConductLog: (studentId: string, data: { batch_id?: string; category?: string; severity?: string; title?: string; remark: string; is_confidential?: boolean }) =>
     fetchApi<any>(`/students/${studentId}/conduct-logs`, {
@@ -736,10 +849,215 @@ export const api = {
     }),
   getPayslipDetails: (id: string) =>
     fetchApi<any>(`/payroll/payslips/${id}`),
-  aiParsePayrollPolicy: (policyText: string) =>
-    fetchApi<any>('/payroll/ai-parse-policy', {
+  getSalaryAdjustments: (params?: { month_period?: string; staff_member_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.month_period) q.set('month_period', params.month_period);
+    if (params?.staff_member_id) q.set('staff_member_id', params.staff_member_id);
+    const qs = q.toString();
+    return fetchApi<any>(`/payroll/adjustments${qs ? `?${qs}` : ''}`);
+  },
+  createSalaryAdjustment: (payload: {
+    staff_member_id: string;
+    month_period: string;
+    type: 'deduction' | 'earning';
+    category: string;
+    unit_amount: number;
+    quantity: number;
+    reason?: string;
+  }) =>
+    fetchApi<any>('/payroll/adjustments', {
       method: 'POST',
-      body: JSON.stringify({ policyText })
+      body: JSON.stringify(payload)
+    }),
+  updateSalaryAdjustment: (
+    id: string,
+    payload: Partial<{
+      type: 'deduction' | 'earning';
+      category: string;
+      unit_amount: number;
+      quantity: number;
+      reason?: string;
+    }>
+  ) =>
+    fetchApi<any>(`/payroll/adjustments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+  deleteSalaryAdjustment: (id: string) =>
+    fetchApi<any>(`/payroll/adjustments/${id}`, {
+      method: 'DELETE'
+    }),
+  getSalaryHeads: (params?: { type?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.type) q.set('type', params.type);
+    const qs = q.toString();
+    return fetchApi<any>(`/payroll/heads${qs ? `?${qs}` : ''}`);
+  },
+  createSalaryHead: (payload: {
+    title: string;
+    type: 'deduction' | 'earning';
+    amount?: number;
+    description?: string;
+    is_active?: boolean;
+  }) =>
+    fetchApi<any>('/payroll/heads', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  updateSalaryHead: (
+    id: string,
+    payload: Partial<{
+      title: string;
+      type: 'deduction' | 'earning';
+      amount?: number;
+      description?: string;
+      is_active?: boolean;
+    }>
+  ) =>
+    fetchApi<any>(`/payroll/heads/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+  deleteSalaryHead: (id: string) =>
+    fetchApi<any>(`/payroll/heads/${id}`, {
+      method: 'DELETE'
+    }),
+  getPayrollTags: () =>
+    fetchApi<any>('/payroll/tags'),
+  createPayrollTag: (payload: {
+    tag_code: string;
+    display_label: string;
+    type: 'earning' | 'deduction';
+    calculation_type: 'percentage_of_base' | 'fixed_amount' | 'per_day';
+    default_value: number;
+    reason_template?: string | null;
+  }) =>
+    fetchApi<any>('/payroll/tags', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  updatePayrollTag: (
+    id: string,
+    payload: Partial<{
+      display_label: string;
+      type: 'earning' | 'deduction';
+      calculation_type: 'percentage_of_base' | 'fixed_amount' | 'per_day';
+      default_value: number;
+      reason_template?: string | null;
+      is_active?: boolean;
+    }>
+  ) =>
+    fetchApi<any>(`/payroll/tags/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+  deletePayrollTag: (id: string) =>
+    fetchApi<any>(`/payroll/tags/${id}`, {
+      method: 'DELETE'
+    }),
+
+  // ==========================================================================
+  // LIVE STAFF PAYROLL REGISTER & MULTI-TRANCHE DISBURSEMENTS
+  // ==========================================================================
+  getLiveStaffPayrollRegister: (params?: { month_period?: string; staff_type_id?: string; search?: string }) => {
+    return fetchApi<{
+      month_period: string;
+      total_staff: number;
+      total_net_payable: number;
+      total_disbursed: number;
+      total_pending: number;
+      rows: LiveStaffPayrollRow[];
+    }>(`/payroll/live-register${buildQueryString(params)}`);
+  },
+
+  createSalaryDisbursement: (payload: {
+    staff_member_id: string;
+    month_period: string;
+    amount: number;
+    payment_method?: string;
+    reference_number?: string;
+    notes?: string;
+  }) =>
+    fetchApi<{ disbursement: StaffSalaryDisbursement; expense: Expense }>('/payroll/disbursements', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  getStaffDisbursements: (staffId: string, monthPeriod: string) =>
+    fetchApi<StaffSalaryDisbursement[]>(`/payroll/disbursements/${staffId}/${monthPeriod}`),
+
+  deleteSalaryDisbursement: (id: string) =>
+    fetchApi<{ deleted: boolean; id: string }>(`/payroll/disbursements/${id}`, {
+      method: 'DELETE'
+    }),
+
+  processIndividualPayroll: (payload: {
+    staff_member_id: string;
+    month_period: string;
+    base_pay: number;
+    earnings?: Array<{ title: string; amount: number }>;
+    deductions?: Array<{ title: string; amount: number }>;
+    net_payable?: number;
+    payment_status: 'paid' | 'pending';
+    payment_method?: string;
+    reference_no?: string;
+    notes?: string;
+    is_published?: boolean;
+    attendance?: any;
+  }) =>
+    fetchApi<any>('/payroll/process-individual', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  undoIndividualPayroll: (payload: { staff_member_id: string; month_period: string }) =>
+    fetchApi<any>('/payroll/undo-individual', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  publishPayrollToPortal: (payload: { month_period: string; staff_member_id?: string; is_published?: boolean }) =>
+    fetchApi<any>('/payroll/publish-to-portal', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  // ==========================================================================
+  // ACADEMY EXPENSE MANAGEMENT
+  // ==========================================================================
+  getExpenses: (params?: { month_period?: string; category?: string; search?: string; start_date?: string; end_date?: string }) => {
+    return fetchApi<Expense[]>(`/expenses${buildQueryString(params)}`);
+  },
+
+  getExpenseSummary: (params?: { month_period?: string }) => {
+    return fetchApi<ExpenseSummary>(`/expenses/summary${buildQueryString(params)}`);
+  },
+
+  createExpense: (payload: {
+    category: string;
+    title: string;
+    amount: number;
+    expense_date?: string;
+    payment_method?: string;
+    reference_number?: string;
+    payee_name?: string;
+    month_period?: string;
+    notes?: string;
+  }) =>
+    fetchApi<Expense>('/expenses', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  updateExpense: (id: string, payload: Partial<Expense>) =>
+    fetchApi<Expense>(`/expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+
+  deleteExpense: (id: string) =>
+    fetchApi<{ deleted: boolean; id: string }>(`/expenses/${id}`, {
+      method: 'DELETE'
     })
 };
 

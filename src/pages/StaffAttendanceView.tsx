@@ -22,7 +22,8 @@ import {
   ListFilter
 } from 'lucide-react';
 import { StaffMember, StaffAttendanceRecord, StaffType } from '../types';
-import { api } from '../api/apiClient';
+import { api, peekApiCache } from '../api/apiClient';
+import { useEntityRemoved } from '../lib/useEntityRemoved';
 import { ModernSelect } from '../components/ModernSelect';
 import { ModernDatePicker } from '../components/ModernDatePicker';
 import { AdminAttendanceOverrideModal } from '../components/AdminAttendanceOverrideModal';
@@ -39,10 +40,27 @@ export const StaffAttendanceView: React.FC = () => {
   });
 
   // Data State
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
-  const [staffTypes, setStaffTypes] = useState<StaffType[]>([]);
-  const [rosterRecords, setRosterRecords] = useState<StaffAttendanceRecord[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [staffList, setStaffList] = useState<StaffMember[]>(() => peekApiCache<StaffMember[]>('/staff') || []);
+  const [staffTypes, setStaffTypes] = useState<StaffType[]>(() => peekApiCache<StaffType[]>('/staff-types') || []);
+  const [rosterRecords, setRosterRecords] = useState<StaffAttendanceRecord[]>(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const cached = peekApiCache<any>(`/staff-attendance/roster?date=${today}`);
+    if (Array.isArray(cached)) return cached;
+    if (cached && Array.isArray(cached.rows)) return cached.rows;
+    if (cached && Array.isArray(cached.data)) return cached.data;
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEntityRemoved((ids) => {
+    const gone = new Set(ids);
+    setStaffList(prev => prev.filter(s => !gone.has(s.id)));
+    setRosterRecords(prev => prev.filter(r =>
+      !gone.has(r.id) &&
+      !gone.has((r as any).staff_member_id) &&
+      !gone.has((r as any).staffMemberId)
+    ));
+  });
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -160,7 +178,7 @@ export const StaffAttendanceView: React.FC = () => {
   // Load Attendance Roster for Selected Date
   const fetchDailyRoster = async (dateStr: string) => {
     try {
-      setIsLoading(true);
+      setIsLoading(prev => (rosterRecords.length === 0 ? true : prev));
       const res = await api.getStaffAttendanceRoster({
         date: dateStr,
         staff_type_id: selectedStaffTypeId !== 'all' ? selectedStaffTypeId : undefined

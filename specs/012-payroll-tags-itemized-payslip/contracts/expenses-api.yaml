@@ -1,0 +1,96 @@
+openapi: 3.0.3
+info:
+  title: Academy Pro OS - Expense Management API
+  version: 1.0.0
+  description: Endpoints for managing academy expenditures and automated salary disbursement postings.
+paths:
+  /api/v1/expenses:
+    get:
+      summary: Retrieve list of institutional expenses
+      parameters:
+        - name: month_period
+          in: query
+          schema:
+            type: string
+            example: "2026-08"
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [Salaries, Utilities, Rent, Maintenance, Supplies, Miscellaneous]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of expenses
+    post:
+      summary: Record a new operational or manual expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, title, amount]
+              properties:
+                category:
+                  type: string
+                  enum: [Salaries, Utilities, Rent, Maintenance, Supplies, Miscellaneous]
+                title:
+                  type: string
+                amount:
+                  type: number
+                expense_date:
+                  type: string
+                  format: date
+                payment_method:
+                  type: string
+                  enum: [cash, bank_transfer, cheque, online]
+                reference_number:
+                  type: string
+                payee_name:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Expense created
+
+  /api/v1/expenses/summary:
+    get:
+      summary: Get monthly expenditure totals and category breakdowns
+      parameters:
+        - name: month_period
+          in: query
+          schema:
+            type: string
+            example: "2026-08"
+      responses:
+        '200':
+          description: Aggregated monthly spending metrics
+
+  /api/v1/expenses/{id}:
+    put:
+      summary: Update an expense record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Expense updated
+    delete:
+      summary: Delete an expense record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Expense deleted

@@ -11,7 +11,10 @@ import {
   Settings, 
   LogOut,
   ChevronRight,
-  MessageCircle
+  MessageCircle,
+  DollarSign,
+  UserCheck,
+  Receipt
 } from 'lucide-react';
 
 interface MobileMoreDrawerProps {
@@ -30,7 +33,7 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
   onClose,
   onNavigate,
   onLogout,
-  userName = 'Dilan',
+  userName = 'Admin',
   userRole = 'Administrator'
 }) => {
   if (!isOpen) return null;
@@ -41,6 +44,8 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
       items: [
         { id: 'teachers', label: 'Teachers & Staff', icon: UserSquare2, color: '#3B82F6' },
         { id: 'attendance', label: 'Attendance Portal', icon: CheckSquare, color: '#10B981' },
+        { id: 'staff_attendance', label: 'Staff Attendance', icon: UserCheck, color: '#0EA5E9' },
+        { id: 'staff_payroll', label: 'Staff Payroll', icon: DollarSign, color: '#059669' },
       ]
     },
     {
@@ -49,14 +54,17 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
         { id: 'subjects', label: 'Course Subjects', icon: BookOpen, color: '#3B82F6' },
         { id: 'exams', label: 'Exams & Results', icon: Award, color: '#F59E0B' },
         { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
+        { id: 'leaves', label: 'Student Leave', icon: Calendar, color: '#F59E0B' },
+        { id: 'conduct', label: 'Conduct Desk', icon: UserCheck, color: '#7C3AED' },
         { id: 'timetable', label: 'Timetable Schedules', icon: Calendar, color: '#EC4899' },
       ]
     },
     {
       title: 'ADMINISTRATION',
       items: [
+        { id: 'expenses', label: 'Expenses', icon: Receipt, color: '#F97316' },
         { id: 'crm', label: 'Inquiries & CRM', icon: UserPlus, color: '#06B6D4' },
-        { id: 'announcements', label: 'Announcements & SMS', icon: Megaphone, color: '#14B8A6' },
+        { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
         { id: 'whatsapp', label: 'WhatsApp Center', icon: MessageCircle, color: '#22C55E' },
         { id: 'settings', label: 'Academy Settings', icon: Settings, color: '#64748B' },
       ]

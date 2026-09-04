@@ -53,6 +53,12 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
   });
   const [capacity, setCapacity] = useState('30');
   const [timing, setTiming] = useState('14:00 - 16:00');
+  const [room, setRoom] = useState('');
+  const [teacherId, setTeacherId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [classOptions, setClassOptions] = useState<{ id: string; name: string }[]>([]);
+  const [teacherOptions, setTeacherOptions] = useState<{ id: string; name: string }[]>([]);
+  const [selectedDays, setSelectedDays] = useState<string[]>(['MON', 'WED', 'FRI']);
 
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -73,6 +79,17 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
         } catch (e) {}
       }
 
+      api.getClasses().then(rows => {
+        if (Array.isArray(rows)) setClassOptions(rows.filter((c: any) => c.is_active !== false).map((c: any) => ({ id: c.id, name: c.name })));
+      }).catch(() => {});
+      api.getTeachers().then(rows => {
+        if (Array.isArray(rows)) {
+          setTeacherOptions(rows.map((t: any) => ({
+            id: t.id,
+            name: t.user?.full_name || t.name || ''
+          })).filter((t: any) => t.name));
+        }
+      }).catch(() => {});
       api.getSettings().then(settings => {
         if (settings?.customClassFields) {
           try {
@@ -114,9 +131,10 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
 
     const finalName = classNameVal.trim() || Object.values(customValues).filter(Boolean).join(' - ') || `${getUnitSingular()} ${Math.floor(100 + Math.random() * 900)}`;
 
+    const selectedClass = classOptions.find(c => c.id === classId);
     onAddBatch({
       name: finalName,
-      classLevel: finalName,
+      classLevel: selectedClass?.name || classNameVal.trim() || finalName,
       section_name: sectionName || undefined,
       course_type: courseType,
       total_fee: courseType === 'fixed_course' ? Number(totalCourseFee) : undefined,
@@ -125,6 +143,9 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
       default_installments: courseType === 'fixed_course' ? Number(defaultInstallments) : undefined,
       capacity: Number(capacity) || 30,
       timing,
+      room: room.trim() || undefined,
+      teacherId: teacherId || undefined,
+      days: selectedDays.join(','),
       custom_fields: customValues
     });
 
@@ -257,6 +278,52 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
                     value={sectionName} 
                     onChange={e => setSectionName(e.target.value)} 
                   />
+                </div>
+              </div>
+
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Parent class</label>
+                  <select className="form-input" value={classId} onChange={e => setClassId(e.target.value)}>
+                    <option value="">Create from batch name</option>
+                    {classOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Teacher</label>
+                  <select className="form-input" value={teacherId} onChange={e => setTeacherId(e.target.value)}>
+                    <option value="">Unassigned</option>
+                    {teacherOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Room</label>
+                  <input className="form-input" placeholder="e.g. Hall 2" value={room} onChange={e => setRoom(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: 12 }}>Days</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {['MON','TUE','WED','THU','FRI','SAT','SUN'].map(day => {
+                      const on = selectedDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => setSelectedDays(prev => on ? prev.filter(d => d !== day) : [...prev, day])}
+                          style={{
+                            border: '1px solid ' + (on ? '#0F172A' : '#E2E8F0'),
+                            background: on ? '#0F172A' : '#FFF',
+                            color: on ? '#FFF' : '#475569',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: '6px 8px',
+                            cursor: 'pointer'
+                          }}
+                        >{day}</button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

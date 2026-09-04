@@ -8,13 +8,16 @@ export type TabType =
   | 'staff_attendance'
   | 'staff_payroll'
   | 'fees'
+  | 'expenses'
   | 'exams'
   | 'homework'
   | 'timetable'
   | 'crm'
   | 'announcements'
   | 'whatsapp'
-  | 'settings';
+  | 'settings'
+  | 'leaves'
+  | 'conduct';
 
 export type StudentLifecycleStatus = 'Active' | 'On Leave' | 'Graduated' | 'Suspended' | 'Left';
 
@@ -192,12 +195,18 @@ export interface Announcement {
   date: string;
   author?: string;
   urgent?: boolean;
+  pinned?: boolean;
+  scheduledFor?: string | null;
 }
 
 export interface Subject {
   id: string;
   name: string;
   code: string;
+  batchCount?: number;
+  homeworkCount?: number;
+  testCount?: number;
+  slotCount?: number;
 }
 
 export type ConductCategory = 'commendation' | 'infraction' | 'academic' | 'attendance' | 'general';
@@ -1127,6 +1136,8 @@ export interface MonthlyPayrollItem {
   slipUrl?: string | null;
   slip_url?: string | null;
   remarks?: string | null;
+  custom_deductions_json?: string | null;
+  custom_earnings_json?: string | null;
 }
 
 
@@ -1157,4 +1168,132 @@ export interface BatchPayrollSummary {
   totalNetPayable: number;
   paidCount: number;
   pendingCount: number;
+}
+
+export interface PayrollComponentTag {
+  id: string;
+  tag_code: string;
+  display_label: string;
+  type: 'earning' | 'deduction';
+  calculation_type: 'percentage_of_base' | 'fixed_amount' | 'per_day';
+  default_value: number;
+  reason_template?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ItemizedAdjustmentLine {
+  tag?: string;
+  id?: string;
+  name?: string;
+  category?: string;
+  label: string;
+  unit_amount?: number;
+  quantity?: number;
+  total_amount?: number;
+  amount: number;
+  percentage?: number;
+  type: 'earning' | 'deduction';
+  reason?: string;
+  applied_to?: string;
+}
+
+export interface SalaryHead {
+  id: string;
+  title: string;
+  type: 'deduction' | 'earning';
+  amount?: number;
+  description?: string | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StaffSalaryAdjustment {
+  id: string;
+  staff_member_id: string;
+  staffMember?: StaffMember;
+  month_period: string;
+  type: 'deduction' | 'earning';
+  category: string;
+  unit_amount: number;
+  quantity: number;
+  total_amount: number;
+  reason?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Expense {
+  id: string;
+  category: 'Salaries' | 'Utilities' | 'Rent' | 'Maintenance' | 'Supplies' | 'Miscellaneous';
+  title: string;
+  amount: number;
+  expense_date: string;
+  payment_method: 'cash' | 'bank_transfer' | 'cheque' | 'online';
+  reference_number?: string | null;
+  payee_name?: string | null;
+  staff_member_id?: string | null;
+  month_period?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ExpenseSummary {
+  total_expenses: number;
+  salaries_total: number;
+  operational_total: number;
+  category_breakdown: Record<string, number>;
+}
+
+export interface StaffSalaryDisbursement {
+  id: string;
+  staff_member_id: string;
+  staffMember?: StaffMember;
+  month_period: string;
+  amount: number;
+  payment_method: 'cash' | 'bank_transfer' | 'cheque';
+  disbursed_at: string;
+  reference_number?: string | null;
+  notes?: string | null;
+  expense_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LiveStaffPayrollRow {
+  staff_id: string;
+  staff_member_id: string;
+  full_name: string;
+  designation: string;
+  staff_type: string;
+  month_period: string;
+  base_salary: number;
+  gross_salary: number;
+  adjustments: StaffSalaryAdjustment[];
+  total_deductions: number;
+  total_earnings: number;
+  net_payable: number;
+  total_paid: number;
+  total_pending: number;
+  payment_status: 'Paid' | 'Partial' | 'Pending' | 'Unprocessed';
+  is_processed: boolean;
+  processed_record_id: string | null;
+  is_published: boolean;
+  payment_method?: string;
+  reference_no?: string;
+  notes?: string;
+  custom_earnings?: Array<{ title: string; amount: number }>;
+  custom_deductions?: Array<{ title: string; amount: number }>;
+  disbursements: StaffSalaryDisbursement[];
+  attendance: {
+    days_present: number;
+    days_absent: number;
+    days_late: number;
+    days_half_day: number;
+    days_leave: number;
+    total_working_days: number;
+  };
 }

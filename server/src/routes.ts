@@ -69,8 +69,35 @@ import {
   getPayrollBatchById,
   disbursePayslip,
   getPayslipDetails,
-  aiParsePayrollPolicyController
+  getSalaryAdjustmentsController,
+  createSalaryAdjustmentController,
+  updateSalaryAdjustmentController,
+  deleteSalaryAdjustmentController,
+  getSalaryHeadsController,
+  createSalaryHeadController,
+  updateSalaryHeadController,
+  deleteSalaryHeadController,
+  getPayrollTagsController,
+  createPayrollTagController,
+  updatePayrollTagController,
+  deletePayrollTagController,
+  getLiveStaffPayrollRegisterController,
+  processIndividualPayrollController,
+  undoIndividualPayrollController,
+  publishPayrollToPortalController
 } from './controllers/payrollBatchController';
+import {
+  getExpensesController,
+  getExpenseSummaryController,
+  createExpenseController,
+  updateExpenseController,
+  deleteExpenseController
+} from './controllers/expenseController';
+import {
+  createSalaryDisbursementController,
+  getStaffDisbursementsController,
+  deleteSalaryDisbursementController
+} from './controllers/salaryDisbursementController';
 import {
   calculateProRataFee,
   calculateCyclePeriod,
@@ -82,6 +109,46 @@ import {
 } from './utils/billingUtils';
 
 import { prisma } from './prisma';
+import { timeRangesOverlap, timeToMinutes } from './utils/timeOverlap';
+import {
+  getSubjectCatalog,
+  deleteSubjectSafe,
+  archiveBatch,
+  getBatchWaitlist,
+  addBatchWaitlist,
+  promoteWaitlist,
+  removeWaitlist,
+  listSubstitutes,
+  createSubstitute,
+  copyTimetableDay
+} from './controllers/academicController';
+import { getDayEnd, voidPayment, setChequeStatus } from './controllers/feesDeskController';
+import { listInquiries, createInquiry, updateInquiry, addInquiryFollowUp, findDuplicatePhones } from './controllers/crmController';
+import {
+  getDashboard,
+  listAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  listWhatsAppTemplates,
+  upsertWhatsAppTemplate,
+  listWhatsAppLogs,
+  sendWhatsApp,
+  previewWhatsApp,
+  dispatchAbsenceAlerts,
+  dispatchFeeReminders
+} from './controllers/opsController';
+import {
+  listHomework,
+  getHomeworkRoster,
+  saveHomeworkRoster,
+  getTestRoster,
+  saveTestMarksGuarded,
+  decideLeave,
+  createStudyMaterial,
+  deleteStudyMaterial
+} from './controllers/academicsWorkController';
+import { listConductDesk } from './controllers/conductDeskController';
 
 const router = Router();
 
@@ -146,53 +213,50 @@ router.post('/staff-salary-structures/:staffId', authenticateJwt, requireAdmin, 
 
 // Feature: 1-Click Monthly Batch Payroll & Payslips
 router.post('/payroll/generate-batch', authenticateJwt, requireAdmin, generateMonthlyPayrollBatch);
-router.post('/payroll/ai-parse-policy', authenticateJwt, requireAdmin, aiParsePayrollPolicyController);
 router.get('/payroll/batches', authenticateJwt, requireModulePermission('teachers', 'view_only'), getPayrollBatches);
 router.get('/payroll/batches/:batchId', authenticateJwt, requireModulePermission('teachers', 'view_only'), getPayrollBatchById);
 router.put('/payroll/payslips/:id/disburse', authenticateJwt, requireAdmin, disbursePayslip);
-router.post('/payroll/payslips/:id/disburse', authenticateJwt, requireAdmin, disbursePayslip);
 router.get('/payroll/payslips/:id', authenticateJwt, getPayslipDetails);
+
+// Feature: Simple Staff Salary Deductions & Earnings (Direct Multiplier Calculator)
+router.get('/payroll/adjustments', authenticateJwt, requireModulePermission('teachers', 'view_only'), getSalaryAdjustmentsController);
+router.post('/payroll/adjustments', authenticateJwt, requireAdmin, createSalaryAdjustmentController);
+router.put('/payroll/adjustments/:id', authenticateJwt, requireAdmin, updateSalaryAdjustmentController);
+// Feature: Simple Salary Heads Catalog (Deduction & Earning Types)
+router.get('/payroll/heads', authenticateJwt, requireModulePermission('teachers', 'view_only'), getSalaryHeadsController);
+router.post('/payroll/heads', authenticateJwt, requireAdmin, createSalaryHeadController);
+router.put('/payroll/heads/:id', authenticateJwt, requireAdmin, updateSalaryHeadController);
+router.delete('/payroll/heads/:id', authenticateJwt, requireAdmin, deleteSalaryHeadController);
+
+// Feature: Payroll Component Tags (Universal WhatsApp-Style Variables)
+router.get('/payroll/tags', authenticateJwt, requireModulePermission('teachers', 'view_only'), getPayrollTagsController);
+router.post('/payroll/tags', authenticateJwt, requireAdmin, createPayrollTagController);
+router.put('/payroll/tags/:id', authenticateJwt, requireAdmin, updatePayrollTagController);
+router.delete('/payroll/tags/:id', authenticateJwt, requireAdmin, deletePayrollTagController);
+
+// Feature: Live Staff Payroll Register (Zero Batch Barrier)
+router.get('/payroll/live-register', authenticateJwt, requireModulePermission('teachers', 'view_only'), getLiveStaffPayrollRegisterController);
+router.post('/payroll/process-individual', authenticateJwt, requireAdmin, processIndividualPayrollController);
+router.post('/payroll/undo-individual', authenticateJwt, requireAdmin, undoIndividualPayrollController);
+router.post('/payroll/publish-to-portal', authenticateJwt, requireAdmin, publishPayrollToPortalController);
+
+// Feature: Multi-Tranche Staff Salary Disbursements & Installment Tracking
+router.post('/payroll/disbursements', authenticateJwt, requireAdmin, createSalaryDisbursementController);
+router.get('/payroll/disbursements/:staffId/:monthPeriod', authenticateJwt, requireModulePermission('teachers', 'view_only'), getStaffDisbursementsController);
+router.delete('/payroll/disbursements/:id', authenticateJwt, requireAdmin, deleteSalaryDisbursementController);
+
+// Feature: Academy Expense Management Module
+router.get('/expenses', authenticateJwt, requireModulePermission('finance', 'view_only'), getExpensesController);
+router.get('/expenses/summary', authenticateJwt, requireModulePermission('finance', 'view_only'), getExpenseSummaryController);
+router.post('/expenses', authenticateJwt, requireAdmin, createExpenseController);
+router.put('/expenses/:id', authenticateJwt, requireAdmin, updateExpenseController);
+router.delete('/expenses/:id', authenticateJwt, requireAdmin, deleteExpenseController);
 
 
 /* ==========================================================================
    2. DASHBOARD MODULE (M15 DASH)
    ========================================================================== */
-router.get('/dashboard', authenticateJwt, requireModulePermission('analytics', 'view_only'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const [
-      totalStudents,
-      totalTeachers,
-      totalBatches,
-      payments,
-      invoices,
-      defaulters
-    ] = await Promise.all([
-      prisma.student.count({ where: { status: 'active' } }),
-      prisma.teacher.count(),
-      prisma.batch.count({ where: { is_active: true } }),
-      prisma.feePayment.findMany(),
-      prisma.feeInvoice.findMany(),
-      prisma.studentFeePlan.count()
-    ]);
-
-    const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
-    const totalPending = invoices.reduce((sum, i) => sum + (i.net_amount - (i.amount || 0)), 0);
-
-    return sendSuccess(res, {
-      overview: {
-        totalStudents,
-        totalTeachers,
-        totalBatches,
-        todayAttendancePct: 0,
-        totalCollected,
-        totalPending,
-        defaultersCount: defaulters
-      }
-    });
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/dashboard', authenticateJwt, requireModulePermission('analytics', 'view_only'), getDashboard);
 
 /* ==========================================================================
    3. STUDENTS MODULE (M2 STU)
@@ -294,6 +358,7 @@ router.get('/students', authenticateJwt, requireModulePermission('students', 'vi
 
       return {
         ...s,
+        parentName: (s.custom_fields as any)?.parentName || (s as any).parentStudents?.[0]?.parent?.full_name || '',
         baseMonthlyFee: s.feePlan?.monthly_amount || 0,
         scholarshipType: s.feePlan?.scholarship_type || 'none',
         scholarshipValue: s.feePlan?.scholarship_value || 0,
@@ -369,6 +434,11 @@ router.post('/students', authenticateJwt, requireModulePermission('students', 'e
     const admissionNo = `ACAD-2026-${(count + 1).toString().padStart(3, '0')}`;
     const admittedDateStr = admitted_on || admissionDate || formatDateIso(new Date());
 
+    const studentCustomData = {
+      ...((custom_fields || customFields) && typeof (custom_fields || customFields) === 'object' ? (custom_fields || customFields) : {}),
+      ...(parentName ? { parentName } : {})
+    };
+
     const student = await prisma.student.create({
       data: {
         admission_no: admissionNo,
@@ -378,7 +448,7 @@ router.post('/students', authenticateJwt, requireModulePermission('students', 'e
         gender: gender || 'Male',
         admitted_on: parseDateIso(admittedDateStr),
         photo_url: photoUrl || photo_url || null,
-        custom_fields: custom_fields || customFields || null,
+        custom_fields: Object.keys(studentCustomData).length > 0 ? studentCustomData : null,
         status: 'active'
       }
     });
@@ -585,8 +655,21 @@ router.put('/students/:id/fee-plan', authenticateJwt, requireModulePermission('f
 router.put('/students/:id', authenticateJwt, requireModulePermission('students', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { fullName, name, phone, email, gender, status, photoUrl, photo_url, custom_fields, customFields } = req.body;
+    const { fullName, name, parentName, phone, email, gender, status, photoUrl, photo_url, custom_fields, customFields } = req.body;
     
+    let customUpdate: any = undefined;
+    if (parentName !== undefined || custom_fields !== undefined || customFields !== undefined) {
+      const existing = await prisma.student.findUnique({ where: { id }, select: { custom_fields: true } });
+      const currentCustom = (existing?.custom_fields && typeof existing.custom_fields === 'object')
+        ? (existing.custom_fields as Record<string, any>)
+        : {};
+      customUpdate = {
+        ...currentCustom,
+        ...((custom_fields || customFields) && typeof (custom_fields || customFields) === 'object' ? (custom_fields || customFields) : {}),
+        ...(parentName !== undefined ? { parentName } : {})
+      };
+    }
+
     const student = await prisma.student.update({
       where: { id },
       data: {
@@ -596,7 +679,7 @@ router.put('/students/:id', authenticateJwt, requireModulePermission('students',
         gender,
         status,
         photo_url: photoUrl || photo_url !== undefined ? (photoUrl || photo_url) : undefined,
-        custom_fields: custom_fields || customFields !== undefined ? (custom_fields || customFields) : undefined
+        custom_fields: customUpdate !== undefined ? customUpdate : undefined
       }
     });
 
@@ -1116,41 +1199,44 @@ router.get('/students/:id/leaving-certificate', authenticateJwt, requireModulePe
     // Compute Attendance %
     const totalAttendances = student.attendances.length;
     const presentCount = student.attendances.filter(a => a.status === 'present' || a.status === 'late').length;
-    const attendancePercentage = totalAttendances > 0 
-      ? Math.round((presentCount / totalAttendances) * 100) 
-      : 96;
+    const attendancePercentage = totalAttendances > 0
+      ? Math.round((presentCount / totalAttendances) * 100)
+      : 0;
 
-    // Compute Fee Clearance
     const totalInvoiced = student.feeInvoices.reduce((sum, inv) => sum + (inv.net_amount || 0), 0);
-    const totalPaid = student.feePayments.reduce((sum, pay) => sum + (pay.amount || 0), 0);
+    const totalPaid = student.feePayments
+      .filter(pay => !pay.voided_at && (pay.cleared_status || 'cleared') === 'cleared')
+      .reduce((sum, pay) => sum + (pay.amount || 0), 0);
     const dueBalance = Math.max(0, totalInvoiced - totalPaid);
     const feeStatus = dueBalance <= 0 ? 'Cleared' : (student.is_fee_paused ? 'Waived' : 'Pending Dues');
 
-    // Compute Conduct Rating
     const infractionCount = student.conductLogs.filter(c => c.category === 'infraction').length;
     const commendationCount = student.conductLogs.filter(c => c.category === 'commendation').length;
-    let conductRating: 'Exemplary' | 'Good' | 'Satisfactory' | 'Needs Improvement' = 'Good';
-    if (commendationCount > 0 && infractionCount === 0) conductRating = 'Exemplary';
-    else if (infractionCount > 2) conductRating = 'Needs Improvement';
+    const criticalCount = student.conductLogs.filter(c => c.severity === 'critical').length;
+    let conductRating: 'Exemplary' | 'Good' | 'Satisfactory' | 'Needs Improvement' = 'Satisfactory';
+    if (student.conductLogs.length === 0) conductRating = 'Satisfactory';
+    else if (criticalCount > 0 || infractionCount > 2) conductRating = 'Needs Improvement';
+    else if (commendationCount > 0 && infractionCount === 0) conductRating = 'Exemplary';
     else if (infractionCount > 0) conductRating = 'Satisfactory';
+    else conductRating = 'Good';
 
-    const parentName = student.parentStudents[0]?.parent?.full_name || 'Parent / Guardian';
+    const parentName = student.parentStudents[0]?.parent?.full_name || '';
 
     const leavingCertificateData = {
       admissionNo: student.admission_no,
       studentName: student.full_name,
       parentName,
       phone: student.phone,
-      gradeBatch: student.class?.name || 'Standard Batch',
-      enrollmentDate: student.admitted_on ? student.admitted_on.toISOString().split('T')[0] : '2024-08-15',
+      gradeBatch: student.class?.name || '',
+      enrollmentDate: student.admitted_on ? student.admitted_on.toISOString().split('T')[0] : '',
       leavingDate: student.leaving_date ? student.leaving_date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      reason: student.status_reason ? (student.status_reason.charAt(0).toUpperCase() + student.status_reason.slice(1)) : (student.status === 'graduated' ? 'Graduation' : 'Course Completed'),
+      reason: student.status_reason ? (student.status_reason.charAt(0).toUpperCase() + student.status_reason.slice(1)) : (student.status === 'graduated' ? 'Graduation' : student.status),
       status: student.status,
       attendancePercentage,
       feeStatus,
       dueBalance,
       conductRating,
-      remarks: student.status_remarks || 'Student maintained good academic standing and completed their institutional term.'
+      remarks: student.status_remarks || (student.conductLogs.length === 0 ? 'No conduct remarks on file.' : '')
     };
 
     return sendSuccess(res, leavingCertificateData);
@@ -1165,7 +1251,11 @@ router.get('/students/:id/leaving-certificate', authenticateJwt, requireModulePe
 router.get('/teachers', authenticateJwt, requireModulePermission('teachers', 'view_only'), async (req, res) => {
   try {
     const teachers = await prisma.teacher.findMany({
-      include: { user: true }
+      include: {
+        user: true,
+        batches: { select: { id: true, name: true } },
+        batchSubjects: { include: { subject: true, batch: true } }
+      }
     });
     return sendSuccess(res, teachers);
   } catch (err: any) {
@@ -1288,9 +1378,59 @@ router.delete('/teachers/:id', authenticateJwt, requireModulePermission('teacher
    ========================================================================== */
 router.get('/classes', authenticateJwt, requireModulePermission('batches', 'view_only'), async (req, res) => {
   try {
-    const classes = await prisma.class.findMany({ where: { is_active: true } });
+    const classes = await prisma.class.findMany({
+      include: { _count: { select: { batches: true } } },
+      orderBy: { name: 'asc' }
+    });
     return sendSuccess(res, classes);
   } catch (err: any) {
+    return sendError(res, err.message, 500);
+  }
+});
+
+router.post('/classes', authenticateJwt, requireModulePermission('batches', 'editable'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    if (!name) return sendError(res, 'Class name is required.', 400);
+    const existing = await prisma.class.findUnique({ where: { name } });
+    if (existing) return sendError(res, `Class "${name}" already exists.`, 409);
+    const cls = await prisma.class.create({ data: { name, is_active: true } });
+    if (req.user) await createAuditLog(req.user.userId, 'CREATE_CLASS', 'Class', cls.id, { name });
+    return sendSuccess(res, cls, null, 201);
+  } catch (err: any) {
+    return sendError(res, err.message, 500);
+  }
+});
+
+router.put('/classes/:id', authenticateJwt, requireModulePermission('batches', 'editable'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const name = req.body.name !== undefined ? String(req.body.name).trim() : undefined;
+    const isActive = req.body.is_active;
+    const data: any = {};
+    if (name) data.name = name;
+    if (isActive !== undefined) data.is_active = Boolean(isActive);
+    if (Object.keys(data).length === 0) return sendError(res, 'Nothing to update.', 400);
+    const cls = await prisma.class.update({ where: { id: req.params.id }, data });
+    if (req.user) await createAuditLog(req.user.userId, 'UPDATE_CLASS', 'Class', cls.id, data);
+    return sendSuccess(res, cls);
+  } catch (err: any) {
+    if (err.code === 'P2025') return sendError(res, 'Class not found.', 404);
+    if (err.code === 'P2002') return sendError(res, 'A class with that name already exists.', 409);
+    return sendError(res, err.message, 500);
+  }
+});
+
+router.delete('/classes/:id', authenticateJwt, requireModulePermission('batches', 'editable'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const batchCount = await prisma.batch.count({ where: { class_id: req.params.id } });
+    if (batchCount > 0) {
+      return sendError(res, `Cannot delete class: ${batchCount} batch(es) still belong to it. Archive it instead.`, 409);
+    }
+    await prisma.class.delete({ where: { id: req.params.id } });
+    if (req.user) await createAuditLog(req.user.userId, 'DELETE_CLASS', 'Class', req.params.id, {});
+    return sendSuccess(res, { deleted: true, id: req.params.id });
+  } catch (err: any) {
+    if (err.code === 'P2025') return sendError(res, 'Class not found.', 404);
     return sendError(res, err.message, 500);
   }
 });
@@ -1341,7 +1481,7 @@ router.post('/batches', authenticateJwt, requireModulePermission('batches', 'edi
         name,
         class_id: cls.id,
         teacher_id: teacherId || null,
-        days: 'MON,WED,FRI', // default
+        days: req.body.days || 'MON,WED,FRI',
         start_time: timing?.split('-')[0]?.trim() || '14:00',
         end_time: timing?.split('-')[1]?.trim() || '16:00',
         capacity: Number(capacity) || 30,
@@ -1350,7 +1490,8 @@ router.post('/batches', authenticateJwt, requireModulePermission('batches', 'edi
         start_date: sDate,
         end_date: eDate,
         default_installments: defInst,
-        section_name: section_name || sectionName || null
+        section_name: section_name || sectionName || null,
+        room: room || null
       },
       include: { class: true, teacher: { include: { user: true } } }
     });
@@ -1514,10 +1655,28 @@ router.post('/batches/:id/enroll', authenticateJwt, requireModulePermission('bat
     });
 
     if (activeCount >= batch.capacity && !adminOverride) {
+      if (req.body.waitlist) {
+        const last = await prisma.batchWaitlist.findFirst({
+          where: { batch_id: id },
+          orderBy: { position: 'desc' }
+        });
+        const row = await prisma.batchWaitlist.upsert({
+          where: { batch_id_student_id: { batch_id: id, student_id: studentId } },
+          update: {},
+          create: {
+            batch_id: id,
+            student_id: studentId,
+            position: (last?.position || 0) + 1,
+            reason: 'Capacity full'
+          },
+          include: { student: true }
+        });
+        return sendSuccess(res, { waitlisted: true, waitlist: row }, null, 201);
+      }
       return res.status(409).json({
         success: false,
         error: `Batch "${batch.name}" has reached maximum capacity (${activeCount}/${batch.capacity})`,
-        meta: { current: activeCount, capacity: batch.capacity, canOverride: true }
+        meta: { current: activeCount, capacity: batch.capacity, canOverride: true, canWaitlist: true }
       });
     }
 
@@ -1974,6 +2133,9 @@ router.post('/fees/payments', authenticateJwt, requireModulePermission('fees', '
     if (!studentId || isNaN(paymentAmount) || paymentAmount <= 0) {
       return sendError(res, 'Valid studentId and positive amount are required', 400);
     }
+    if (adhocDiscount > 0 && !discountReason) {
+      return sendError(res, 'A reason is required when applying a discount or waiver.', 400);
+    }
 
     // Determine invoice to link or cascade
     let targetInvoiceId = invoiceId || null;
@@ -2013,52 +2175,60 @@ router.post('/fees/payments', authenticateJwt, requireModulePermission('fees', '
       adhocDiscount > 0 ? `[Ad-hoc Discount: PKR ${adhocDiscount}${discountReason ? ` - Reason: ${discountReason}` : ''}]` : ''
     ].filter(Boolean).join(' ');
 
+    const methodNorm = String(method || 'cash').toLowerCase();
+    const chequePending = methodNorm === 'cheque';
     const payment = await prisma.feePayment.create({
       data: {
         student_id: studentId,
         invoice_id: targetInvoiceId,
         amount: paymentAmount,
-        method: method || 'cash',
+        method: methodNorm,
         receipt_no: receiptNo,
         recorded_by: req.user?.userId || 'admin',
         note: paymentNote || null,
-        paid_at: new Date()
+        paid_at: new Date(),
+        cleared_status: chequePending ? 'pending' : 'cleared',
+        credit_applied: 0
       }
     });
 
-    // Cascade payment across unpaid/partial invoices
-    const targetInvoices = await prisma.feeInvoice.findMany({
-      where: {
-        student_id: studentId,
-        ...(invoiceId ? { id: invoiceId } : { status: { in: ['unpaid', 'partial', 'overdue'] } })
-      },
-      include: { feePayments: true, installmentSchedule: true },
-      orderBy: { due_date: 'asc' }
-    });
-
-    let remainingAmount = paymentAmount;
-    for (const invoice of targetInvoices) {
-      if (remainingAmount <= 0) break;
-      // Calculate total paid including the new payment
-      const totalPaidOnInvoice = invoice.feePayments.reduce((sum, p) => sum + p.amount, 0);
-      const isNowFullyPaid = totalPaidOnInvoice >= invoice.net_amount;
-      const newStatus = isNowFullyPaid ? 'paid' : (totalPaidOnInvoice > 0 ? 'partial' : 'unpaid');
-
-      await prisma.feeInvoice.update({
-        where: { id: invoice.id },
-        data: { status: newStatus }
+    if (!chequePending) {
+      const targetInvoices = await prisma.feeInvoice.findMany({
+        where: {
+          student_id: studentId,
+          ...(invoiceId ? { id: invoiceId } : { status: { in: ['unpaid', 'partial', 'overdue'] } })
+        },
+        include: { feePayments: true, installmentSchedule: true },
+        orderBy: { due_date: 'asc' }
       });
 
-      // Synchronize linked installment schedule status if applicable
-      if (invoice.installmentSchedule) {
-        await prisma.studentInstallmentSchedule.update({
-          where: { id: invoice.installmentSchedule.id },
-          data: { status: isNowFullyPaid ? 'paid' : 'invoiced' }
+      let remainingAmount = paymentAmount;
+      for (const invoice of targetInvoices) {
+        if (remainingAmount <= 0) break;
+        const countablePaid = invoice.feePayments
+          .filter(p => !p.voided_at && (p.cleared_status || 'cleared') === 'cleared')
+          .reduce((sum, p) => sum + p.amount, 0);
+        const isNowFullyPaid = countablePaid >= invoice.net_amount;
+        const newStatus = isNowFullyPaid ? 'paid' : (countablePaid > 0 ? 'partial' : 'unpaid');
+        await prisma.feeInvoice.update({
+          where: { id: invoice.id },
+          data: { status: newStatus }
+        });
+        if (invoice.installmentSchedule) {
+          await prisma.studentInstallmentSchedule.update({
+            where: { id: invoice.installmentSchedule.id },
+            data: { status: isNowFullyPaid ? 'paid' : 'invoiced' }
+          });
+        }
+        const dueBeforeThisPay = Math.max(0, invoice.net_amount - (countablePaid - (invoice.id === targetInvoiceId ? paymentAmount : 0)));
+        remainingAmount -= Math.min(remainingAmount, dueBeforeThisPay);
+      }
+      if (remainingAmount > 0) {
+        await prisma.feePayment.update({
+          where: { id: payment.id },
+          data: { credit_applied: remainingAmount }
         });
       }
-
-      const dueBeforeThisPay = Math.max(0, invoice.net_amount - (totalPaidOnInvoice - (invoice.id === targetInvoiceId ? paymentAmount : 0)));
-      remainingAmount -= Math.min(remainingAmount, dueBeforeThisPay);
     }
 
     if (req.user) {
@@ -2087,7 +2257,9 @@ router.get('/fees/invoices', authenticateJwt, requireModulePermission('fees', 'v
     const todayStr = formatDateIso(new Date());
 
     const enriched = invoices.map(inv => {
-      const paid = inv.feePayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+      const paid = inv.feePayments
+        .filter((p: any) => !p.voided_at && (p.cleared_status || 'cleared') === 'cleared')
+        .reduce((sum: number, p: any) => sum + p.amount, 0);
       const balance = Math.max(0, inv.net_amount - paid);
       let calculatedStatus = inv.status;
       if (paid >= inv.net_amount) {
@@ -2302,93 +2474,44 @@ router.get('/fees/ledger/:studentId', authenticateJwt, requireModulePermission('
 /* ==========================================================================
    8. ANNOUNCEMENTS & INQUIRIES (M13 INQ & M14 COM)
    ========================================================================== */
-router.get('/announcements', authenticateJwt, requireModulePermission('announcements', 'view_only'), async (req, res) => {
-  try {
-    const list = await prisma.announcement.findMany({ orderBy: { created_at: 'desc' } });
-    return sendSuccess(res, list);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/announcements', authenticateJwt, requireModulePermission('announcements', 'view_only'), listAnnouncements);
+router.post('/announcements', authenticateJwt, requireModulePermission('announcements', 'editable'), createAnnouncement);
+router.put('/announcements/:id', authenticateJwt, requireModulePermission('announcements', 'editable'), updateAnnouncement);
+router.delete('/announcements/:id', authenticateJwt, requireModulePermission('announcements', 'editable'), deleteAnnouncement);
 
-router.post('/announcements', authenticateJwt, requireModulePermission('announcements', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { title, content, targetAudience } = req.body;
-    const ann = await prisma.announcement.create({
-      data: {
-        title,
-        body: content,
-        audience: targetAudience || 'all',
-        created_by: req.user?.userId || 'admin'
-      }
-    });
-    return sendSuccess(res, ann, null, 201);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/inquiries', authenticateJwt, requireModulePermission('crm', 'view_only'), listInquiries);
+router.get('/inquiries/duplicates', authenticateJwt, requireModulePermission('crm', 'view_only'), findDuplicatePhones);
+router.post('/inquiries', authenticateJwt, requireModulePermission('crm', 'editable'), createInquiry);
+router.put('/inquiries/:id', authenticateJwt, requireModulePermission('crm', 'editable'), updateInquiry);
+router.post('/inquiries/:id/follow-ups', authenticateJwt, requireModulePermission('crm', 'editable'), addInquiryFollowUp);
 
-router.get('/inquiries', authenticateJwt, requireModulePermission('crm', 'view_only'), async (req, res) => {
-  try {
-    const inquiries = await prisma.inquiry.findMany({ orderBy: { created_at: 'desc' } });
-    return sendSuccess(res, inquiries);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
-
-router.post('/inquiries', authenticateJwt, requireModulePermission('crm', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { studentName, parentName, phone, targetClass, source } = req.body;
-    const inq = await prisma.inquiry.create({
-      data: {
-        name: studentName,
-        phone,
-        class_interest: targetClass || 'Any',
-        source: source || 'Walk-in',
-        notes: parentName ? `Parent: ${parentName}` : null,
-        status: 'new'
-      }
-    });
-    return sendSuccess(res, inq, null, 201);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/fees/day-end', authenticateJwt, requireModulePermission('fees', 'view_only'), getDayEnd);
+router.post('/fees/payments/:id/void', authenticateJwt, requireAdmin, voidPayment);
+router.post('/fees/payments/:id/cheque', authenticateJwt, requireAdmin, setChequeStatus);
 
 /* ==========================================================================
    9. ACADEMIC MODULES — HOMEWORK, MATERIALS, EXAMS (M9 HW, M10 SM, M11 EX)
    ========================================================================== */
-router.get('/homework', authenticateJwt, requireModulePermission('homework', 'view_only'), async (req, res) => {
-  try {
-    const list = await prisma.homework.findMany({
-      include: { batch: true, subject: true, teacher: { include: { user: true } } },
-      orderBy: { created_at: 'desc' }
-    });
-    return sendSuccess(res, list);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/homework', authenticateJwt, requireModulePermission('homework', 'view_only'), listHomework);
 
 router.post('/homework', authenticateJwt, requireModulePermission('homework', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
     const { batchId, subjectId, teacherId, title, description, dueDate } = req.body;
-    
-    // Fallback default batch/subject/teacher if creating quick homework
-    const defaultBatch = batchId || (await prisma.batch.findFirst())?.id;
-    const defaultSubject = subjectId || (await prisma.subject.findFirst())?.id;
-    const defaultTeacher = teacherId || (await prisma.teacher.findFirst())?.id;
 
-    if (!defaultBatch || !defaultSubject || !defaultTeacher) {
-      return sendError(res, 'Batch, Subject, and Teacher are required to create homework.', 400);
+    if (!batchId || !subjectId || !title) {
+      return sendError(res, 'Batch, subject, and title are required to create homework.', 400);
+    }
+    const batch = await prisma.batch.findUnique({ where: { id: batchId } });
+    const resolvedTeacher = teacherId || batch?.teacher_id;
+    if (!resolvedTeacher) {
+      return sendError(res, 'Assign a teacher to the batch, or pick a teacher on the homework.', 400);
     }
 
     const hw = await prisma.homework.create({
       data: {
-        batch_id: defaultBatch,
-        subject_id: defaultSubject,
-        teacher_id: defaultTeacher,
+        batch_id: batchId,
+        subject_id: subjectId,
+        teacher_id: resolvedTeacher,
         title,
         description: description || '',
         due_date: dueDate || new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0]
@@ -2412,31 +2535,8 @@ router.get('/study-materials', authenticateJwt, requireModulePermission('homewor
   }
 });
 
-router.post('/study-materials', authenticateJwt, requireModulePermission('homework', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { batchId, subjectId, teacherId, title, fileUrl } = req.body;
-    const defaultBatch = batchId || (await prisma.batch.findFirst())?.id;
-    const defaultSubject = subjectId || (await prisma.subject.findFirst())?.id;
-    const defaultTeacher = teacherId || (await prisma.teacher.findFirst())?.id;
-
-    if (!defaultBatch || !defaultSubject || !defaultTeacher) {
-      return sendError(res, 'Batch, Subject, and Teacher are required.', 400);
-    }
-
-    const sm = await prisma.studyMaterial.create({
-      data: {
-        batch_id: defaultBatch,
-        subject_id: defaultSubject,
-        teacher_id: defaultTeacher,
-        title,
-        file_url: fileUrl || 'https://example.com/notes.pdf'
-      }
-    });
-    return sendSuccess(res, sm, null, 201);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.post('/study-materials', authenticateJwt, requireModulePermission('homework', 'editable'), createStudyMaterial);
+router.delete('/study-materials/:id', authenticateJwt, requireModulePermission('homework', 'editable'), deleteStudyMaterial);
 
 router.get('/tests', authenticateJwt, requireModulePermission('exams', 'view_only'), async (req, res) => {
   try {
@@ -2453,22 +2553,14 @@ router.get('/tests', authenticateJwt, requireModulePermission('exams', 'view_onl
 router.post('/tests', authenticateJwt, requireModulePermission('exams', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
     const { batchId, subjectId, title, examDate, maxMarks, passMarks } = req.body;
-    const defaultBatch = batchId || (await prisma.batch.findFirst())?.id;
-    let defaultSubject = subjectId || (await prisma.subject.findFirst())?.id;
-
-    if (!defaultSubject) {
-      const createdSub = await prisma.subject.create({ data: { name: 'General Mathematics', code: 'MATH101' } });
-      defaultSubject = createdSub.id;
-    }
-
-    if (!defaultBatch) {
-      return sendError(res, 'Batch is required to create a test.', 400);
+    if (!batchId || !subjectId || !title) {
+      return sendError(res, 'Batch, subject, and title are required to create a test.', 400);
     }
 
     const test = await prisma.test.create({
       data: {
-        batch_id: defaultBatch,
-        subject_id: defaultSubject,
+        batch_id: batchId,
+        subject_id: subjectId,
         title,
         exam_date: examDate || new Date().toISOString().split('T')[0],
         max_marks: Number(maxMarks) || 100,
@@ -2482,35 +2574,8 @@ router.post('/tests', authenticateJwt, requireModulePermission('exams', 'editabl
   }
 });
 
-router.post('/tests/:id/marks', authenticateJwt, requireModulePermission('exams', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id: testId } = req.params;
-    const { marks } = req.body; // Array of { studentId, marks, remark }
-
-    const results = [];
-    for (const m of (marks || [])) {
-      const entry = await prisma.testMark.upsert({
-        where: {
-          test_id_student_id: {
-            test_id: testId,
-            student_id: m.studentId || m.student_id
-          }
-        },
-        update: { marks: Number(m.marks) || 0, remark: m.remark || null },
-        create: {
-          test_id: testId,
-          student_id: m.studentId || m.student_id,
-          marks: Number(m.marks) || 0,
-          remark: m.remark || null
-        }
-      });
-      results.push(entry);
-    }
-    return sendSuccess(res, results);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/tests/:id/roster', authenticateJwt, requireModulePermission('exams', 'view_only'), getTestRoster);
+router.post('/tests/:id/marks', authenticateJwt, requireModulePermission('exams', 'editable'), saveTestMarksGuarded);
 
 router.put('/tests/:id', authenticateJwt, requireModulePermission('exams', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
@@ -2538,6 +2603,11 @@ router.put('/tests/:id', authenticateJwt, requireModulePermission('exams', 'edit
 router.delete('/tests/:id', authenticateJwt, requireModulePermission('exams', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
+    const test = await prisma.test.findUnique({ where: { id } });
+    if (!test) return sendError(res, 'Test not found.', 404);
+    if (test.is_published && req.query.confirm !== 'true') {
+      return sendError(res, 'Published tests cannot be deleted without confirm=true.', 409);
+    }
     await prisma.testMark.deleteMany({ where: { test_id: id } });
     await prisma.test.delete({ where: { id } });
     return sendSuccess(res, { deleted: true, id });
@@ -2572,44 +2642,48 @@ router.post('/timetable', authenticateJwt, requireModulePermission('timetable', 
   try {
     const { day, startTime, endTime, room, batchId, subjectId, teacherId, topic } = req.body;
 
-    if (!day || !startTime || !endTime || !room || !batchId) {
-      return sendError(res, 'Day, start time, end time, room, and batch are required.', 400);
+    if (!day || !startTime || !endTime || !batchId) {
+      return sendError(res, 'Day, start time, end time, and batch are required.', 400);
+    }
+    const startMins = timeToMinutes(startTime);
+    const endMins = timeToMinutes(endTime);
+    if (startMins === null || endMins === null) {
+      return sendError(res, 'Start and end time must be valid (HH:MM or h:mm AM/PM).', 400);
+    }
+    if (endMins <= startMins) {
+      return sendError(res, 'End time must be after start time. Overnight slots are not allowed.', 400);
     }
 
-    // 1. Room Double-Booking Conflict Check
-    const roomConflict = await prisma.timetableSlot.findFirst({
-      where: {
-        day,
-        room: { equals: room, mode: 'insensitive' },
-        start_time: startTime
-      },
-      include: { batch: true }
+    const sameDaySlots = await prisma.timetableSlot.findMany({
+      where: { day },
+      include: { batch: true, teacher: { include: { user: true } } }
     });
 
-    if (roomConflict) {
-      return sendError(
-        res,
-        `Room conflict: ${room} is already booked for cohort "${roomConflict.batch?.name}" at ${startTime} on ${day}.`,
-        409
+    if (room) {
+      const roomConflict = sameDaySlots.find(slot =>
+        slot.room &&
+        slot.room.toLowerCase() === String(room).toLowerCase() &&
+        timeRangesOverlap(startTime, endTime, slot.start_time, slot.end_time)
       );
-    }
-
-    // 2. Teacher Collision Check
-    if (teacherId) {
-      const teacherConflict = await prisma.timetableSlot.findFirst({
-        where: {
-          day,
-          teacher_id: teacherId,
-          start_time: startTime
-        },
-        include: { batch: true, teacher: { include: { user: true } } }
-      });
-
-      if (teacherConflict) {
-        const teacherName = teacherConflict.teacher?.user?.full_name || 'Assigned Faculty';
+      if (roomConflict) {
         return sendError(
           res,
-          `Teacher collision: ${teacherName} is already assigned to cohort "${teacherConflict.batch?.name}" at ${startTime} on ${day}.`,
+          `Room conflict: ${room} is already booked for "${roomConflict.batch?.name}" (${roomConflict.start_time}–${roomConflict.end_time}) on ${day}.`,
+          409
+        );
+      }
+    }
+
+    if (teacherId) {
+      const teacherConflict = sameDaySlots.find(slot =>
+        slot.teacher_id === teacherId &&
+        timeRangesOverlap(startTime, endTime, slot.start_time, slot.end_time)
+      );
+      if (teacherConflict) {
+        const teacherName = teacherConflict.teacher?.user?.full_name || 'Assigned faculty';
+        return sendError(
+          res,
+          `Teacher collision: ${teacherName} is already assigned to "${teacherConflict.batch?.name}" (${teacherConflict.start_time}–${teacherConflict.end_time}) on ${day}.`,
           409
         );
       }
@@ -2639,6 +2713,75 @@ router.post('/timetable', authenticateJwt, requireModulePermission('timetable', 
   }
 });
 
+router.put('/timetable/:id', authenticateJwt, requireModulePermission('timetable', 'editable'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const existing = await prisma.timetableSlot.findUnique({ where: { id: req.params.id } });
+    if (!existing) return sendError(res, 'Timetable slot not found.', 404);
+
+    const day = req.body.day || existing.day;
+    const startTime = req.body.startTime || req.body.start_time || existing.start_time;
+    const endTime = req.body.endTime || req.body.end_time || existing.end_time;
+    const room = req.body.room !== undefined ? req.body.room : existing.room;
+    const batchId = req.body.batchId || req.body.batch_id || existing.batch_id;
+    const subjectId = req.body.subjectId !== undefined ? req.body.subjectId : existing.subject_id;
+    const teacherId = req.body.teacherId !== undefined ? req.body.teacherId : existing.teacher_id;
+    const topic = req.body.topic !== undefined ? req.body.topic : existing.topic;
+
+    const startMins = timeToMinutes(startTime);
+    const endMins = timeToMinutes(endTime);
+    if (startMins === null || endMins === null || endMins <= startMins) {
+      return sendError(res, 'End time must be after a valid start time.', 400);
+    }
+
+    const sameDaySlots = await prisma.timetableSlot.findMany({
+      where: { day, id: { not: existing.id } },
+      include: { batch: true, teacher: { include: { user: true } } }
+    });
+
+    if (room) {
+      const roomConflict = sameDaySlots.find(slot =>
+        slot.room &&
+        slot.room.toLowerCase() === String(room).toLowerCase() &&
+        timeRangesOverlap(startTime, endTime, slot.start_time, slot.end_time)
+      );
+      if (roomConflict) {
+        return sendError(res, `Room conflict: ${room} is booked for "${roomConflict.batch?.name}" on ${day}.`, 409);
+      }
+    }
+    if (teacherId) {
+      const teacherConflict = sameDaySlots.find(slot =>
+        slot.teacher_id === teacherId &&
+        timeRangesOverlap(startTime, endTime, slot.start_time, slot.end_time)
+      );
+      if (teacherConflict) {
+        return sendError(res, `Teacher collision with "${teacherConflict.batch?.name}" on ${day}.`, 409);
+      }
+    }
+
+    const updated = await prisma.timetableSlot.update({
+      where: { id: existing.id },
+      data: {
+        day,
+        start_time: startTime,
+        end_time: endTime,
+        room: room || '',
+        batch_id: batchId,
+        subject_id: subjectId || null,
+        teacher_id: teacherId || null,
+        topic: topic || null
+      },
+      include: {
+        batch: { include: { class: true } },
+        subject: true,
+        teacher: { include: { user: true } }
+      }
+    });
+    return sendSuccess(res, updated);
+  } catch (err: any) {
+    return sendError(res, err.message, 500);
+  }
+});
+
 router.delete('/timetable/:id', authenticateJwt, requireModulePermission('timetable', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
@@ -2652,133 +2795,13 @@ router.delete('/timetable/:id', authenticateJwt, requireModulePermission('timeta
 /* ==========================================================================
    WHATSAPP NOTIFICATION DISPATCHER & AUTOMATION ENGINE
    ========================================================================== */
-router.get('/whatsapp/templates', authenticateJwt, requireModulePermission('whatsapp', 'view_only'), async (req, res) => {
-  try {
-    const templates = await prisma.whatsAppTemplate.findMany({
-      orderBy: { updated_at: 'desc' }
-    });
-    return sendSuccess(res, templates);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
-
-router.put('/whatsapp/templates/:code', authenticateJwt, requireModulePermission('whatsapp', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { code } = req.params;
-    const { body, name, is_enabled, is_active } = req.body;
-    const activeVal = is_enabled !== undefined ? Boolean(is_enabled) : (is_active !== undefined ? Boolean(is_active) : true);
-
-    const updated = await prisma.whatsAppTemplate.upsert({
-      where: { code },
-      update: {
-        ...(body && { body }),
-        ...(name && { name }),
-        is_enabled: activeVal
-      },
-      create: {
-        code,
-        name: name || code,
-        body: body || '',
-        is_enabled: activeVal
-      }
-    });
-
-    return sendSuccess(res, updated);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
-
-router.get('/whatsapp/logs', authenticateJwt, requireModulePermission('whatsapp', 'view_only'), async (req, res) => {
-  try {
-    const logs = await prisma.whatsAppLog.findMany({
-      orderBy: { created_at: 'desc' },
-      take: 100
-    });
-    return sendSuccess(res, logs);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
-
-router.post('/whatsapp/send', authenticateJwt, requireModulePermission('whatsapp', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { phone, studentName, templateCode, body, studentId } = req.body;
-
-    const log = await prisma.whatsAppLog.create({
-      data: {
-        phone: phone || '',
-        body_snapshot: body || '',
-        status: 'manual_opened',
-        template_code: templateCode || 'MANUAL',
-        student_id: studentId || null
-      }
-    });
-
-    return sendSuccess(res, log, 'Notification logged successfully');
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
-
-router.post('/whatsapp/dispatch-absence-alerts', authenticateJwt, requireModulePermission('whatsapp', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    const absences = await prisma.attendance.findMany({
-      where: {
-        date: todayStr,
-        status: 'absent'
-      },
-      include: {
-        student: {
-          include: {
-            parentStudents: { include: { parent: true } }
-          }
-        },
-        batch: true
-      }
-    });
-
-    const dispatched = [];
-    for (const att of absences) {
-      const student = att.student;
-      const phone = student.phone || student.parentStudents?.[0]?.parent?.phone || '';
-      const parentName = student.parentStudents?.[0]?.parent?.full_name || 'Parent / Guardian';
-      const studentName = student.full_name;
-
-      const messageBody = `Dear ${parentName}, please note that ${studentName} was marked ABSENT today (${todayStr}) in batch "${att.batch?.name || 'Class'}". If this was unforeseen, please contact administration. – AcademiaPro OS`;
-
-      const log = await prisma.whatsAppLog.create({
-        data: {
-          phone,
-          body_snapshot: messageBody,
-          status: 'queued',
-          template_code: 'WA_ABSENCE_ALERT',
-          student_id: student.id
-        }
-      });
-
-      dispatched.push({
-        studentId: student.id,
-        studentName,
-        phone,
-        parentName,
-        messageBody,
-        logId: log.id
-      });
-    }
-
-    return sendSuccess(res, {
-      totalAbsences: absences.length,
-      dispatchedCount: dispatched.length,
-      alerts: dispatched
-    });
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/whatsapp/templates', authenticateJwt, requireModulePermission('whatsapp', 'view_only'), listWhatsAppTemplates);
+router.put('/whatsapp/templates/:code', authenticateJwt, requireModulePermission('whatsapp', 'editable'), upsertWhatsAppTemplate);
+router.get('/whatsapp/logs', authenticateJwt, requireModulePermission('whatsapp', 'view_only'), listWhatsAppLogs);
+router.get('/whatsapp/preview', authenticateJwt, requireModulePermission('whatsapp', 'view_only'), previewWhatsApp);
+router.post('/whatsapp/send', authenticateJwt, requireModulePermission('whatsapp', 'editable'), sendWhatsApp);
+router.post('/whatsapp/dispatch-absence-alerts', authenticateJwt, requireModulePermission('whatsapp', 'editable'), dispatchAbsenceAlerts);
+router.post('/whatsapp/dispatch-fee-reminders', authenticateJwt, requireModulePermission('whatsapp', 'editable'), dispatchFeeReminders);
 
 router.get('/students/:id/report-card', authenticateJwt, requireModulePermission('academics', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
@@ -2997,14 +3020,7 @@ router.post('/settings', authenticateJwt, requireModulePermission('settings', 'e
 /* ==========================================================================
    12. SUBJECT MANAGEMENT (M12 SUB)
    ========================================================================== */
-router.get('/subjects', authenticateJwt, requireModulePermission('batches', 'view_only'), async (req, res) => {
-  try {
-    const subjects = await prisma.subject.findMany({ orderBy: { name: 'asc' } });
-    return sendSuccess(res, subjects);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/subjects', authenticateJwt, requireModulePermission('batches', 'view_only'), getSubjectCatalog);
 
 router.post('/subjects', authenticateJwt, requireModulePermission('batches', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
@@ -3049,41 +3065,7 @@ router.put('/subjects/:id', authenticateJwt, requireModulePermission('batches', 
   }
 });
 
-router.delete('/subjects/:id', authenticateJwt, requireModulePermission('batches', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    
-    // 1. Cascade delete all test marks linked to tests for this subject
-    const subjectTests = await prisma.test.findMany({ where: { subject_id: id }, select: { id: true } });
-    if (subjectTests.length > 0) {
-      const testIds = subjectTests.map(t => t.id);
-      await prisma.testMark.deleteMany({ where: { test_id: { in: testIds } } });
-    }
-
-    // 2. Cascade delete tests for this subject
-    await prisma.test.deleteMany({ where: { subject_id: id } });
-
-    // 3. Cascade delete homework entries for this subject
-    await prisma.homework.deleteMany({ where: { subject_id: id } });
-
-    // 4. Cascade delete study materials for this subject
-    await prisma.studyMaterial.deleteMany({ where: { subject_id: id } });
-
-    // 5. Cascade delete batch-subject mappings
-    await prisma.batchSubject.deleteMany({ where: { subject_id: id } });
-
-    // 6. Delete the subject itself
-    await prisma.subject.delete({ where: { id } });
-
-    if (req.user) {
-      await createAuditLog(req.user.userId, 'DELETE_SUBJECT', 'Subject', id);
-    }
-
-    return sendSuccess(res, { deleted: true, id });
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.delete('/subjects/:id', authenticateJwt, requireModulePermission('batches', 'editable'), deleteSubjectSafe);
 
 /* ==========================================================================
    13. BATCH-SUBJECT ASSIGNMENTS (M13 BSA)
@@ -3234,30 +3216,7 @@ router.post('/leaves', authenticateJwt, requireModulePermission('attendance', 'e
   }
 });
 
-router.put('/leaves/:id', authenticateJwt, requireModulePermission('attendance', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const leave = await prisma.leave.update({
-      where: { id },
-      data: {
-        status,
-        decided_by: req.user?.userId || 'admin',
-        decided_at: new Date()
-      },
-      include: { student: true }
-    });
-
-    if (req.user) {
-      await createAuditLog(req.user.userId, 'UPDATE_LEAVE_STATUS', 'Leave', id, { status });
-    }
-
-    return sendSuccess(res, leave);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.put('/leaves/:id', authenticateJwt, requireModulePermission('attendance', 'editable'), decideLeave);
 
 /* ==========================================================================
    17. BULK CLASS PROMOTION & TRANSFER (M17 PRM)
@@ -3340,29 +3299,14 @@ router.post('/students/transfer', authenticateJwt, requireModulePermission('stud
 /* ==========================================================================
    18. FACULTY OPERATIONS & SUBSTITUTION (M18 SUB)
    ========================================================================== */
-router.post('/batches/:id/substitute', authenticateJwt, requireModulePermission('timetable', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    const { substituteTeacherId, substituteName, date, reason } = req.body;
-
-    const key = `substitute_batch_${id}`;
-    const record = { substituteTeacherId, substituteName, date, reason, assignedAt: new Date() };
-
-    await prisma.appSetting.upsert({
-      where: { key },
-      update: { value: JSON.stringify(record) },
-      create: { key, value: JSON.stringify(record) }
-    });
-
-    if (req.user) {
-      await createAuditLog(req.user.userId, 'ASSIGN_SUBSTITUTE_TEACHER', 'Batch', id, { substituteName, date });
-    }
-
-    return sendSuccess(res, record);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/batches/:id/waitlist', authenticateJwt, requireModulePermission('batches', 'view_only'), getBatchWaitlist);
+router.post('/batches/:id/waitlist', authenticateJwt, requireModulePermission('batches', 'editable'), addBatchWaitlist);
+router.post('/batches/:id/waitlist/promote', authenticateJwt, requireModulePermission('batches', 'editable'), promoteWaitlist);
+router.delete('/batches/:id/waitlist/:studentId', authenticateJwt, requireModulePermission('batches', 'editable'), removeWaitlist);
+router.post('/batches/:id/archive', authenticateJwt, requireModulePermission('batches', 'editable'), archiveBatch);
+router.get('/batches/:id/substitutes', authenticateJwt, requireModulePermission('timetable', 'view_only'), listSubstitutes);
+router.post('/batches/:id/substitute', authenticateJwt, requireModulePermission('timetable', 'editable'), createSubstitute);
+router.post('/timetable/copy-day', authenticateJwt, requireModulePermission('timetable', 'editable'), copyTimetableDay);
 
 router.post('/batches/:id/co-teacher', authenticateJwt, requireModulePermission('timetable', 'editable'), async (req: AuthenticatedRequest, res) => {
   try {
@@ -3624,42 +3568,8 @@ router.post('/batches/:id/diaries', authenticateJwt, requireModulePermission('ho
   }
 });
 
-router.get('/homework/:id/submissions', authenticateJwt, requireModulePermission('homework', 'view_only'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const key = `hw_submissions_${id}`;
-    const setting = await prisma.appSetting.findUnique({ where: { key } });
-    const subs = setting && setting.value ? JSON.parse(setting.value) : [];
-    return sendSuccess(res, subs);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
-
-router.post('/homework/:id/submissions', authenticateJwt, requireModulePermission('homework', 'editable'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    const { studentId, status, remarks } = req.body;
-
-    const key = `hw_submissions_${id}`;
-    const existingSetting = await prisma.appSetting.findUnique({ where: { key } });
-    const existing = existingSetting && existingSetting.value ? JSON.parse(existingSetting.value) : [];
-
-    const subRecord = { studentId, status: status || 'submitted', remarks: remarks || '', submittedAt: new Date() };
-    const filtered = existing.filter((s: any) => s.studentId !== studentId);
-    const updated = [subRecord, ...filtered];
-
-    await prisma.appSetting.upsert({
-      where: { key },
-      update: { value: JSON.stringify(updated) },
-      create: { key, value: JSON.stringify(updated) }
-    });
-
-    return sendSuccess(res, subRecord);
-  } catch (err: any) {
-    return sendError(res, err.message, 500);
-  }
-});
+router.get('/homework/:id/submissions', authenticateJwt, requireModulePermission('homework', 'view_only'), getHomeworkRoster);
+router.post('/homework/:id/submissions', authenticateJwt, requireModulePermission('homework', 'editable'), saveHomeworkRoster);
 
 import { createConductLogSchema, updateConductLogSchema } from './validations/conductLogValidation';
 import { canModifyConductLog, canViewConductLog } from './common/auth';
@@ -3667,6 +3577,8 @@ import { canModifyConductLog, canViewConductLog } from './common/auth';
 /* ==========================================================================
    22. STUDENT CONDUCT & BEHAVIOR LOGS MODULE (M16 RBAC)
    ========================================================================== */
+
+router.get('/conduct-logs', authenticateJwt, requireModulePermission('students', 'view_only'), listConductDesk);
 
 // GET /students/:studentId/conduct-logs
 router.get('/students/:studentId/conduct-logs', authenticateJwt, requireModulePermission('students', 'view_only'), async (req: AuthenticatedRequest, res) => {
@@ -4042,6 +3954,49 @@ router.post('/students/:studentId/reset-parent-password', authenticateJwt, async
       phone: parentUser.phone || student.phone,
       newPassword: finalPassword
     });
+  } catch (err: any) {
+    return sendError(res, err.message, 500);
+  }
+});
+
+router.get('/notifications', authenticateJwt, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, 'Unauthorized', 401);
+    const rows = await prisma.notification.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: 50
+    });
+    return sendSuccess(res, rows);
+  } catch (err: any) {
+    return sendError(res, err.message, 500);
+  }
+});
+
+router.post('/notifications/:id/read', authenticateJwt, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, 'Unauthorized', 401);
+    const row = await prisma.notification.updateMany({
+      where: { id: req.params.id, user_id: userId },
+      data: { is_read: true }
+    });
+    return sendSuccess(res, { updated: row.count });
+  } catch (err: any) {
+    return sendError(res, err.message, 500);
+  }
+});
+
+router.post('/notifications/read-all', authenticateJwt, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, 'Unauthorized', 401);
+    const row = await prisma.notification.updateMany({
+      where: { user_id: userId, is_read: false },
+      data: { is_read: true }
+    });
+    return sendSuccess(res, { updated: row.count });
   } catch (err: any) {
     return sendError(res, err.message, 500);
   }

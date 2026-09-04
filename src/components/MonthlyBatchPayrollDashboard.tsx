@@ -18,22 +18,25 @@ import {
   Receipt
 } from 'lucide-react';
 import { ModernSelect, ModernSelectOption } from './ModernSelect';
-import { MonthlyPayrollItem, PayrollBatch, StaffMember, StaffSalaryStructure } from '../types';
+import { MonthlyPayrollItem, PayrollBatch, StaffMember, StaffSalaryStructure, SalaryHead } from '../types';
 import { api } from '../api/apiClient';
 import { exportToCSV } from '../utils/csvExporter';
 import { formatCurrencyPKR } from '../utils/payrollUiUtils';
 import { SalaryDisbursementModal } from './SalaryDisbursementModal';
 import { DigitalPayslipModal } from './DigitalPayslipModal';
 import { StaffSalaryStructureModal } from './StaffSalaryStructureModal';
-import { PayrollRulesModal, PayrollDeductionPolicy, DEFAULT_PAYROLL_POLICY } from './PayrollRulesModal';
-import { Sliders, Sparkles } from 'lucide-react';
+import { StaffAdjustmentModal } from './StaffAdjustmentModal';
 
 interface MonthlyBatchPayrollDashboardProps {
   onNavigateToStructures?: () => void;
+  onOpenTagManager?: () => void;
+  availableHeads?: SalaryHead[];
 }
 
 export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboardProps> = ({
-  onNavigateToStructures
+  onNavigateToStructures,
+  onOpenTagManager,
+  availableHeads
 }) => {
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
@@ -59,50 +62,24 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
   const [selectedPayslipForDisburse, setSelectedPayslipForDisburse] = useState<MonthlyPayrollItem | null>(null);
   const [selectedPayslipForView, setSelectedPayslipForView] = useState<MonthlyPayrollItem | null>(null);
   const [selectedStaffForStructure, setSelectedStaffForStructure] = useState<StaffMember | null>(null);
-  const [isRulesModalOpen, setIsRulesModalOpen] = useState<boolean>(false);
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState<boolean>(false);
+  const [selectedStaffForAdjustment, setSelectedStaffForAdjustment] = useState<string | null>(null);
 
-  // Persistent deduction policy
-  const [deductionPolicy, setDeductionPolicy] = useState<PayrollDeductionPolicy>(() => {
+  const handleSaveAdjustment = async (adjData: any) => {
     try {
-      const saved = localStorage.getItem('payroll_deduction_policy');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return DEFAULT_PAYROLL_POLICY;
-  });
-
-  const handleSavePolicy = async (newPolicy: PayrollDeductionPolicy) => {
-    setDeductionPolicy(newPolicy);
-    try {
-      localStorage.setItem('payroll_deduction_policy', JSON.stringify(newPolicy));
-    } catch {}
-
-    setFeedbackMsg({
-      type: 'success',
-      text: 'AI payroll policy applied. Recalculating compensation packages...'
-    });
-
-    const [yStr, mStr] = selectedPeriod.split('-');
-    const year = parseInt(yStr, 10);
-    const month = parseInt(mStr, 10);
-
-    try {
-      const result = await api.generateMonthlyPayrollBatch({
-        year,
-        month,
-        period: selectedPeriod,
-        notes: `Payroll batch updated with AI policy: ${newPolicy.policyName || 'Custom'}`,
-        rules: newPolicy
-      } as any);
-
-      if (result && result.payslips) {
-        setPayslips(result.payslips);
-        setFeedbackMsg({
-          type: 'success',
-          text: `Applied policy & computed ${result.payslips.length} compensation packages for ${selectedPeriod}.`
-        });
-      }
+      await api.createSalaryAdjustment(adjData);
+      setFeedbackMsg({
+        type: 'success',
+        text: `Applied ${adjData.category} (${formatCurrencyPKR(adjData.unit_amount * adjData.quantity)}) to salary.`
+      });
+      // Automatically refresh batch so salary updates immediately
+      handleGenerateBatch();
     } catch (err: any) {
-      console.warn('Recalculation sync:', err);
+      console.warn('Error saving adjustment:', err);
+      setFeedbackMsg({
+        type: 'error',
+        text: 'Failed to apply adjustment. Please try again.'
+      });
     }
   };
 
@@ -178,30 +155,7 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
       const tax = Math.round(base * 0.05);
       const pf = Math.round(base * 0.03);
 
-      let staffCut = 0;
-      const sFullName = (s.full_name || s.fullName || '').toLowerCase();
-      const sCode = (s.staff_id || s.staffId || '').toLowerCase();
-      if (deductionPolicy?.staffAdjustments) {
-        for (const adj of deductionPolicy.staffAdjustments) {
-          const tName = (adj.staffName || '').toLowerCase().trim();
-          if (tName && (sFullName.includes(tName) || tName.includes(sFullName) || sCode.includes(tName))) {
-            if (adj.type === 'deduction_percentage') {
-              staffCut += Math.round((base * (adj.value || 50)) / 100);
-            } else if (adj.type === 'deduction_fixed') {
-              staffCut += (adj.value || 0);
-            }
-          }
-        }
-      }
-      if (staffCut === 0 && deductionPolicy?.rawPolicyText) {
-        const rawL = deductionPolicy.rawPolicyText.toLowerCase();
-        const fWord = sFullName.split(' ')[0];
-        if (fWord && (rawL.includes(`cut half salary of ${fWord}`) || rawL.includes(`half salary of ${fWord}`) || rawL.includes(`cut half of ${fWord}`) || rawL.includes(`half ${fWord}`))) {
-          staffCut += Math.round(base * 0.5);
-        }
-      }
-
-      const statutory = tax + pf + staffCut;
+      const statutory = tax + pf;
       const attDed = 0;
       const net = Math.max(0, gross - (attDed + statutory));
 
@@ -224,7 +178,7 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
         created_at: new Date().toISOString()
       } as any;
     });
-  }, [payslips, staffList, selectedPeriod, deductionPolicy]);
+  }, [payslips, staffList, selectedPeriod]);
 
   // Monthly Batch Payroll Generation (0ms Instant Optimistic + Silent Background Sync)
   const handleGenerateBatch = async () => {
@@ -235,7 +189,7 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
     const year = parseInt(yStr, 10);
     const month = parseInt(mStr, 10);
 
-    // 1. Compute instant local optimistic payslips using active rules
+    // 1. Compute instant local optimistic payslips
     const optimisticSlips: MonthlyPayrollItem[] = staffList.map((s, idx) => {
       const roleStr = s.role || s.staffType?.name || 'Faculty';
       const defaultBase = roleStr === 'Admin' ? 45000 : roleStr.toLowerCase().includes('domestic') ? 28000 : 65000;
@@ -246,36 +200,12 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
       const gross = base + hra + med + conv;
       const tax = Math.round(base * 0.05);
       const pf = Math.round(base * 0.03);
-
-      let staffCut = 0;
-      const sFullName = (s.full_name || s.fullName || '').toLowerCase();
-      const sCode = (s.staff_id || s.staffId || '').toLowerCase();
-      if (deductionPolicy?.staffAdjustments) {
-        for (const adj of deductionPolicy.staffAdjustments) {
-          const tName = (adj.staffName || '').toLowerCase().trim();
-          if (tName && (sFullName.includes(tName) || tName.includes(sFullName) || sCode.includes(tName))) {
-            if (adj.type === 'deduction_percentage') {
-              staffCut += Math.round((base * (adj.value || 50)) / 100);
-            } else if (adj.type === 'deduction_fixed') {
-              staffCut += (adj.value || 0);
-            }
-          }
-        }
-      }
-      if (staffCut === 0 && deductionPolicy?.rawPolicyText) {
-        const rawL = deductionPolicy.rawPolicyText.toLowerCase();
-        const fWord = sFullName.split(' ')[0];
-        if (fWord && (rawL.includes(`cut half salary of ${fWord}`) || rawL.includes(`half salary of ${fWord}`) || rawL.includes(`cut half of ${fWord}`) || rawL.includes(`half ${fWord}`))) {
-          staffCut += Math.round(base * 0.5);
-        }
-      }
-
-      const statutory = tax + pf + staffCut;
+      const statutory = tax + pf;
       const attDed = 0;
       const net = Math.max(0, gross - (attDed + statutory));
 
       return {
-        id: `opt-slip-${s.id}-${selectedPeriod}`,
+        id: `local-${s.id}-${selectedPeriod}`,
         staff_member_id: s.id,
         staffMember: s,
         period: selectedPeriod,
@@ -289,33 +219,40 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
         provident_fund: pf,
         net_payable: net,
         status: 'pending',
-        payslip_number: `PAY-${selectedPeriod}-${String(idx + 1).padStart(3, '0')}`,
+        payslip_number: `SLIP-${selectedPeriod}-${String(idx + 1).padStart(3, '0')}`,
         created_at: new Date().toISOString()
       } as any;
     });
 
     setPayslips(optimisticSlips);
-    setFeedbackMsg({
-      type: 'success',
-      text: `Processed monthly payroll for ${selectedPeriod} (${optimisticSlips.length} staff compensation packages computed with active deduction rules).`
-    });
 
-    // 2. Silent background API sync with rules
+    // 2. Silent backend sync with database persistence & multiplier adjustments
     try {
       const result = await api.generateMonthlyPayrollBatch({
         year,
         month,
         period: selectedPeriod,
-        notes: `Payroll batch computed for cycle ${selectedPeriod}`,
-        rules: deductionPolicy
+        notes: `Payroll batch generated for ${selectedPeriod}`
       } as any);
 
-      if (result && result.payslips) {
-        setActiveBatch(result.batch);
-        setPayslips(result.payslips);
+      if (result) {
+        if (result.payslips && result.payslips.length > 0) {
+          setPayslips(result.payslips);
+        }
+        if (result.batch) {
+          setActiveBatch(result.batch);
+        }
+        setFeedbackMsg({
+          type: 'success',
+          text: `Processed compensation packages for ${result.payslips?.length || optimisticSlips.length} staff members with recorded adjustments.`
+        });
       }
     } catch (err: any) {
-      console.warn('Backend batch sync noted (local optimistic active):', err);
+      console.warn('Batch generation sync:', err);
+      setFeedbackMsg({
+        type: 'error',
+        text: 'Sync issue with backend. Please refresh or check connection.'
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -382,6 +319,16 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
       const pf = p.provident_fund ?? p.providentFund ?? 0;
       const net = p.net_payable ?? p.netPayable ?? Math.max(0, gross - (attDed + tax + pf));
 
+      let customDedSummary = '';
+      if (p.custom_deductions_json) {
+        try {
+          const parsed = JSON.parse(p.custom_deductions_json);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            customDedSummary = parsed.map((i: any) => `${i.label || i.tag}: ${i.amount} (${i.reason || 'N/A'})`).join('; ');
+          }
+        } catch {}
+      }
+
       return {
         Period: selectedPeriod,
         StaffID: staffCode,
@@ -393,6 +340,8 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
         AttendanceDeductions: attDed,
         IncomeTax: tax,
         ProvidentFund: pf,
+        CustomDeductions: p.other_deductions ?? (p as any).otherDeductions ?? 0,
+        ItemizedAdjustmentsBreakdown: customDedSummary || 'None',
         NetPayable: net,
         Status: (p.status || 'pending').toUpperCase(),
         PayslipNumber: p.payslip_number || (p as any).payslipNumber || 'N/A'
@@ -608,7 +557,10 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
           <button 
             type="button" 
             className="btn-secondary" 
-            onClick={() => setIsRulesModalOpen(true)}
+            onClick={() => {
+              setSelectedStaffForAdjustment(null);
+              setIsAdjustmentModalOpen(true);
+            }}
             style={{
               height: 35,
               fontSize: 12,
@@ -617,15 +569,15 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: '#FFFFFF',
-              border: '1.5px solid #CBD5E1',
-              color: '#0F172A',
+              background: '#0F172A',
+              border: 'none',
+              color: '#FFFFFF',
               cursor: 'pointer'
             }}
-            title="AI Payroll Policy & Custom Rule Engine (Cloudflare Workers AI)"
+            title="Add Staff Salary Deduction or Earning (Amount × Count)"
           >
-            <Sparkles size={13} color="#2563EB" />
-            <span>AI Policy & Rules</span>
+            <TrendingDown size={13} color="#EF4444" />
+            <span>Add Deduction / Earning</span>
           </button>
 
           <button 
@@ -664,6 +616,8 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
         </div>
       </div>
 
+
+
       {/* Itemized Payroll Batch Register Table (Responsive Zero-Overflow Container) */}
       <div style={{ width: '100%', overflowX: 'auto', borderRadius: 14, border: '1.5px solid #E2E8F0', background: '#FFFFFF', boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}>
         <table className="data-table" style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
@@ -694,9 +648,10 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
                 const gross = payslip.gross_salary ?? payslip.grossSalary ?? (base + allowances);
                 const attDed = payslip.attendance_deduction_amount ?? payslip.attendance_deduction ?? payslip.attendanceDeduction ?? 0;
                 const unexcusedDays = payslip.unexcused_absences || (payslip as any).days_absent || 0;
+                const other = payslip.other_deductions ?? (payslip as any).otherDeductions ?? 0;
                 const tax = payslip.tax_deduction ?? payslip.taxDeduction ?? 0;
                 const pf = payslip.provident_fund ?? payslip.providentFund ?? 0;
-                const statutory = tax + pf + (payslip.other_deductions || payslip.otherDeductions || 0);
+                const statutory = tax + pf + other;
                 const net = payslip.net_payable ?? payslip.netPayable ?? payslip.amount ?? Math.max(0, gross - (attDed + statutory));
                 const isPaid = (payslip.status || '').toLowerCase() === 'paid';
 
@@ -751,20 +706,23 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
                     </td>
 
                     <td>
-                      {attDed > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {attDed > 0 && (
                           <span style={{ fontWeight: 500, color: '#DC2626', fontSize: 12 }}>
-                            -{formatCurrencyPKR(attDed)}
+                            -{formatCurrencyPKR(attDed)} ({unexcusedDays}d att)
                           </span>
-                          <span style={{ fontSize: 10.5, color: '#DC2626', fontWeight: 500 }}>
-                            {unexcusedDays}d unexcused
+                        )}
+                        {other > 0 && (
+                          <span style={{ fontWeight: 700, color: '#DC2626', fontSize: 12 }}>
+                            -{formatCurrencyPKR(other)} (Adjustments)
                           </span>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: 11.5, color: '#16A34A', fontWeight: 500 }}>
-                          No Deductions
-                        </span>
-                      )}
+                        )}
+                        {attDed === 0 && other === 0 && (
+                          <span style={{ fontSize: 11.5, color: '#16A34A', fontWeight: 500 }}>
+                            No Deductions
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td>
@@ -798,6 +756,21 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
 
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                        {!isPaid && (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => {
+                              setSelectedStaffForAdjustment(payslip.staff_member_id);
+                              setIsAdjustmentModalOpen(true);
+                            }}
+                            style={{ height: 28, fontSize: 11.5, padding: '0 8px', borderRadius: 6, color: '#DC2626', borderColor: '#FECACA' }}
+                            title="Add Salary Deduction or Earning (Amount × Count)"
+                          >
+                            <TrendingDown size={12} /> Adjust
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           className="btn-secondary"
@@ -850,7 +823,7 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
                       No payroll records for cycle {selectedPeriod}
                     </span>
                     <span style={{ fontSize: 12, color: '#64748B' }}>
-                      Click <strong>"Process Monthly Payroll"</strong> above to compute compensation packages and attendance deductions.
+                      Click "Generate Monthly Batch" to compute salary packages and apply any recorded adjustments.
                     </span>
                   </div>
                 </td>
@@ -860,15 +833,15 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
         </table>
       </div>
 
-      {/* Modals */}
+      {/* Salary Disbursement Modal */}
       {selectedPayslipForDisburse && (
         <SalaryDisbursementModal
           isOpen={!!selectedPayslipForDisburse}
           onClose={() => setSelectedPayslipForDisburse(null)}
           payslip={selectedPayslipForDisburse}
-          onDisbursed={updated => {
-            setPayslips(prev => prev.map(p => p.id === updated.id ? updated : p));
+          onDisbursed={() => {
             setSelectedPayslipForDisburse(null);
+            handleGenerateBatch();
           }}
         />
       )}
@@ -893,12 +866,18 @@ export const MonthlyBatchPayrollDashboard: React.FC<MonthlyBatchPayrollDashboard
         />
       )}
 
-      {isRulesModalOpen && (
-        <PayrollRulesModal
-          isOpen={isRulesModalOpen}
-          onClose={() => setIsRulesModalOpen(false)}
-          currentPolicy={deductionPolicy}
-          onSavePolicy={handleSavePolicy}
+      {isAdjustmentModalOpen && (
+        <StaffAdjustmentModal
+          isOpen={isAdjustmentModalOpen}
+          onClose={() => {
+            setIsAdjustmentModalOpen(false);
+            setSelectedStaffForAdjustment(null);
+          }}
+          staffList={staffList}
+          initialStaffId={selectedStaffForAdjustment || undefined}
+          initialPeriod={selectedPeriod}
+          availableHeads={availableHeads}
+          onSave={handleSaveAdjustment}
         />
       )}
     </div>

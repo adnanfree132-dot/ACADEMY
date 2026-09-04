@@ -37,24 +37,10 @@ export const LeavingCertificateModal: React.FC<LeavingCertificateModalProps> = (
         setLoading(true);
         const certData = await api.getLeavingCertificate(student.id);
         setData(certData);
+        setError(null);
       } catch (err: any) {
-        // Provide graceful fallback
-        setData({
-          admissionNo: student.regNo,
-          studentName: student.name,
-          parentName: student.parentName || 'Parent / Guardian',
-          phone: student.phone,
-          gradeBatch: student.gradeBatch || 'Standard Section',
-          enrollmentDate: '2024-08-15',
-          leavingDate: student.leavingDate || new Date().toISOString().split('T')[0],
-          reason: student.statusReason || (student.status === 'Graduated' ? 'Graduation' : 'Course Completed'),
-          status: student.status,
-          attendancePercentage: 96,
-          feeStatus: student.dueBalance <= 0 ? 'Cleared' : 'Pending Dues',
-          dueBalance: student.dueBalance || 0,
-          conductRating: 'Exemplary',
-          remarks: student.statusRemarks || 'Student maintained exemplary conduct and successfully completed the institutional term.'
-        });
+        setData(null);
+        setError(err.message || 'Could not load the leaving certificate from the server.');
       } finally {
         setLoading(false);
       }
@@ -208,6 +194,10 @@ export const LeavingCertificateModal: React.FC<LeavingCertificateModalProps> = (
           {loading ? (
             <div style={{ padding: '40px 0', textAlign: 'center', color: '#64748B' }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Generating official certificate...</div>
+            </div>
+          ) : error ? (
+            <div style={{ padding: '28px 0', textAlign: 'center', color: '#B91C1C' }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{error}</div>
             </div>
           ) : data ? (
             <>

@@ -21,11 +21,14 @@ import {
   Search,
   Check
 } from 'lucide-react';
-import { api } from '../api/apiClient';
+import { api, peekApiCache } from '../api/apiClient';
+import { useApiCacheSync } from '../lib/useApiCacheSync';
 import { exportToCSV } from '../utils/csvExporter';
 import { ModernSelect } from '../components/ModernSelect';
 import { ModernDatePicker } from '../components/ModernDatePicker';
 import { MarksheetEntryModal } from '../components/MarksheetEntryModal';
+import { ReportCardModal } from '../components/ReportCardModal';
+import { showToast } from '../lib/toast';
 
 interface ExamsViewProps {
   students: Student[];
@@ -33,10 +36,10 @@ interface ExamsViewProps {
 }
 
 export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batches: propBatches }) => {
-  const [examsList, setExamsList] = useState<any[]>([]);
-  const [batches, setBatches] = useState<Batch[]>(propBatches || []);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [examsList, setExamsList] = useState<any[]>(() => peekApiCache<any[]>('/tests') || []);
+  const [batches, setBatches] = useState<Batch[]>(propBatches || peekApiCache<any[]>('/batches') || []);
+  const [subjects, setSubjects] = useState<Subject[]>(() => peekApiCache<any[]>('/subjects') || []);
+  const [loading, setLoading] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,10 +58,10 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
 
   // Marksheet Entry Modal State
   const [selectedTestForMarks, setSelectedTestForMarks] = useState<any | null>(null);
+  const [reportStudent, setReportStudent] = useState<Student | null>(null);
 
   const fetchInitialData = async () => {
     try {
-      setLoading(true);
       const [testsData, batchesData, subjectsData] = await Promise.all([
         api.getTests().catch(() => []),
         api.getBatches().catch(() => []),
@@ -83,6 +86,7 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
   useEffect(() => {
     fetchInitialData();
   }, []);
+  useApiCacheSync<any[]>('/tests', rows => { if (Array.isArray(rows)) setExamsList(rows); });
 
   // Filtered Assessments
   const filteredExams = examsList.filter(exam => {
@@ -106,14 +110,17 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
 
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle.trim()) return;
+    if (!formTitle.trim() || !formBatchId || !formSubjectId) {
+      showToast('Title, batch, and subject are required.', 'error');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       const newTest = await api.createTest({
         title: formTitle.trim(),
-        batchId: formBatchId || (batches[0]?.id || ''),
-        subjectId: formSubjectId || (subjects[0]?.id || ''),
+        batchId: formBatchId,
+        subjectId: formSubjectId,
         examDate: formExamDate,
         maxMarks: Number(formMaxMarks) || 100,
         passMarks: Number(formPassMarks) || 40
@@ -125,7 +132,6 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
       setFormTitle('');
       setFormMaxMarks('100');
       setFormPassMarks('40');
-      fetchInitialData();
     } catch (err) {
       console.error('Error creating assessment test:', err);
     } finally {
@@ -140,20 +146,21 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
 
     try {
       await api.updateTest(test.id, { isPublished: newStatus });
+      showToast(newStatus ? 'Test published. Marks are locked.' : 'Test unpublished.', 'success');
     } catch (err) {
-      console.error('Error toggling publication status:', err);
+      showToast('Could not change publish state.', 'error');
       fetchInitialData();
     }
   };
 
   const handleDeleteTest = async (testId: string) => {
-    // 0ms Optimistic UI update
+    const test = examsList.find(t => t.id === testId);
+    if (test?.is_published && !window.confirm('This test is published. Delete anyway?')) return;
     setExamsList(prev => prev.filter(t => t.id !== testId));
-
     try {
       await api.deleteTest(testId);
-    } catch (err) {
-      console.error('Error deleting test:', err);
+    } catch (err: any) {
+      showToast(err.message || 'Could not delete test.', 'error');
       fetchInitialData();
     }
   };
@@ -340,6 +347,19 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
                       >
                         <Award size={13} /> Marksheet
                       </button>
+                      <button
+                        className="btn-secondary btn-sm"
+                        onClick={() => {
+                          const pick = students.find(s => s.gradeBatch === exam.batch?.name) || students[0];
+                          if (!pick) {
+                            showToast('No student available for a report card.', 'info');
+                            return;
+                          }
+                          setReportStudent(pick);
+                        }}
+                      >
+                        Report card
+                      </button>
                       <button 
                         className="btn-secondary btn-sm"
                         onClick={() => handleTogglePublish(exam)}
@@ -434,10 +454,12 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
       {selectedTestForMarks && (
         <MarksheetEntryModal
           test={selectedTestForMarks}
-          students={students}
           onClose={() => setSelectedTestForMarks(null)}
           onSaved={fetchInitialData}
         />
+      )}
+      {reportStudent && (
+        <ReportCardModal student={reportStudent} onClose={() => setReportStudent(null)} />
       )}
 
       {/* 4-Island Floating Architecture: Create Assessment Test Modal */}

@@ -24,19 +24,13 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
     });
   }, [student]);
 
-  const academyName = settings.academyName || 'Academia Pro OS Model Campus';
-  const principalName = settings.principalName || 'Prof. Dr. S. A. Khan';
-  const session = reportCardData?.academicSession || settings.academicSession || 'Session 2026-2027';
+  const academyName = settings.academyName || 'Academy';
+  const principalName = settings.principalName || '';
+  const session = reportCardData?.academicSession || settings.academicSession || '';
 
-  // Extract or fallback dynamic subject marks
   const subjects = (reportCardData?.subjects && reportCardData.subjects.length > 0)
     ? reportCardData.subjects
-    : [
-        { subjectName: 'Mathematics', totalMax: 100, obtainedMarks: 88, percentage: 88.0, grade: 'A', performanceLabel: 'Excellent', isPass: true, remarks: 'Strong analytical reasoning' },
-        { subjectName: 'Physics', totalMax: 100, obtainedMarks: 92, percentage: 92.0, grade: 'A+', performanceLabel: 'Outstanding', isPass: true, remarks: 'Exceptional mastery in mechanics' },
-        { subjectName: 'Chemistry', totalMax: 100, obtainedMarks: 81, percentage: 81.0, grade: 'A', performanceLabel: 'Excellent', isPass: true, remarks: 'Consistent lab performance' },
-        { subjectName: 'English Comp', totalMax: 100, obtainedMarks: 85, percentage: 85.0, grade: 'A', performanceLabel: 'Excellent', isPass: true, remarks: 'Articulate expression' }
-      ];
+    : [];
 
   const cumulativeMax = reportCardData?.summary?.cumulativeMax ?? subjects.reduce((sum: number, s: any) => sum + (s.totalMax || 100), 0);
   const cumulativeObtained = reportCardData?.summary?.cumulativeObtained ?? subjects.reduce((sum: number, s: any) => sum + (s.obtainedMarks || 0), 0);
@@ -45,9 +39,9 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
   const standingLabel = reportCardData?.summary?.performanceEvaluation || (Number(overallPercentage) >= 80 ? 'Honors / Distinction' : 'Merit Standing');
   const promotionStatus = reportCardData?.summary?.status || (Number(overallPercentage) >= 50 ? 'Promoted' : 'Conditional');
 
-  const attendanceRate = reportCardData?.attendance?.attendancePercentage ?? 94.5;
-  const presentDays = reportCardData?.attendance?.presentDays ?? 26;
-  const totalDays = reportCardData?.attendance?.totalDays ?? 28;
+  const attendanceRate = reportCardData?.attendance?.attendancePercentage;
+  const presentDays = reportCardData?.attendance?.presentDays;
+  const totalDays = reportCardData?.attendance?.totalDays;
 
   const handlePrint = () => {
     window.print();
@@ -232,7 +226,7 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
             <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Attendance Rate</span>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#15803D', marginTop: 2 }}>{attendanceRate}% ({presentDays}/{totalDays}d)</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#15803D', marginTop: 2 }}>{attendanceRate != null && totalDays ? `${attendanceRate}% (${presentDays}/${totalDays}d)` : '—'}</div>
             </div>
             <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#1E40AF', textTransform: 'uppercase' }}>Academic Standing</span>

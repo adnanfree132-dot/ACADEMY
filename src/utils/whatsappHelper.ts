@@ -15,17 +15,17 @@ export const DEFAULT_WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
   {
     code: 'WA_FEE_REMINDER',
     name: 'Monthly Fee Due Reminder',
-    body: 'Dear {parent_name}, {student_name} fee for {month} = ${amount}, due {due_date}. Please pay on time. – {academy_name}'
+    body: 'Dear {parent_name}, {student_name} fee for {month} = {currency} {amount}, due {due_date}. Please pay on time. – {academy_name}'
   },
   {
     code: 'WA_DEFAULTER',
     name: 'Overdue Fee Defaulter Alert',
-    body: 'Dear {parent_name}, {student_name} fee is {days_overdue} days overdue. Outstanding balance ${balance}. Please clear immediately. – {academy_name}'
+    body: 'Dear {parent_name}, {student_name} fee is {days_overdue} days overdue. Outstanding {currency} {balance}. Please clear immediately. – {academy_name}'
   },
   {
     code: 'WA_RECEIPT',
     name: 'Payment Receipt Confirmation',
-    body: 'Payment received: ${amount} ({method}) for {student_name}. Receipt No: {receipt_no}. Remaining balance: ${balance}. – {academy_name}'
+    body: 'Payment received: {currency} {amount} ({method}) for {student_name}. Receipt No: {receipt_no}. Remaining: {currency} {balance}. – {academy_name}'
   },
   {
     code: 'WA_ABSENT',

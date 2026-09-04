@@ -25,22 +25,79 @@ interface AttendanceViewProps {
 export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batches }) => {
   const [portalTab, setPortalTab] = useState<'students' | 'staff'>('students');
   const [selectedBatchId, setSelectedBatchId] = useState(batches[0]?.id || 'b1');
-  const [selectedDate, setSelectedDate] = useState('2026-08-25');
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [saveMessage, setSaveMessage] = useState('');
-  
-  const currentBatch = batches.find(b => b.id === selectedBatchId) || batches[0];
-  const batchStudents = students;
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
 
-  const [attendanceState, setAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'>>({
-    s1: 'Present',
-    s2: 'Present',
-    s3: 'Present',
-    s4: 'Absent',
-    s5: 'Present'
-  });
+  const currentBatch = batches.find(b => b.id === selectedBatchId) || batches[0];
+  
+  // Filter students by assigned batch, falling back to all students if no direct match
+  const batchStudents = React.useMemo(() => {
+    if (!currentBatch) return students;
+    const filtered = students.filter(s => {
+      const gb = (s.gradeBatch || '').toLowerCase();
+      const bn = (currentBatch.name || '').toLowerCase();
+      const cl = (currentBatch.classLevel || '').toLowerCase();
+      return gb === bn || gb === cl || gb.includes(bn) || bn.includes(gb);
+    });
+    return filtered.length > 0 ? filtered : students;
+  }, [students, currentBatch]);
+
+  const [attendanceState, setAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'>>({});
+
+  // Sync attendance with backend database whenever batch or date changes
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadAttendance = async () => {
+      if (!selectedBatchId || !selectedDate) return;
+      setIsLoadingAttendance(true);
+      try {
+        const records = await api.getAttendance({ batchId: selectedBatchId, date: selectedDate });
+        if (!isMounted) return;
+        const stateMap: Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'> = {};
+        if (Array.isArray(records) && records.length > 0) {
+          records.forEach((r: any) => {
+            const sId = r.student_id || r.studentId;
+            const rawSt = (r.status || 'present').toLowerCase();
+            let capSt: 'Present' | 'Absent' | 'Late' | 'Leave' = 'Present';
+            if (rawSt === 'absent') capSt = 'Absent';
+            else if (rawSt === 'late') capSt = 'Late';
+            else if (rawSt === 'leave' || rawSt === 'excused') capSt = 'Leave';
+            stateMap[sId] = capSt;
+          });
+        }
+        batchStudents.forEach(s => {
+          if (!stateMap[s.id]) {
+            stateMap[s.id] = 'Present';
+          }
+        });
+        setAttendanceState(stateMap);
+      } catch (err) {
+        console.warn('Could not load attendance from API, defaulting to Present:', err);
+        if (isMounted) {
+          const fallbackMap: Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'> = {};
+          batchStudents.forEach(s => { fallbackMap[s.id] = 'Present'; });
+          setAttendanceState(fallbackMap);
+        }
+      } finally {
+        if (isMounted) setIsLoadingAttendance(false);
+      }
+    };
+
+    loadAttendance();
+    return () => { isMounted = false; };
+  }, [selectedBatchId, selectedDate, batchStudents]);
 
   const toggleStatus = (studentId: string, status: 'Present' | 'Absent' | 'Late' | 'Leave') => {
     setAttendanceState(prev => ({ ...prev, [studentId]: status }));
+  };
+
+  const markAll = (status: 'Present' | 'Absent' | 'Late' | 'Leave') => {
+    const nextMap: Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'> = {};
+    batchStudents.forEach(s => {
+      nextMap[s.id] = status;
+    });
+    setAttendanceState(nextMap);
   };
 
   const handleSave = () => {
@@ -50,7 +107,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
     }));
 
     setSaveMessage(`Attendance saved successfully for ${currentBatch?.name || 'Selected Batch'} on ${selectedDate}.`);
-    setTimeout(() => setSaveMessage(''), 3000);
+    setTimeout(() => setSaveMessage(''), 3500);
 
     api.markAttendanceBulk({
       batchId: selectedBatchId,
@@ -179,7 +236,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
           )}
 
           {/* Batch & Date Picker */}
-          <div style={{ display: 'flex', gap: 12, background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1.5px solid #E2E8F0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1.5px solid #E2E8F0', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 220 }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Select Batch / Class Section</label>
               <ModernSelect
@@ -196,6 +253,78 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                 value={selectedDate}
                 onChange={setSelectedDate}
               />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => markAll('Present')}
+                style={{ height: 38, borderRadius: 10, fontSize: 12, fontWeight: 700 }}
+              >
+                <Check size={14} color="#16A34A" /> All Present
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => markAll('Absent')}
+                style={{ height: 38, borderRadius: 10, fontSize: 12, fontWeight: 700 }}
+              >
+                <X size={14} color="#DC2626" /> All Absent
+              </button>
+            </div>
+          </div>
+
+          {/* Real-Time Metrics Strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Enrolled</span>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{batchStudents.length}</div>
+              </div>
+              <Users size={20} color="#64748B" />
+            </div>
+
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#166534', fontWeight: 600 }}>Present</span>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#15803D' }}>
+                  {batchStudents.filter(s => (attendanceState[s.id] || 'Present') === 'Present').length}
+                </div>
+              </div>
+              <Check size={20} color="#15803D" />
+            </div>
+
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#991B1B', fontWeight: 600 }}>Absent</span>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#DC2626' }}>
+                  {batchStudents.filter(s => (attendanceState[s.id] || 'Present') === 'Absent').length}
+                </div>
+              </div>
+              <X size={20} color="#DC2626" />
+            </div>
+
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>Late</span>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#D97706' }}>
+                  {batchStudents.filter(s => (attendanceState[s.id] || 'Present') === 'Late').length}
+                </div>
+              </div>
+              <Clock size={20} color="#D97706" />
+            </div>
+
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#1E40AF', fontWeight: 600 }}>Attendance</span>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#2563EB' }}>
+                  {batchStudents.length > 0
+                    ? `${Math.round((batchStudents.filter(s => (attendanceState[s.id] || 'Present') === 'Present').length / batchStudents.length) * 100)}%`
+                    : '0%'}
+                </div>
+              </div>
+              <GraduationCap size={20} color="#2563EB" />
             </div>
           </div>
 

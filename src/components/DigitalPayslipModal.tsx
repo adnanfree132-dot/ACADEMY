@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
   X, 
@@ -20,7 +20,7 @@ import { api } from '../api/apiClient';
 import { 
   formatCurrencyPKR, 
   numberToCurrencyWords, 
-  buildWhatsAppSalaryAdvice 
+  buildWhatsAppSalaryAdvice
 } from '../utils/payrollUiUtils';
 
 interface DigitalPayslipModalProps {
@@ -58,6 +58,31 @@ export const DigitalPayslipModal: React.FC<DigitalPayslipModalProps> = ({
   }, [payslipId, initialPayslip]);
 
   const p = payslipData || initialPayslip || {};
+
+  // Parse itemized reason-backed line items (Spec 012 - User Story 3)
+  const itemizedDeductions: any[] = useMemo(() => {
+    if (Array.isArray(p.custom_deductions)) return p.custom_deductions;
+    if (Array.isArray(p.customDeductions)) return p.customDeductions;
+    if (p.custom_deductions_json) {
+      try {
+        const parsed = JSON.parse(p.custom_deductions_json);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  }, [p]);
+
+  const itemizedEarnings: any[] = useMemo(() => {
+    if (Array.isArray(p.custom_earnings)) return p.custom_earnings;
+    if (Array.isArray(p.customEarnings)) return p.customEarnings;
+    if (p.custom_earnings_json) {
+      try {
+        const parsed = JSON.parse(p.custom_earnings_json);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  }, [p]);
 
   const staffName = p.staffMember?.full_name || p.staffMember?.fullName || p.staff_name || p.fullName || 'Staff Member';
   const staffCode = p.staffMember?.staff_id || p.staffMember?.staffId || p.staff_id || p.staffCode || 'STAFF';
@@ -495,43 +520,58 @@ export const DigitalPayslipModal: React.FC<DigitalPayslipModalProps> = ({
                   <strong style={{ color: '#0F172A' }}>{formatCurrencyPKR(basePay)}</strong>
                 </div>
 
-                {Array.isArray(p.custom_earnings || p.customEarnings) && (p.custom_earnings || p.customEarnings).length > 0 ? (
-                  (p.custom_earnings || p.customEarnings).map((item: any) => (
-                    <div key={item.id || item.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{item.name}</span>
-                      <strong>{formatCurrencyPKR(item.amount || 0)}</strong>
+                {hra > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>House Rent Allowance (HRA)</span>
+                    <strong>{formatCurrencyPKR(hra)}</strong>
+                  </div>
+                )}
+
+                {med > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Medical Allowance</span>
+                    <strong>{formatCurrencyPKR(med)}</strong>
+                  </div>
+                )}
+
+                {conv > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Conveyance Allowance</span>
+                    <strong>{formatCurrencyPKR(conv)}</strong>
+                  </div>
+                )}
+
+                {/* Reason-Backed Itemized Earnings / Allowances */}
+                {itemizedEarnings.length > 0 ? (
+                  itemizedEarnings.map((item: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <span style={{ fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          {item.label || item.name || 'Special Allowance'}
+                          {item.unit_amount && item.quantity && (
+                            <span style={{ fontFamily: 'monospace', fontSize: 10, background: '#F0FDF4', color: '#16A34A', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                              {formatCurrencyPKR(item.unit_amount)} × {item.quantity}
+                            </span>
+                          )}
+                        </span>
+                        <strong style={{ color: '#16A34A' }}>
+                          +{formatCurrencyPKR(item.total_amount || item.amount)}
+                        </strong>
+                      </div>
+                      {item.reason && (
+                        <span style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', paddingLeft: 6, borderLeft: '2px solid #CBD5E1' }}>
+                          Reason: {item.reason}
+                        </span>
+                      )}
                     </div>
                   ))
                 ) : (
-                  <>
-                    {hra > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>House Rent Allowance (HRA)</span>
-                        <strong>{formatCurrencyPKR(hra)}</strong>
-                      </div>
-                    )}
-
-                    {med > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Medical Allowance</span>
-                        <strong>{formatCurrencyPKR(med)}</strong>
-                      </div>
-                    )}
-
-                    {conv > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Conveyance Allowance</span>
-                        <strong>{formatCurrencyPKR(conv)}</strong>
-                      </div>
-                    )}
-
-                    {spec > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Special Allowance</span>
-                        <strong>{formatCurrencyPKR(spec)}</strong>
-                      </div>
-                    )}
-                  </>
+                  spec > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Special Allowance</span>
+                      <strong style={{ color: '#16A34A' }}>+{formatCurrencyPKR(spec)}</strong>
+                    </div>
+                  )
                 )}
               </div>
 
@@ -569,45 +609,70 @@ export const DigitalPayslipModal: React.FC<DigitalPayslipModalProps> = ({
               </div>
 
               <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Attendance Deduction ({unexcusedUnits}d)</span>
-                  <strong style={{ color: attDed > 0 ? '#DC2626' : '#64748B' }}>
-                    {attDed > 0 ? `-${formatCurrencyPKR(attDed)}` : 'PKR 0'}
-                  </strong>
-                </div>
+                {attDed > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Attendance Deduction ({unexcusedUnits}d)</span>
+                    <strong style={{ color: '#DC2626' }}>
+                      -{formatCurrencyPKR(attDed)}
+                    </strong>
+                  </div>
+                )}
 
-                {Array.isArray(p.custom_deductions || p.customDeductions) && (p.custom_deductions || p.customDeductions).length > 0 ? (
-                  (p.custom_deductions || p.customDeductions).map((item: any) => (
-                    <div key={item.id || item.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{item.name}</span>
-                      <strong style={{ color: item.amount > 0 ? '#DC2626' : '#64748B' }}>
-                        {item.amount > 0 ? `-${formatCurrencyPKR(item.amount)}` : 'PKR 0'}
-                      </strong>
+                {tax > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Income Tax Withholding</span>
+                    <strong style={{ color: '#DC2626' }}>
+                      -{formatCurrencyPKR(tax)}
+                    </strong>
+                  </div>
+                )}
+
+                {pf > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Provident Fund (PF / EOBI)</span>
+                    <strong style={{ color: '#DC2626' }}>
+                      -{formatCurrencyPKR(pf)}
+                    </strong>
+                  </div>
+                )}
+
+                {/* Reason-Backed Itemized Deductions (Rate × Multiplier) */}
+                {itemizedDeductions.length > 0 ? (
+                  itemizedDeductions.map((item: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <span style={{ fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          {item.label || item.name || 'Deduction'}
+                          {item.unit_amount && item.quantity && (
+                            <span style={{ fontFamily: 'monospace', fontSize: 10, background: '#FEF2F2', color: '#DC2626', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                              {formatCurrencyPKR(item.unit_amount)} × {item.quantity}
+                            </span>
+                          )}
+                        </span>
+                        <strong style={{ color: '#DC2626' }}>
+                          -{formatCurrencyPKR(item.total_amount || item.amount)}
+                        </strong>
+                      </div>
+                      {item.reason && (
+                        <span style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', paddingLeft: 6, borderLeft: '2px solid #CBD5E1' }}>
+                          Reason: {item.reason}
+                        </span>
+                      )}
                     </div>
                   ))
                 ) : (
-                  <>
+                  other > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Income Tax Withholding</span>
-                      <strong style={{ color: tax > 0 ? '#DC2626' : '#64748B' }}>
-                        {tax > 0 ? `-${formatCurrencyPKR(tax)}` : 'PKR 0'}
-                      </strong>
+                      <span>Other Deductions</span>
+                      <strong style={{ color: '#DC2626' }}>-{formatCurrencyPKR(other)}</strong>
                     </div>
+                  )
+                )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Provident Fund (PF / EOBI)</span>
-                      <strong style={{ color: pf > 0 ? '#DC2626' : '#64748B' }}>
-                        {pf > 0 ? `-${formatCurrencyPKR(pf)}` : 'PKR 0'}
-                      </strong>
-                    </div>
-
-                    {other > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Other Deductions</span>
-                        <strong style={{ color: '#DC2626' }}>-{formatCurrencyPKR(other)}</strong>
-                      </div>
-                    )}
-                  </>
+                {attDed === 0 && tax === 0 && pf === 0 && itemizedDeductions.length === 0 && other === 0 && (
+                  <div style={{ color: '#64748B', fontStyle: 'italic', textAlign: 'center', padding: '6px 0' }}>
+                    No deductions applied this month
+                  </div>
                 )}
               </div>
 

@@ -783,6 +783,8 @@ export async function deleteStaff(req: AuthenticatedRequest, res: Response) {
         await tx.staffSalaryPayment.deleteMany({ where: { staff_member_id: staff.id } });
         await tx.staffLeaveRequest.deleteMany({ where: { staff_member_id: staff.id } });
         await tx.staffSalaryStructure.deleteMany({ where: { staff_member_id: staff.id } }).catch(() => {});
+        await tx.staffSalaryAdjustment.deleteMany({ where: { staff_member_id: staff.id } }).catch(() => {});
+        await tx.staffSalaryDisbursement.deleteMany({ where: { staff_member_id: staff.id } }).catch(() => {});
 
         // 3. Delete staff member, teacher, user
         await tx.staffMember.delete({ where: { id: staff.id } });
@@ -1315,8 +1317,12 @@ export async function getStaffSalaryPayments(req: AuthenticatedRequest, res: Res
       }
     }
 
+    const isStaffPortalUser = user && user.role !== 'admin' && user.role !== 'super_admin';
     const payments = await prisma.staffSalaryPayment.findMany({
-      where: { staff_member_id: staff.id },
+      where: { 
+        staff_member_id: staff.id,
+        ...(isStaffPortalUser ? { is_published: true } : {})
+      },
       orderBy: { payment_date: 'desc' }
     });
 

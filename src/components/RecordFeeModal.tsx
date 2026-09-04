@@ -43,7 +43,7 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
   const [paymentAmount, setPaymentAmount] = useState(preSelectedAmount !== undefined ? String(preSelectedAmount) : '5000');
   const [waiverDiscount, setWaiverDiscount] = useState('0');
   const [discountRemarks, setDiscountRemarks] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'Cheque' | 'Card'>('Cash');
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'Cheque' | 'Card' | 'JazzCash' | 'Easypaisa'>('Cash');
   const [paymentNotes, setPaymentNotes] = useState('');
 
   useEffect(() => {
@@ -76,6 +76,9 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
     e.preventDefault();
     if (!selectedStudent) return;
 
+    if (Number(waiverDiscount) > 0 && !discountRemarks.trim()) {
+      return;
+    }
     onAddPayment({
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
@@ -256,7 +259,9 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
                     { value: 'Cash', label: 'Cash Payment' },
                     { value: 'Bank Transfer', label: 'Bank Transfer (Online)' },
                     { value: 'Cheque', label: 'Cheque Deposit' },
-                    { value: 'Card', label: 'Debit / Credit Card' }
+                    { value: 'Card', label: 'Debit / Credit Card' },
+                    { value: 'JazzCash', label: 'JazzCash' },
+                    { value: 'Easypaisa', label: 'Easypaisa' }
                   ]}
                   zIndex={1150}
                 />
@@ -291,12 +296,13 @@ export const RecordFeeModal: React.FC<RecordFeeModalProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: 12 }}>Discount Reason / Remarks</label>
+                <label className="form-label" style={{ fontSize: 12 }}>Discount Reason / Remarks {Number(waiverDiscount) > 0 ? '*' : ''}</label>
                 <input 
                   className="form-input" 
-                  placeholder="e.g. Special concession / Late fee waiver" 
+                  placeholder="Required if a waiver is applied" 
                   value={discountRemarks} 
                   onChange={e => setDiscountRemarks(e.target.value)} 
+                  required={Number(waiverDiscount) > 0}
                 />
               </div>
             </div>

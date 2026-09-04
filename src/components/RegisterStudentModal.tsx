@@ -69,13 +69,19 @@ export interface RegisterStudentModalProps {
   onAddStudent: (student: any) => void;
   batches: Batch[];
   students?: Student[];
+  initialName?: string;
+  initialParentName?: string;
+  initialPhone?: string;
 }
 
 export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
   isOpen,
   onClose,
   onAddStudent,
-  batches
+  batches,
+  initialName,
+  initialParentName,
+  initialPhone
 }) => {
   // Student Profile
   const [studentName, setStudentName] = useState('');
@@ -86,7 +92,7 @@ export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   // Batch & Academic Selection
-  const [batchSelect, setBatchSelect] = useState(batches[0]?.name || 'Grade 10 - Sec A');
+  const [batchSelect, setBatchSelect] = useState(batches[0]?.name || '');
   
   // Find selected batch object to autofill details
   const selectedBatchObj = useMemo(() => {
@@ -110,6 +116,13 @@ export const RegisterStudentModal: React.FC<RegisterStudentModalProps> = ({
   const [installmentCount, setInstallmentCount] = useState<string>('3');
 
   // Dynamic One-Time Add-on Fee Items (Admission, Registration, Books, ID Card, etc.)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialName) setStudentName(initialName);
+    if (initialParentName) setParentName(initialParentName);
+    if (initialPhone) setPhone(initialPhone);
+  }, [isOpen, initialName, initialParentName, initialPhone]);
+
   const [addonFeeItems, setAddonFeeItems] = useState<AddonFeeItem[]>([
     { id: 'fee-1', type: 'Admission Fee', amount: '0' }
   ]);

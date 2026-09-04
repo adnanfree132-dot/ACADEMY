@@ -5,9 +5,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
+  --theme-primary: #EA580C;
+  --theme-secondary: #0F172A;
+  --color-primary-500: var(--theme-primary);
   --bg-app: #F4F5F7;
   --bg-surface: #FFFFFF;
-  --bg-dark-hero: #0F172A;
+  --bg-dark-hero: var(--theme-secondary);
 
   --border-subtle: #E2E8F0;
   --border-card: #E2E8F0;
@@ -941,6 +944,13 @@ option:hover {
   overflow: hidden;
   border: 1px solid #E2E8F0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0F172A;
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 12px;
 }
 
 .user-avatar img {
@@ -991,7 +1001,7 @@ option:hover {
 
 /* Dark Overview Hero Card */
 .overview-card {
-  background-color: #0F172A !important;
+  background-color: var(--theme-secondary, #0F172A) !important;
   color: #FFFFFF;
   border-radius: 14px;
   padding: 20px;
@@ -1209,8 +1219,41 @@ option:hover {
 
 .progress-bar-fill {
   height: 100%;
-  background-color: #0F172A;
+  background-color: var(--theme-primary, #0F172A);
   border-radius: 9999px;
+}
+
+.dashboard-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-attention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dashboard-attention-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #334155;
+  font-family: inherit;
+}
+
+.dashboard-attention-row strong {
+  color: #0F172A;
+  font-weight: 800;
 }
 
 .financial-columns {
@@ -2081,6 +2124,26 @@ select,
 @media (max-width: 960px) {
   .card-grid-3 {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  }
+}
+
+.card-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .card-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid-4 {
+    grid-template-columns: 1fr;
   }
 }
 

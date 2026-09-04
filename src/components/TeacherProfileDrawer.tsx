@@ -141,7 +141,7 @@ export const TeacherProfileDrawer: React.FC<TeacherProfileDrawerProps> = ({
                       <span className="badge badge-blue">{batch.code || batch.classLevel || 'Class'}</span>
                       <h4 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginTop: 4 }}>{batch.name}</h4>
                       <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 12 }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} color="#64748B" /> {batch.room || 'Room 101'}</span>
+                        {batch.room && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} color="#64748B" /> {batch.room}</span>}
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} color="#64748B" /> {batch.schedule || batch.timing || '09:00 AM - 11:00 AM'}</span>
                       </div>
                     </div>

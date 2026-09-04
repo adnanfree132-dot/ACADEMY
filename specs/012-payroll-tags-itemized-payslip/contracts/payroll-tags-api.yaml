@@ -1,0 +1,138 @@
+openapi: 3.0.3
+info:
+  title: Academia Pro OS - Payroll Tags & Itemized Payslips API
+  version: 1.0.0
+  description: RESTful contracts for managing reusable payroll tags and generating reason-backed itemized payslips.
+
+paths:
+  /api/v1/payroll/tags:
+    get:
+      summary: List all active payroll component tags
+      responses:
+        '200':
+          description: List of payroll tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollComponentTag'
+    post:
+      summary: Create a new payroll component tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayrollTagInput'
+      responses:
+        '201':
+          description: Created tag object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollComponentTag'
+
+  /api/v1/payroll/tags/{id}:
+    put:
+      summary: Update a payroll component tag
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePayrollTagInput'
+      responses:
+        '200':
+          description: Updated tag object
+    delete:
+      summary: Deactivate a payroll component tag (soft delete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tag successfully deactivated
+
+components:
+  schemas:
+    PayrollComponentTag:
+      type: object
+      properties:
+        id:
+          type: string
+        tag_code:
+          type: string
+          example: HALF_MONTH_SALARY
+        display_label:
+          type: string
+          example: Disciplinary Half-Month Pay Cut
+        type:
+          type: string
+          enum: [earning, deduction]
+        calculation_type:
+          type: string
+          enum: [percentage_of_base, fixed_amount, per_day]
+        default_value:
+          type: number
+          example: 50
+        reason_template:
+          type: string
+          example: Deduction applied per institutional policy memo
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    CreatePayrollTagInput:
+      type: object
+      required: [tag_code, display_label, type, calculation_type, default_value]
+      properties:
+        tag_code:
+          type: string
+        display_label:
+          type: string
+        type:
+          type: string
+          enum: [earning, deduction]
+        calculation_type:
+          type: string
+          enum: [percentage_of_base, fixed_amount, per_day]
+        default_value:
+          type: number
+        reason_template:
+          type: string
+
+    UpdatePayrollTagInput:
+      type: object
+      properties:
+        display_label:
+          type: string
+        type:
+          type: string
+          enum: [earning, deduction]
+        calculation_type:
+          type: string
+          enum: [percentage_of_base, fixed_amount, per_day]
+        default_value:
+          type: number
+        reason_template:
+          type: string
+        is_active:
+          type: boolean

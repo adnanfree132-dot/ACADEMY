@@ -14,10 +14,10 @@ interface MobileTopBarProps {
 export const MobileTopBar: React.FC<MobileTopBarProps> = ({
   academyName = 'AcademiaPro',
   activeViewTitle,
-  notificationCount = 3,
+  notificationCount = 0,
   onOpenNotifications,
   onOpenQuickCreate,
-  userName = 'Dilan',
+  userName = 'Admin',
   userRole = 'Admin'
 }) => {
   return (
