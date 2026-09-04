@@ -1,0 +1,5 @@
+name = "academy-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-04"
+account_id = "64ce0da1d6bde1c338aa1eed69626c73"
+workers_dev = true

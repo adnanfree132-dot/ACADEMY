@@ -10,7 +10,16 @@ import {
   filterDeleted
 } from '../lib/resourceCache';
 
-const BASE_URL = '/api/v1';
+const LIVE_API = 'https://academy-api.adnanfree132.workers.dev/api/v1';
+
+function resolveBaseUrl(): string {
+  if (typeof window === 'undefined') return '/api/v1';
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') return '/api/v1';
+  return LIVE_API;
+}
+
+const BASE_URL = resolveBaseUrl();
 
 export { peekApiCache };
 

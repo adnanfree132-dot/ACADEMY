@@ -27,6 +27,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'AcademiaPro OS Express API', time: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 AcademiaPro Express API Server running on http://localhost:${PORT}/api/v1`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 AcademiaPro Express API Server running on http://0.0.0.0:${PORT}/api/v1`);
 });

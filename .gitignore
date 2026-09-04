@@ -80,3 +80,7 @@ create_test.js
 gen_tests.py
 make_suite.py
 test_single_line.txt
+
+# Wrangler local state
+.wrangler/
+**/.wrangler/

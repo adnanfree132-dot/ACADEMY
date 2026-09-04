@@ -76,9 +76,8 @@ export const StaffPayrollView: React.FC = () => {
   useEntityRemoved((ids) => {
     const gone = new Set(ids);
     setLiveRows(prev => prev.filter(r =>
-      !gone.has(r.id) &&
-      !gone.has((r as any).staff_member_id) &&
-      !gone.has((r as any).staffMemberId)
+      !gone.has(r.staff_id) &&
+      !gone.has(r.staff_member_id)
     ));
   });
   const [searchQuery, setSearchQuery] = useState<string>('');
