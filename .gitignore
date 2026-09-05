@@ -57,6 +57,7 @@ Thumbs.db
 mobile_audit_screenshots/
 
 # Temporary Agent Swarm & Scratch Workspaces
+.agents/audit_*
 .agents/auditor_*
 .agents/backend_*
 .agents/challenger_*

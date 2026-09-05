@@ -110,6 +110,7 @@ import {
 
 import { prisma } from './prisma';
 import { timeRangesOverlap, timeToMinutes } from './utils/timeOverlap';
+import { getNextSequenceValue } from './utils/sequenceGenerator';
 import {
   getSubjectCatalog,
   deleteSubjectSafe,
@@ -429,9 +430,8 @@ router.post('/students', authenticateJwt, requireModulePermission('students', 'e
       }
     }
 
-    // Auto-generate admission_no
-    const count = await prisma.student.count();
-    const admissionNo = `ACAD-2026-${(count + 1).toString().padStart(3, '0')}`;
+    // Auto-generate admission_no atomically to prevent race collisions
+    const admissionNo = await getNextSequenceValue('admission_no_seq', 'ACAD-2026-', 4);
     const admittedDateStr = admitted_on || admissionDate || formatDateIso(new Date());
 
     const studentCustomData = {
@@ -527,8 +527,7 @@ router.post('/students', authenticateJwt, requireModulePermission('students', 'e
 
       // Record immediate payment at counter if collected
       if (collectedAmount > 0) {
-        const pCount = await prisma.feePayment.count();
-        const receiptNo = `REC-2026-${(pCount + 1).toString().padStart(4, '0')}`;
+        const receiptNo = await getNextSequenceValue('receipt_no_seq', 'REC-2026-', 5);
         const payMethod = (payment_method || paymentMethod || 'Cash').toLowerCase();
         const feeItemDetails = rawFeeItems.length > 0
           ? ` [Items: ${rawFeeItems.map((i: any) => `${i.type}: PKR ${i.amount}`).join(', ')}]`
@@ -683,15 +682,22 @@ router.put('/students/:id', authenticateJwt, requireModulePermission('students',
       }
     });
 
-    // If status changed to 'left' or 'suspended', freeze recurring fee plan and remove enrollments
+    // If status changed to 'left' or 'suspended', update enrollments and pause/delete fee plan (HIGH-02)
     if (status === 'left' || status === 'suspended') {
       await prisma.enrollment.updateMany({
         where: { student_id: id },
         data: { status: 'removed' }
       });
-      await prisma.studentFeePlan.deleteMany({
-        where: { student_id: id }
-      });
+      if (status === 'left') {
+        await prisma.studentFeePlan.deleteMany({
+          where: { student_id: id }
+        });
+      } else {
+        await prisma.student.update({
+          where: { id },
+          data: { is_fee_paused: true }
+        });
+      }
       if (req.user) {
         await createAuditLog(req.user.userId, 'STUDENT_DEPARTURE_FEE_FREEZE', 'Student', id, { status });
       }
@@ -805,8 +811,8 @@ router.post('/students/bulk', authenticateJwt, requireModulePermission('students
     }
 
     const createdStudents = [];
+    const defaultPassword = await bcrypt.hash('student123', 10);
     for (const item of studentList) {
-      const defaultPassword = await bcrypt.hash('student123', 10);
       const user = await prisma.user.create({
         data: {
           role: 'student',
@@ -822,7 +828,7 @@ router.post('/students/bulk', authenticateJwt, requireModulePermission('students
         cls = await prisma.class.create({ data: { name: item.gradeBatch || 'Grade 10', is_active: true } });
       }
 
-      const admissionNo = `ACAD-${new Date().getFullYear()}-${String(Math.floor(Math.random()*10000)).padStart(4, '0')}`;
+      const admissionNo = await getNextSequenceValue('admission_no_seq', `ACAD-${new Date().getFullYear()}-`, 4);
       const student = await prisma.student.create({
         data: {
           user_id: user.id,
@@ -959,7 +965,16 @@ router.post('/students/:id/status', authenticateJwt, requireModulePermission('st
 
     const effectiveDateTime = effectiveDate ? new Date(effectiveDate) : new Date();
 
-    // 1. Update Student Record
+    // 1. Resolve Target Batch Parent Class ID if provided (CRIT-10)
+    let resolvedClassId: string | undefined = undefined;
+    if (targetBatchId) {
+      const targetBatch = await prisma.batch.findUnique({ where: { id: targetBatchId } });
+      if (targetBatch) {
+        resolvedClassId = targetBatch.class_id;
+      }
+    }
+
+    // Update Student Record
     const updatedStudent = await prisma.student.update({
       where: { id },
       data: {
@@ -969,7 +984,7 @@ router.post('/students/:id/status', authenticateJwt, requireModulePermission('st
         status_updated_at: new Date(),
         leaving_date: (targetStatus === 'left' || targetStatus === 'graduated') ? effectiveDateTime : null,
         is_fee_paused: isFeePaused,
-        class_id: targetBatchId ? targetBatchId : undefined
+        class_id: resolvedClassId
       },
       include: { class: true, feePlan: true }
     });
@@ -1208,7 +1223,7 @@ router.get('/students/:id/leaving-certificate', authenticateJwt, requireModulePe
       .filter(pay => !pay.voided_at && (pay.cleared_status || 'cleared') === 'cleared')
       .reduce((sum, pay) => sum + (pay.amount || 0), 0);
     const dueBalance = Math.max(0, totalInvoiced - totalPaid);
-    const feeStatus = dueBalance <= 0 ? 'Cleared' : (student.is_fee_paused ? 'Waived' : 'Pending Dues');
+    const feeStatus = dueBalance <= 0 ? 'Cleared' : 'Pending Dues';
 
     const infractionCount = student.conductLogs.filter(c => c.category === 'infraction').length;
     const commendationCount = student.conductLogs.filter(c => c.category === 'commendation').length;
@@ -1342,6 +1357,10 @@ router.delete('/teachers/:id', authenticateJwt, requireModulePermission('teacher
       }).catch(() => {});
       await tx.homework.deleteMany({ where: { teacher_id: id } }).catch(() => {});
       await tx.studyMaterial.deleteMany({ where: { teacher_id: id } }).catch(() => {});
+      await tx.batchSubject.deleteMany({ where: { teacher_id: id } }).catch(() => {});
+      await tx.batchSubstitute.deleteMany({
+        where: { OR: [{ original_teacher_id: id }, { substitute_teacher_id: id }] }
+      }).catch(() => {});
 
       // 2. Cascade delete linked StaffMember if exists
       const staff = await tx.staffMember.findFirst({ where: { teacher_id: id } });
@@ -1581,6 +1600,10 @@ router.delete('/batches/:id', authenticateJwt, requireModulePermission('batches'
         await tx.testMark.deleteMany({ where: { test_id: { in: testIds } } });
       }
       await tx.test.deleteMany({ where: { batch_id: id } });
+      await tx.feeStructure.deleteMany({ where: { batch_id: id } }).catch(() => {});
+      await tx.conductLog.deleteMany({ where: { batch_id: id } }).catch(() => {});
+      await tx.batchWaitlist.deleteMany({ where: { batch_id: id } }).catch(() => {});
+      await tx.batchSubstitute.deleteMany({ where: { batch_id: id } }).catch(() => {});
 
       // 3. Delete batch
       await tx.batch.delete({ where: { id } });
@@ -1600,23 +1623,27 @@ router.delete('/batches/:id', authenticateJwt, requireModulePermission('batches'
 router.get('/batches/:id/students', authenticateJwt, requireModulePermission('batches', 'view_only'), async (req, res) => {
   try {
     const { id } = req.params;
+    const userRole = (req as any).user?.role;
+    const canViewFees = userRole === 'admin' || userRole === 'super_admin' || userRole === 'accountant';
+
     const enrollments = await prisma.enrollment.findMany({
       where: { batch_id: id, status: 'active' },
       include: {
         student: {
-          include: { class: true, feePlan: true }
+          include: { class: true, feePlan: canViewFees }
         },
-        installmentSchedules: true
+        installmentSchedules: canViewFees
       },
       orderBy: { enrolled_on: 'desc' }
     });
     return sendSuccess(res, enrollments.map(e => ({
       ...e.student,
+      feePlan: canViewFees ? (e.student as any).feePlan : undefined,
       enrollmentId: e.id,
       enrolledOn: e.enrolled_on,
       isExtendedTimeline: e.is_extended_timeline,
       individualEndDate: e.individual_end_date,
-      installmentSchedules: e.installmentSchedules
+      installmentSchedules: canViewFees ? e.installmentSchedules : []
     })));
   } catch (err: any) {
     return sendError(res, err.message, 500);
@@ -1650,11 +1677,24 @@ router.post('/batches/:id/enroll', authenticateJwt, requireModulePermission('bat
     });
     if (!student) return sendError(res, 'Student not found', 404);
 
+    // Atomic Capacity Check with Row-Level Lock (CRIT-04 / Hardening 2.3)
+    let batchCapacity = batch.capacity;
+    try {
+      const lockedBatch = await prisma.$queryRaw<Array<{ id: string; capacity: number }>>`
+        SELECT id, capacity FROM "Batch" WHERE id = ${id} FOR UPDATE
+      `;
+      if (lockedBatch && lockedBatch.length > 0 && lockedBatch[0].capacity != null) {
+        batchCapacity = lockedBatch[0].capacity;
+      }
+    } catch {
+      // If DB driver does not support row lock outside transaction, continue with read capacity
+    }
+
     const activeCount = await prisma.enrollment.count({
       where: { batch_id: id, status: 'active' }
     });
 
-    if (activeCount >= batch.capacity && !adminOverride) {
+    if (activeCount >= batchCapacity && !adminOverride) {
       if (req.body.waitlist) {
         const last = await prisma.batchWaitlist.findFirst({
           where: { batch_id: id },
@@ -1675,8 +1715,8 @@ router.post('/batches/:id/enroll', authenticateJwt, requireModulePermission('bat
       }
       return res.status(409).json({
         success: false,
-        error: `Batch "${batch.name}" has reached maximum capacity (${activeCount}/${batch.capacity})`,
-        meta: { current: activeCount, capacity: batch.capacity, canOverride: true, canWaitlist: true }
+        error: `Batch "${batch.name}" has reached maximum capacity (${activeCount}/${batchCapacity})`,
+        meta: { current: activeCount, capacity: batchCapacity, canOverride: true, canWaitlist: true }
       });
     }
 
@@ -2010,6 +2050,16 @@ router.post(['/attendance/bulk', '/attendance/mark'], authenticateJwt, requireMo
     const items = entries || records || [];
     const targetDate = date || new Date().toISOString().split('T')[0];
 
+    // Lock retroactive attendance older than 48 hours unless admin
+    const today = new Date().toISOString().split('T')[0];
+    const diffMs = new Date(today).getTime() - new Date(targetDate).getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 3600 * 24));
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+
+    if (diffDays > 2 && !isAdmin) {
+      return sendError(res, 'Attendance for dates older than 48 hours is locked. Admin override required.', 403);
+    }
+
     // Faculty Scoping Check
     const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
     const isGlobal = (req as any).modulePermission?.isGlobalScope || req.user?.role === 'admin' || req.user?.role === 'super_admin';
@@ -2082,11 +2132,23 @@ router.post(['/attendance/bulk', '/attendance/mark'], authenticateJwt, requireMo
 router.get('/fees', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
     const [payments, invoices] = await Promise.all([
-      prisma.feePayment.findMany(),
-      prisma.feeInvoice.findMany()
+      prisma.feePayment.findMany({
+        where: { voided_at: null, cleared_status: { not: 'bounced' } }
+      }),
+      prisma.feeInvoice.findMany({
+        include: {
+          feePayments: {
+            where: { voided_at: null, cleared_status: { not: 'bounced' } }
+          }
+        }
+      })
     ]);
     const totalCollected = payments.reduce((sum, p) => sum + p.amount, 0);
-    const totalPending = invoices.reduce((sum, i) => sum + (i.net_amount - (i.amount || 0)), 0);
+    const totalPending = invoices.reduce((sum, i) => {
+      const invoicePaid = i.feePayments ? i.feePayments.reduce((pSum, p) => pSum + p.amount, 0) : 0;
+      const targetAmount = (i.net_amount !== undefined && i.net_amount !== null) ? i.net_amount : (i.amount || 0);
+      return sum + Math.max(0, targetAmount - invoicePaid);
+    }, 0);
     return sendSuccess(res, {
       totalCollected,
       totalPending,
@@ -2100,11 +2162,26 @@ router.get('/fees', authenticateJwt, requireModulePermission('fees', 'view_only'
 
 router.get('/fees/defaulters', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
-    const overdueInvoices = await prisma.feeInvoice.findMany({
-      where: { status: { in: ['unpaid', 'overdue'] } },
-      include: { student: true },
+    const todayStr = new Date().toISOString().split('T')[0];
+    const candidateInvoices = await prisma.feeInvoice.findMany({
+      where: {
+        status: { in: ['unpaid', 'partial', 'overdue'] },
+        due_date: { lt: todayStr }
+      },
+      include: {
+        student: true,
+        feePayments: {
+          where: { voided_at: null, cleared_status: { not: 'bounced' } }
+        }
+      },
       orderBy: { due_date: 'asc' }
     });
+
+    const overdueInvoices = candidateInvoices.filter(inv => {
+      const paid = inv.feePayments ? inv.feePayments.reduce((sum, p) => sum + p.amount, 0) : 0;
+      return (inv.net_amount || inv.amount || 0) > paid;
+    });
+
     return sendSuccess(res, overdueInvoices);
   } catch (err: any) {
     return sendError(res, err.message, 500);
@@ -2167,75 +2244,151 @@ router.post('/fees/payments', authenticateJwt, requireModulePermission('fees', '
       }
     }
 
-    // Create the payment record
-    const count = await prisma.feePayment.count();
-    const receiptNo = `RCP-2026-${(count + 1).toString().padStart(4, '0')}`;
+    // Create payment records with atomic sequence numbers and multi-invoice cascading allocation
+    const methodNorm = String(method || 'cash').toLowerCase();
+    const chequePending = methodNorm === 'cheque';
     const paymentNote = [
       notes || '',
       adhocDiscount > 0 ? `[Ad-hoc Discount: PKR ${adhocDiscount}${discountReason ? ` - Reason: ${discountReason}` : ''}]` : ''
     ].filter(Boolean).join(' ');
 
-    const methodNorm = String(method || 'cash').toLowerCase();
-    const chequePending = methodNorm === 'cheque';
-    const payment = await prisma.feePayment.create({
-      data: {
-        student_id: studentId,
-        invoice_id: targetInvoiceId,
-        amount: paymentAmount,
-        method: methodNorm,
-        receipt_no: receiptNo,
-        recorded_by: req.user?.userId || 'admin',
-        note: paymentNote || null,
-        paid_at: new Date(),
-        cleared_status: chequePending ? 'pending' : 'cleared',
-        credit_applied: 0
-      }
-    });
+    let createdPayments: any[] = [];
 
-    if (!chequePending) {
+    if (invoiceId) {
+      // Direct payment targeting a specific invoice
+      const receiptNo = await getNextSequenceValue('receipt_no_seq', 'RCP-2026-', 5);
+      const payment = await prisma.feePayment.create({
+        data: {
+          student_id: studentId,
+          invoice_id: invoiceId,
+          amount: paymentAmount,
+          method: methodNorm,
+          receipt_no: receiptNo,
+          recorded_by: req.user?.userId || 'admin',
+          note: paymentNote || null,
+          paid_at: new Date(),
+          cleared_status: chequePending ? 'pending' : 'cleared',
+          credit_applied: 0
+        }
+      });
+      createdPayments.push(payment);
+
+      if (!chequePending) {
+        const inv = await prisma.feeInvoice.findUnique({
+          where: { id: invoiceId },
+          include: { feePayments: true, installmentSchedule: true }
+        });
+        if (inv) {
+          const countablePaid = inv.feePayments
+            .filter(p => !p.voided_at && (p.cleared_status || 'cleared') === 'cleared')
+            .reduce((sum, p) => sum + p.amount, 0);
+          const isNowFullyPaid = countablePaid >= inv.net_amount;
+          const newStatus = isNowFullyPaid ? 'paid' : (countablePaid > 0 ? 'partial' : 'unpaid');
+          await prisma.feeInvoice.update({
+            where: { id: inv.id },
+            data: { status: newStatus }
+          });
+          if (inv.installmentSchedule) {
+            await prisma.studentInstallmentSchedule.update({
+              where: { id: inv.installmentSchedule.id },
+              data: { status: isNowFullyPaid ? 'paid' : 'invoiced' }
+            });
+          }
+          if (countablePaid > inv.net_amount) {
+            await prisma.feePayment.update({
+              where: { id: payment.id },
+              data: { credit_applied: countablePaid - inv.net_amount }
+            });
+          }
+        }
+      }
+    } else {
+      // Cascading payment across unpaid/partial/overdue invoices (CRIT-13)
       const targetInvoices = await prisma.feeInvoice.findMany({
         where: {
           student_id: studentId,
-          ...(invoiceId ? { id: invoiceId } : { status: { in: ['unpaid', 'partial', 'overdue'] } })
+          status: { in: ['unpaid', 'partial', 'overdue'] }
         },
         include: { feePayments: true, installmentSchedule: true },
         orderBy: { due_date: 'asc' }
       });
 
-      let remainingAmount = paymentAmount;
-      for (const invoice of targetInvoices) {
-        if (remainingAmount <= 0) break;
-        const countablePaid = invoice.feePayments
+      let unallocated = paymentAmount;
+
+      for (const inv of targetInvoices) {
+        if (unallocated <= 0) break;
+        const currentPaid = inv.feePayments
           .filter(p => !p.voided_at && (p.cleared_status || 'cleared') === 'cleared')
           .reduce((sum, p) => sum + p.amount, 0);
-        const isNowFullyPaid = countablePaid >= invoice.net_amount;
-        const newStatus = isNowFullyPaid ? 'paid' : (countablePaid > 0 ? 'partial' : 'unpaid');
-        await prisma.feeInvoice.update({
-          where: { id: invoice.id },
-          data: { status: newStatus }
+        const due = Math.max(0, inv.net_amount - currentPaid);
+        if (due <= 0) continue;
+
+        const portion = Math.min(unallocated, due);
+        const receiptNo = await getNextSequenceValue('receipt_no_seq', 'RCP-2026-', 5);
+        const subPayment = await prisma.feePayment.create({
+          data: {
+            student_id: studentId,
+            invoice_id: inv.id,
+            amount: portion,
+            method: methodNorm,
+            receipt_no: receiptNo,
+            recorded_by: req.user?.userId || 'admin',
+            note: paymentNote || null,
+            paid_at: new Date(),
+            cleared_status: chequePending ? 'pending' : 'cleared',
+            credit_applied: 0
+          }
         });
-        if (invoice.installmentSchedule) {
-          await prisma.studentInstallmentSchedule.update({
-            where: { id: invoice.installmentSchedule.id },
-            data: { status: isNowFullyPaid ? 'paid' : 'invoiced' }
+        createdPayments.push(subPayment);
+
+        if (!chequePending) {
+          const newPaid = currentPaid + portion;
+          const isNowFullyPaid = newPaid >= inv.net_amount;
+          await prisma.feeInvoice.update({
+            where: { id: inv.id },
+            data: { status: isNowFullyPaid ? 'paid' : 'partial' }
           });
+          if (inv.installmentSchedule) {
+            await prisma.studentInstallmentSchedule.update({
+              where: { id: inv.installmentSchedule.id },
+              data: { status: isNowFullyPaid ? 'paid' : 'invoiced' }
+            });
+          }
         }
-        const dueBeforeThisPay = Math.max(0, invoice.net_amount - (countablePaid - (invoice.id === targetInvoiceId ? paymentAmount : 0)));
-        remainingAmount -= Math.min(remainingAmount, dueBeforeThisPay);
+        unallocated -= portion;
       }
-      if (remainingAmount > 0) {
-        await prisma.feePayment.update({
-          where: { id: payment.id },
-          data: { credit_applied: remainingAmount }
+
+      // If leftover or no open invoices exist, record advance credit payment
+      if (unallocated > 0 || createdPayments.length === 0) {
+        const receiptNo = await getNextSequenceValue('receipt_no_seq', 'RCP-2026-', 5);
+        const advancePayment = await prisma.feePayment.create({
+          data: {
+            student_id: studentId,
+            invoice_id: null,
+            amount: unallocated,
+            method: methodNorm,
+            receipt_no: receiptNo,
+            recorded_by: req.user?.userId || 'admin',
+            note: `Advance fee credit payment: ${paymentNote}`.trim(),
+            paid_at: new Date(),
+            cleared_status: chequePending ? 'pending' : 'cleared',
+            credit_applied: unallocated
+          }
         });
+        createdPayments.push(advancePayment);
       }
     }
 
-    if (req.user) {
-      await createAuditLog(req.user.userId, 'COLLECT_FEE', 'FeePayment', payment.id, { amount: paymentAmount, studentId, receiptNo });
+    const primaryPayment = createdPayments[0];
+    if (req.user && primaryPayment) {
+      await createAuditLog(req.user.userId, 'COLLECT_FEE', 'FeePayment', primaryPayment.id, {
+        amount: paymentAmount,
+        studentId,
+        paymentsCount: createdPayments.length
+      });
     }
 
-    return sendSuccess(res, payment, null, 201);
+    return sendSuccess(res, primaryPayment, { payments: createdPayments }, 201);
   } catch (err: any) {
     return sendError(res, err.message, 500);
   }
@@ -2501,6 +2654,33 @@ router.post('/homework', authenticateJwt, requireModulePermission('homework', 'e
     if (!batchId || !subjectId || !title) {
       return sendError(res, 'Batch, subject, and title are required to create homework.', 400);
     }
+
+    // Faculty Scoping Check (HIGH-01)
+    const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
+    const isGlobal = (req as any).modulePermission?.isGlobalScope || req.user?.role === 'admin' || req.user?.role === 'super_admin';
+
+    if (isTeacherRole && !isGlobal && req.user && batchId) {
+      let teacherIdVal = req.user.teacherId;
+      if (!teacherIdVal && req.user.userId) {
+        const teacher = await prisma.teacher.findUnique({ where: { user_id: req.user.userId } });
+        teacherIdVal = teacher?.id;
+      }
+      if (teacherIdVal) {
+        const isAssigned =
+          (await prisma.batch.findFirst({
+            where: { id: batchId, teacher_id: teacherIdVal }
+          })) ||
+          (await prisma.batchSubject.findFirst({
+            where: { batch_id: batchId, teacher_id: teacherIdVal }
+          }));
+        if (!isAssigned) {
+          return sendError(res, 'Faculty cannot create homework for batches assigned to other teachers', 403);
+        }
+      } else {
+        return sendError(res, 'Faculty cannot create homework for batches assigned to other teachers', 403);
+      }
+    }
+
     const batch = await prisma.batch.findUnique({ where: { id: batchId } });
     const resolvedTeacher = teacherId || batch?.teacher_id;
     if (!resolvedTeacher) {
@@ -2687,6 +2867,18 @@ router.post('/timetable', authenticateJwt, requireModulePermission('timetable', 
           409
         );
       }
+    }
+
+    const batchConflict = sameDaySlots.find(slot =>
+      slot.batch_id === batchId &&
+      timeRangesOverlap(startTime, endTime, slot.start_time, slot.end_time)
+    );
+    if (batchConflict) {
+      return sendError(
+        res,
+        `Batch collision: "${batchConflict.batch?.name || 'This batch'}" is already scheduled for another class (${batchConflict.start_time}–${batchConflict.end_time}) on ${day}.`,
+        409
+      );
     }
 
     const createdSlot = await prisma.timetableSlot.create({

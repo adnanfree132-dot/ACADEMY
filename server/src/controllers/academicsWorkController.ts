@@ -138,6 +138,32 @@ export async function saveTestMarksGuarded(req: AuthenticatedRequest, res: Respo
     if (test.is_published) {
       return sendError(res, 'This test is published. Unpublish it before editing marks.', 409);
     }
+
+    // IDOR Faculty Boundary Check (HIGH-01)
+    const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
+    const isGlobal = (req as any).modulePermission?.isGlobalScope || req.user?.role === 'admin' || req.user?.role === 'super_admin';
+
+    if (isTeacherRole && !isGlobal && req.user) {
+      let teacherId = req.user.teacherId;
+      if (!teacherId && req.user.userId) {
+        const teacher = await prisma.teacher.findUnique({ where: { user_id: req.user.userId } });
+        teacherId = teacher?.id;
+      }
+      if (teacherId) {
+        const isAssigned =
+          (await prisma.batch.findFirst({
+            where: { id: test.batch_id, teacher_id: teacherId }
+          })) ||
+          (await prisma.batchSubject.findFirst({
+            where: { batch_id: test.batch_id, teacher_id: teacherId }
+          }));
+        if (!isAssigned) {
+          return sendError(res, 'Faculty cannot modify test marks for batches assigned to other teachers', 403);
+        }
+      } else {
+        return sendError(res, 'Faculty cannot modify test marks for batches assigned to other teachers', 403);
+      }
+    }
     const marks = Array.isArray(req.body.marks) ? req.body.marks : [];
     const results = [];
     for (const m of marks) {

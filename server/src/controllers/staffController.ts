@@ -266,14 +266,19 @@ export async function registerStaff(req: AuthenticatedRequest, res: Response) {
       }
 
       if (user) {
+        if (user.role !== 'staff' && user.role !== 'teacher') {
+          throw new Error(`Phone or email is already registered to an active ${user.role} account.`);
+        }
+        const existingStaff = await tx.staffMember.findFirst({ where: { user_id: user.id } });
+        if (existingStaff) {
+          throw new Error('User already has an active staff profile.');
+        }
+
         user = await tx.user.update({
           where: { id: user.id },
           data: {
-            role: userRole,
+            role: userRole === 'admin' ? 'admin' : user.role,
             full_name: data.fullName,
-            username: staffId,
-            password_hash: passwordHash,
-            must_change_password: true,
             is_active: data.status === 'active' || data.status === 'probation'
           }
         });
@@ -774,6 +779,10 @@ export async function deleteStaff(req: AuthenticatedRequest, res: Response) {
           }).catch(() => {});
           await tx.homework.deleteMany({ where: { teacher_id: staff.teacher_id } }).catch(() => {});
           await tx.studyMaterial.deleteMany({ where: { teacher_id: staff.teacher_id } }).catch(() => {});
+          await tx.batchSubject.deleteMany({ where: { teacher_id: staff.teacher_id } }).catch(() => {});
+          await tx.batchSubstitute.deleteMany({
+            where: { OR: [{ original_teacher_id: staff.teacher_id }, { substitute_teacher_id: staff.teacher_id }] }
+          }).catch(() => {});
         }
 
         // 2. Delete staff relationships

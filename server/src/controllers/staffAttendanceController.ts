@@ -90,8 +90,9 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
       return sendError(res, `Staff member status is '${staffMember.status}'. Check-in is not permitted.`, 403);
     }
 
-    const targetDate = date || formatDateIso(new Date());
-    const currentTime = check_in_time || getCurrentTimeIso();
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    const targetDate = (isAdmin && date) ? date : formatDateIso(new Date());
+    const currentTime = (isAdmin && check_in_time) ? check_in_time : getCurrentTimeIso();
 
     // 2. Fetch Active Geofence & Shift Configuration
     const geofence = await prisma.campusGeofence.findFirst({
@@ -108,14 +109,19 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
     };
 
     // 3. Geolocation & Haversine Distance Validation
-    let isInside = true;
+    const hasCoordinates = latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null;
+    if (!hasCoordinates && !isAdmin) {
+      return sendError(res, 'Check-in rejected: GPS coordinates are required for campus attendance.', 400);
+    }
+
+    let isInside = false;
     let distanceMeters: number | null = null;
     let allowedRadius = activeGeofence.radius_meters || 150;
 
-    if (latitude !== undefined && longitude !== undefined) {
+    if (hasCoordinates) {
       const check = isWithinGeofence(
-        latitude,
-        longitude,
+        latitude!,
+        longitude!,
         activeGeofence.latitude,
         activeGeofence.longitude,
         allowedRadius
@@ -123,6 +129,16 @@ export async function staffCheckIn(req: AuthenticatedRequest, res: Response) {
       isInside = check.isInside;
       distanceMeters = check.distanceMeters;
       allowedRadius = check.allowedRadius;
+
+      if (!isInside && !isAdmin) {
+        return sendError(
+          res,
+          `Check-in rejected: You are ${Math.round(distanceMeters)}m away from campus. Allowable perimeter is ${allowedRadius}m.`,
+          403
+        );
+      }
+    } else if (isAdmin) {
+      isInside = true;
     }
 
     // 4. Shift Arrival Classification
@@ -257,10 +273,11 @@ export async function staffCheckOut(req: AuthenticatedRequest, res: Response) {
       return sendError(res, `Staff member with ID '${staffId}' does not exist.`, 404);
     }
 
-    const targetDate = date || formatDateIso(new Date());
-    const currentTime = check_out_time || getCurrentTimeIso();
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    const targetDate = (isAdmin && date) ? date : formatDateIso(new Date());
+    const currentTime = (isAdmin && check_out_time) ? check_out_time : getCurrentTimeIso();
 
-    const existing = await prisma.staffAttendance.findUnique({
+    let existing = await prisma.staffAttendance.findUnique({
       where: {
         staff_member_id_date: {
           staff_member_id: staffMember.id,
@@ -269,10 +286,21 @@ export async function staffCheckOut(req: AuthenticatedRequest, res: Response) {
       }
     });
 
+    // Night-shift support: if no record today, check for unclosed check-in from previous day
+    if (!existing || !existing.check_in_time) {
+      existing = await prisma.staffAttendance.findFirst({
+        where: {
+          staff_member_id: staffMember.id,
+          check_out_time: null
+        },
+        orderBy: { date: 'desc' }
+      });
+    }
+
     if (!existing || !existing.check_in_time) {
       return sendError(
         res,
-        `Cannot check out without an existing check-in record for date: ${targetDate}. Please check in first.`,
+        `Cannot check out without an active check-in record. Please check in first.`,
         400
       );
     }

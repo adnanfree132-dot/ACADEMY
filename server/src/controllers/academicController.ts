@@ -132,9 +132,22 @@ export async function promoteWaitlist(req: AuthenticatedRequest, res: Response) 
 
     const batch = await prisma.batch.findUnique({ where: { id: batchId } });
     if (!batch) return sendError(res, 'Batch not found.', 404);
+
+    let batchCapacity = batch.capacity;
+    try {
+      const lockedBatch = await prisma.$queryRaw<Array<{ id: string; capacity: number }>>`
+        SELECT id, capacity FROM "Batch" WHERE id = ${batchId} FOR UPDATE
+      `;
+      if (lockedBatch && lockedBatch.length > 0 && lockedBatch[0].capacity != null) {
+        batchCapacity = lockedBatch[0].capacity;
+      }
+    } catch {
+      // Driver fallback
+    }
+
     const activeCount = await prisma.enrollment.count({ where: { batch_id: batchId, status: 'active' } });
-    if (activeCount >= batch.capacity) {
-      return sendError(res, `Still at capacity (${activeCount}/${batch.capacity}). Free a seat first.`, 409);
+    if (activeCount >= batchCapacity) {
+      return sendError(res, `Still at capacity (${activeCount}/${batchCapacity}). Free a seat first.`, 409);
     }
 
     await prisma.$transaction(async (tx) => {

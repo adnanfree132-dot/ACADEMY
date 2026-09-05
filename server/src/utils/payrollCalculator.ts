@@ -270,18 +270,18 @@ export function calculateStaffPayrollItem(
   else if (rules?.workingDaysMode === 'fixed_30') workingDays = 30;
   else if (rules?.customWorkingDays && rules.customWorkingDays > 0) workingDays = rules.customWorkingDays;
 
-  // Fallback standard base salary if 0/null
+  // Base salary from structure (or 0 if unpaid intern/stipend) - HIGH-07
   const rawBase = salaryStructure.base_salary ?? salaryStructure.baseSalary ?? 0;
-  const baseSalary = roundCurrency(rawBase > 0 ? rawBase : 65000);
+  const baseSalary = roundCurrency(rawBase >= 0 ? rawBase : 0);
 
   const houseRentAllowance = roundCurrency(
-    salaryStructure.house_rent_allowance ?? salaryStructure.houseRentAllowance ?? salaryStructure.hra ?? Math.round(baseSalary * 0.15)
+    salaryStructure.house_rent_allowance ?? salaryStructure.houseRentAllowance ?? salaryStructure.hra ?? (baseSalary > 0 ? Math.round(baseSalary * 0.15) : 0)
   );
   const medicalAllowance = roundCurrency(
-    salaryStructure.medical_allowance ?? salaryStructure.medicalAllowance ?? salaryStructure.medical ?? Math.round(baseSalary * 0.08)
+    salaryStructure.medical_allowance ?? salaryStructure.medicalAllowance ?? salaryStructure.medical ?? (baseSalary > 0 ? Math.round(baseSalary * 0.08) : 0)
   );
   const conveyanceAllowance = roundCurrency(
-    salaryStructure.conveyance_allowance ?? salaryStructure.conveyanceAllowance ?? salaryStructure.conveyance ?? Math.round(baseSalary * 0.07)
+    salaryStructure.conveyance_allowance ?? salaryStructure.conveyanceAllowance ?? salaryStructure.conveyance ?? (baseSalary > 0 ? Math.round(baseSalary * 0.07) : 0)
   );
   const specialAllowance = roundCurrency(
     Math.max(0, salaryStructure.special_allowance ?? salaryStructure.specialAllowance ?? salaryStructure.special ?? 0)

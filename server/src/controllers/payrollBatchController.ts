@@ -226,12 +226,13 @@ export async function generateMonthlyPayrollBatch(req: AuthenticatedRequest, res
       where: { OR: [{ period }, { batch_code: batchCode }] }
     });
 
-    let batch;
+    let batch: any;
     if (existingBatch) {
       await prisma.staffSalaryPayment.deleteMany({
         where: {
           payroll_batch_id: existingBatch.id,
-          status: { in: ['pending', 'generated', 'draft'] }
+          status: { in: ['pending', 'generated', 'draft'] },
+          ...(staffTypeId ? { staffMember: { staff_type_id: staffTypeId } } : {})
         }
       });
 
@@ -283,7 +284,8 @@ export async function generateMonthlyPayrollBatch(req: AuthenticatedRequest, res
     await prisma.staffSalaryPayment.deleteMany({
       where: {
         payroll_batch_id: batch.id,
-        status: { not: 'paid' }
+        status: { not: 'paid' },
+        ...(staffTypeId ? { staffMember: { staff_type_id: staffTypeId } } : {})
       }
     });
 
@@ -308,6 +310,26 @@ export async function generateMonthlyPayrollBatch(req: AuthenticatedRequest, res
       orderBy: { payslip_number: 'asc' },
       include: { staffMember: true }
     });
+
+    if (existingBatch && staffTypeId) {
+      const aggGross = roundCurrency(createdPayslips.reduce((s, p) => s + (p.base_pay || 0) + (p.allowances || 0), 0));
+      const aggAllowances = roundCurrency(createdPayslips.reduce((s, p) => s + (p.allowances || 0), 0));
+      const aggDeductions = roundCurrency(createdPayslips.reduce((s, p) => s + (p.deductions || 0), 0));
+      const aggAttDeductions = roundCurrency(createdPayslips.reduce((s, p) => s + (p.attendance_deduction_amount || 0), 0));
+      const aggNet = roundCurrency(createdPayslips.reduce((s, p) => s + (p.net_payable || p.amount || 0), 0));
+
+      batch = await prisma.payrollBatch.update({
+        where: { id: batch.id },
+        data: {
+          total_staff_count: createdPayslips.length,
+          total_gross_amount: aggGross,
+          total_allowances: aggAllowances,
+          total_deductions: aggDeductions,
+          total_attendance_deductions: aggAttDeductions,
+          total_net_amount: aggNet
+        }
+      });
+    }
 
     const result = { batch, payslips: createdPayslips };
 

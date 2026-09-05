@@ -31,16 +31,15 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
 
   const currentBatch = batches.find(b => b.id === selectedBatchId) || batches[0];
   
-  // Filter students by assigned batch, falling back to all students if no direct match
+  // Filter students by assigned batch, returning empty array if no students are enrolled in this batch
   const batchStudents = React.useMemo(() => {
-    if (!currentBatch) return students;
-    const filtered = students.filter(s => {
+    if (!currentBatch) return [];
+    return students.filter(s => {
       const gb = (s.gradeBatch || '').toLowerCase();
       const bn = (currentBatch.name || '').toLowerCase();
       const cl = (currentBatch.classLevel || '').toLowerCase();
       return gb === bn || gb === cl || gb.includes(bn) || bn.includes(gb);
     });
-    return filtered.length > 0 ? filtered : students;
   }, [students, currentBatch]);
 
   const [attendanceState, setAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late' | 'Leave'>>({});
@@ -340,7 +339,14 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                 </tr>
               </thead>
               <tbody>
-                {batchStudents.map(s => {
+                {batchStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B', fontWeight: 500 }}>
+                      No students enrolled in this batch.
+                    </td>
+                  </tr>
+                ) : (
+                  batchStudents.map(s => {
                   const currentStatus = attendanceState[s.id] || 'Present';
                   return (
                     <tr key={s.id}>
@@ -384,16 +390,22 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  );
-                })}
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
 
           {/* Mobile Attendance Touch Cards (< 768px) */}
           <div className="mobile-card-roster mobile-only">
-            {batchStudents.map(s => {
+            {batchStudents.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B', fontWeight: 500, background: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                No students enrolled in this batch.
+              </div>
+            ) : (
+              batchStudents.map(s => {
               const currentStatus = attendanceState[s.id] || 'Present';
               return (
                 <div key={s.id} className="mobile-entity-card">
@@ -493,7 +505,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
       )}
