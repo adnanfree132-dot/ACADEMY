@@ -16,6 +16,7 @@ export interface JwtPayload {
   phone?: string | null;
   staffTypeId?: string;
   teacherId?: string | null;
+  studentId?: string | null;
   isPasswordChanged?: boolean;
   permissions?: Record<string, AccessLevelString>;
 }
@@ -622,6 +623,7 @@ export async function handleDemoLogin(req: Request, res: Response) {
         name: studentUser.full_name,
         email: studentUser.email,
         phone: studentUser.phone,
+        studentId: student?.id,
         isPasswordChanged: true,
         permissions: resolvedPermissions
       };

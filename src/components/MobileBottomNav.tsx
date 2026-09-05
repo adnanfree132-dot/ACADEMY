@@ -1,20 +1,36 @@
 import React from 'react';
-import { LayoutDashboard, Users, Layers, Receipt, Menu } from 'lucide-react';
+import { LayoutDashboard, Users, Layers, Receipt, Menu, CheckSquare, BookOpen } from 'lucide-react';
 
 interface MobileBottomNavProps {
   activeTab: string;
   onSelectTab: (tabId: string) => void;
   onOpenMore: () => void;
   isMoreOpen?: boolean;
+  userRole?: string;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   onSelectTab,
   onOpenMore,
-  isMoreOpen = false
+  isMoreOpen = false,
+  userRole = 'admin'
 }) => {
-  const tabs = [
+  const role = (userRole || 'admin').toLowerCase();
+  const isStudent = role === 'student';
+  const isTeacher = role === 'teacher' || role === 'faculty';
+
+  const tabs = isStudent ? [
+    { id: 'dashboard', label: 'Portal', icon: LayoutDashboard },
+    { id: 'attendance', label: 'Attendance', icon: CheckSquare },
+    { id: 'homework', label: 'Homework', icon: BookOpen },
+    { id: 'fees', label: 'My Fees', icon: Receipt }
+  ] : isTeacher ? [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'batches', label: 'Classes', icon: Layers },
+    { id: 'attendance', label: 'Attendance', icon: CheckSquare },
+    { id: 'homework', label: 'Homework', icon: BookOpen }
+  ] : [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Students', icon: Users },
     { id: 'batches', label: 'Classes', icon: Layers },

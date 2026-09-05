@@ -259,7 +259,7 @@ router.delete('/expenses/:id', authenticateJwt, requireAdmin, deleteExpenseContr
 /* ==========================================================================
    2. DASHBOARD MODULE (M15 DASH)
    ========================================================================== */
-router.get('/dashboard', authenticateJwt, requireModulePermission('analytics', 'view_only'), getDashboard);
+router.get('/dashboard', authenticateJwt, getDashboard);
 
 /* ==========================================================================
    3. STUDENTS MODULE (M2 STU)
@@ -267,6 +267,60 @@ router.get('/dashboard', authenticateJwt, requireModulePermission('analytics', '
 router.get('/students', authenticateJwt, requireModulePermission('students', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
     const { q, status, classId } = req.query;
+
+    // 1. Student Self-Scoping (Student can ONLY see their own record)
+    if (req.user?.role === 'student') {
+      const studentId = req.user.studentId;
+      const userId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            studentId ? { id: studentId } : {},
+            userId ? { user_id: userId } : {}
+          ].filter((c) => Object.keys(c).length > 0),
+          status: 'active'
+        },
+        include: {
+          class: true,
+          feePlan: true,
+          feeInvoices: {
+            include: { feePayments: true }
+          },
+          enrollments: {
+            include: {
+              batch: true,
+              installmentSchedules: true
+            }
+          }
+        }
+      });
+      if (!student) return sendSuccess(res, []);
+
+      const totalInvoiced = student.feeInvoices.reduce((sum, inv) => sum + inv.net_amount, 0);
+      const totalPaid = student.feeInvoices.reduce((sum, inv) => {
+        const paid = inv.feePayments.reduce((pSum, p) => pSum + p.amount, 0);
+        return sum + paid;
+      }, 0);
+      const dueBalance = Math.max(0, totalInvoiced - totalPaid);
+      const activeEnrollment = student.enrollments.find((e) => e.status === 'active') || student.enrollments[0];
+      const gradeBatch = student.class?.name || activeEnrollment?.batch?.name || '';
+      const nextDue = student.feeInvoices
+        .filter((inv) => inv.status === 'unpaid' || inv.status === 'partial' || inv.status === 'overdue')
+        .map((inv) => inv.due_date)
+        .filter(Boolean)
+        .sort()[0] || '';
+
+      return sendSuccess(res, [{
+        ...student,
+        totalInvoiced,
+        totalPaid,
+        dueBalance,
+        totalFee: student.feePlan?.monthly_amount || 0,
+        paidFee: totalPaid,
+        gradeBatch,
+        nextDue
+      }]);
+    }
 
     // Faculty Scoping Check
     let teacherBatchIds: string[] | null = null;
@@ -1456,9 +1510,43 @@ router.delete('/classes/:id', authenticateJwt, requireModulePermission('batches'
   }
 });
 
-router.get('/batches', authenticateJwt, requireModulePermission('batches', 'view_only'), async (req, res) => {
+router.get('/batches', authenticateJwt, requireModulePermission('batches', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    let whereCondition: any = { is_active: true };
+
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        select: { id: true }
+      });
+      whereCondition = {
+        is_active: true,
+        enrollments: { some: { student_id: student?.id, status: 'active' } }
+      };
+    } else if (req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      let tId = req.user.teacherId;
+      if (!tId && req.user.userId) {
+        const t = await prisma.teacher.findUnique({ where: { user_id: req.user.userId } });
+        tId = t?.id;
+      }
+      whereCondition = {
+        is_active: true,
+        OR: [
+          tId ? { teacher_id: tId } : {},
+          tId ? { batchSubjects: { some: { teacher_id: tId } } } : {}
+        ].filter(c => Object.keys(c).length > 0)
+      };
+    }
+
     const batches = await prisma.batch.findMany({
+      where: whereCondition,
       include: {
         class: true,
         teacher: { include: { user: true } },
@@ -1994,6 +2082,34 @@ router.get('/attendance', authenticateJwt, requireModulePermission('attendance',
   try {
     const { batchId, date, studentId } = req.query;
 
+    // 1. Student Self-Scoping (Student can ONLY see their own attendance)
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        select: { id: true }
+      });
+      if (!student) return sendSuccess(res, []);
+      const records = await prisma.attendance.findMany({
+        where: {
+          student_id: student.id,
+          date: date ? (date as string) : undefined
+        },
+        include: {
+          student: true,
+          batch: true
+        },
+        orderBy: { date: 'desc' }
+      });
+      return sendSuccess(res, records);
+    }
+
     // Faculty Scoping Check
     const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
     const isGlobal = (req as any).modulePermission?.isGlobalScope || req.user?.role === 'admin' || req.user?.role === 'super_admin';
@@ -2133,6 +2249,39 @@ router.post(['/attendance/bulk', '/attendance/mark'], authenticateJwt, requireMo
    ========================================================================== */
 router.get('/fees', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    if (req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      return sendError(res, 'Forbidden: Teachers do not have access to fee management.', 403);
+    }
+
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        include: {
+          feeInvoices: {
+            include: { feePayments: { where: { voided_at: null, cleared_status: { not: 'bounced' } } } }
+          }
+        }
+      });
+      const invoices = student?.feeInvoices || [];
+      const totalInvoiced = invoices.reduce((sum, i) => sum + (i.net_amount || i.amount || 0), 0);
+      const totalPaid = invoices.reduce((sum, i) => {
+        return sum + (i.feePayments ? i.feePayments.reduce((pSum, p) => pSum + p.amount, 0) : 0);
+      }, 0);
+      return sendSuccess(res, {
+        totalCollected: totalPaid,
+        totalPending: Math.max(0, totalInvoiced - totalPaid),
+        paymentCount: invoices.reduce((sum, i) => sum + (i.feePayments?.length || 0), 0),
+        invoiceCount: invoices.length
+      });
+    }
+
     const [payments, invoices] = await Promise.all([
       prisma.feePayment.findMany({
         where: { voided_at: null, cleared_status: { not: 'bounced' } }
@@ -2164,6 +2313,10 @@ router.get('/fees', authenticateJwt, requireModulePermission('fees', 'view_only'
 
 router.get('/fees/defaulters', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    if (req.user?.role === 'student' || req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      return sendError(res, 'Forbidden: Only administrators can view defaulters.', 403);
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
     const candidateInvoices = await prisma.feeInvoice.findMany({
       where: {
@@ -2190,9 +2343,30 @@ router.get('/fees/defaulters', authenticateJwt, requireModulePermission('fees', 
   }
 });
 
-router.get('/fees/payments', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req, res) => {
+router.get('/fees/payments', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    if (req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      return sendError(res, 'Forbidden: Teachers do not have access to fee payments.', 403);
+    }
+
+    let whereCondition: any = {};
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        select: { id: true }
+      });
+      whereCondition = { student_id: student?.id, voided_at: null };
+    }
+
     const payments = await prisma.feePayment.findMany({
+      where: whereCondition,
       include: { student: true },
       orderBy: { paid_at: 'desc' }
     });
@@ -2396,9 +2570,30 @@ router.post('/fees/payments', authenticateJwt, requireModulePermission('fees', '
   }
 });
 
-router.get('/fees/invoices', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req, res) => {
+router.get('/fees/invoices', authenticateJwt, requireModulePermission('fees', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    if (req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      return sendError(res, 'Forbidden: Teachers do not have access to fee invoices.', 403);
+    }
+
+    let whereCondition: any = {};
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        select: { id: true }
+      });
+      whereCondition = { student_id: student?.id };
+    }
+
     const invoices = await prisma.feeInvoice.findMany({
+      where: whereCondition,
       include: {
         student: {
           include: { feePlan: true }
@@ -2720,10 +2915,55 @@ router.get('/study-materials', authenticateJwt, requireModulePermission('homewor
 router.post('/study-materials', authenticateJwt, requireModulePermission('homework', 'editable'), createStudyMaterial);
 router.delete('/study-materials/:id', authenticateJwt, requireModulePermission('homework', 'editable'), deleteStudyMaterial);
 
-router.get('/tests', authenticateJwt, requireModulePermission('exams', 'view_only'), async (req, res) => {
+router.get('/tests', authenticateJwt, requireModulePermission('exams', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    let whereCondition: any = undefined;
+    let testMarksFilter: any = { include: { student: true } };
+
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        select: { id: true }
+      });
+      whereCondition = {
+        batch: { enrollments: { some: { student_id: student?.id, status: 'active' } } }
+      };
+      testMarksFilter = {
+        where: { student_id: student?.id },
+        include: { student: true }
+      };
+    } else if (req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      let tId = req.user.teacherId;
+      if (!tId && req.user.userId) {
+        const t = await prisma.teacher.findUnique({ where: { user_id: req.user.userId } });
+        tId = t?.id;
+      }
+      if (tId) {
+        whereCondition = {
+          batch: {
+            OR: [
+              { teacher_id: tId },
+              { batchSubjects: { some: { teacher_id: tId } } }
+            ]
+          }
+        };
+      }
+    }
+
     const tests = await prisma.test.findMany({
-      include: { batch: true, subject: true, testMarks: { include: { student: true } } },
+      where: whereCondition,
+      include: {
+        batch: true,
+        subject: true,
+        testMarks: testMarksFilter
+      },
       orderBy: { exam_date: 'desc' }
     });
     return sendSuccess(res, tests);
@@ -2801,9 +3041,44 @@ router.delete('/tests/:id', authenticateJwt, requireModulePermission('exams', 'e
 /* ==========================================================================
    TIMETABLE & ROOM CONFLICT SOLVER
    ========================================================================== */
-router.get('/timetable', authenticateJwt, requireModulePermission('timetable', 'view_only'), async (req, res) => {
+router.get('/timetable', authenticateJwt, requireModulePermission('timetable', 'view_only'), async (req: AuthenticatedRequest, res) => {
   try {
+    let whereCondition: any = undefined;
+
+    if (req.user?.role === 'student') {
+      const sId = req.user.studentId;
+      const uId = req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        select: { id: true }
+      });
+      whereCondition = {
+        batch: { enrollments: { some: { student_id: student?.id, status: 'active' } } }
+      };
+    } else if (req.user?.role === 'teacher' || req.user?.role === 'faculty') {
+      let tId = req.user.teacherId;
+      if (!tId && req.user.userId) {
+        const t = await prisma.teacher.findUnique({ where: { user_id: req.user.userId } });
+        tId = t?.id;
+      }
+      if (tId) {
+        whereCondition = {
+          OR: [
+            { teacher_id: tId },
+            { batch: { teacher_id: tId } },
+            { batch: { batchSubjects: { some: { teacher_id: tId } } } }
+          ]
+        };
+      }
+    }
+
     const slots = await prisma.timetableSlot.findMany({
+      where: whereCondition,
       include: {
         batch: { include: { class: true } },
         subject: true,

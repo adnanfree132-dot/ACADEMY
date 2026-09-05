@@ -15,7 +15,7 @@ export interface EffectivePermission {
   accessLevel: AccessLevelString;
   numericLevel: AccessLevelNumeric;
   isGlobalScope: boolean;
-  source: 'admin_bypass' | 'jwt' | 'staff_override' | 'staff_type_template' | 'zero_trust_default';
+  source: 'admin_bypass' | 'jwt' | 'staff_override' | 'staff_type_template' | 'zero_trust_default' | 'student_scoped_access';
 }
 
 /**
@@ -75,6 +75,26 @@ export async function getEffectiveStaffPermission(
 
   // 2. Student / Parent guard
   if (user.role === 'student' || user.role === 'parent') {
+    const studentAllowedModules = [
+      'students',
+      'attendance',
+      'homework',
+      'exams',
+      'timetable',
+      'announcements',
+      'leaves',
+      'fees',
+      'batches'
+    ];
+    if (studentAllowedModules.includes(moduleKey)) {
+      return {
+        moduleKey,
+        accessLevel: 'view_only',
+        numericLevel: 1,
+        isGlobalScope: false,
+        source: 'student_scoped_access'
+      };
+    }
     return {
       moduleKey,
       accessLevel: 'hidden',

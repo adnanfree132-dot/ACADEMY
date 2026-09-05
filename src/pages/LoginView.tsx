@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../api/apiClient';
 import { Shield, GraduationCap, UserCheck, Sparkles, Loader2 } from 'lucide-react';
+import { cacheClear } from '../lib/resourceCache';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -21,7 +22,8 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     try {
       const result = await api.login({ email, password });
       
-      // Save token to local storage
+      // Wipe stale cached data from previous sessions
+      cacheClear();
       localStorage.setItem('token', result.token);
       localStorage.setItem('user', JSON.stringify(result.user));
       
@@ -52,6 +54,8 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     try {
       const result = await api.demoLogin(role);
       
+      // Wipe stale cached data from previous sessions
+      cacheClear();
       localStorage.setItem('token', result.token);
       localStorage.setItem('user', JSON.stringify(result.user));
       

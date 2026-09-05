@@ -7,7 +7,45 @@ import { formatDateIso } from '../utils/billingUtils';
 
 export async function listHomework(_req: AuthenticatedRequest, res: Response) {
   try {
+    let whereCondition: any = undefined;
+
+    if (_req.user?.role === 'student') {
+      const sId = _req.user.studentId;
+      const uId = _req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            sId ? { id: sId } : {},
+            uId ? { user_id: uId } : {}
+          ].filter(c => Object.keys(c).length > 0)
+        },
+        include: { enrollments: { where: { status: 'active' }, select: { batch_id: true } } }
+      });
+      const batchIds = student?.enrollments.map(e => e.batch_id) || [];
+      whereCondition = { batch_id: { in: batchIds } };
+    } else if (_req.user?.role === 'teacher' || _req.user?.role === 'faculty') {
+      let tId = _req.user.teacherId;
+      if (!tId && _req.user.userId) {
+        const t = await prisma.teacher.findUnique({ where: { user_id: _req.user.userId } });
+        tId = t?.id;
+      }
+      if (tId) {
+        const batches = await prisma.batch.findMany({
+          where: {
+            is_active: true,
+            OR: [
+              { teacher_id: tId },
+              { batchSubjects: { some: { teacher_id: tId } } }
+            ]
+          },
+          select: { id: true }
+        });
+        whereCondition = { batch_id: { in: batches.map(b => b.id) } };
+      }
+    }
+
     const list = await prisma.homework.findMany({
+      where: whereCondition,
       include: {
         batch: true,
         subject: true,

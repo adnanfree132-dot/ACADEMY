@@ -38,7 +38,52 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const sections = [
+  const role = (userRole || 'admin').toLowerCase();
+  const isStudent = role === 'student';
+  const isTeacher = role === 'teacher' || role === 'faculty';
+
+  const sections = isStudent ? [
+    {
+      title: 'STUDENT PORTAL',
+      items: [
+        { id: 'dashboard', label: 'My Portal Overview', icon: CheckSquare, color: '#10B981' },
+        { id: 'attendance', label: 'My Attendance', icon: CheckSquare, color: '#10B981' },
+        { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
+        { id: 'exams', label: 'Exams & Marks', icon: Award, color: '#F59E0B' },
+        { id: 'timetable', label: 'Class Timetable', icon: Calendar, color: '#EC4899' },
+        { id: 'fees', label: 'My Fee Slips', icon: Receipt, color: '#059669' },
+        { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
+        { id: 'leaves', label: 'Leave Request', icon: Calendar, color: '#F59E0B' },
+      ]
+    }
+  ] : isTeacher ? [
+    {
+      title: 'TEACHING & CLASSES',
+      items: [
+        { id: 'batches', label: 'Classes & Batches', icon: BookOpen, color: '#3B82F6' },
+        { id: 'students', label: 'Student Roster', icon: UserSquare2, color: '#10B981' },
+        { id: 'attendance', label: 'Attendance Portal', icon: CheckSquare, color: '#10B981' },
+        { id: 'staff_attendance', label: 'Staff Attendance', icon: UserCheck, color: '#0EA5E9' },
+      ]
+    },
+    {
+      title: 'ACADEMICS',
+      items: [
+        { id: 'subjects', label: 'Course Subjects', icon: BookOpen, color: '#3B82F6' },
+        { id: 'exams', label: 'Exams & Results', icon: Award, color: '#F59E0B' },
+        { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
+        { id: 'leaves', label: 'Student Leave', icon: Calendar, color: '#F59E0B' },
+        { id: 'conduct', label: 'Conduct Desk', icon: UserCheck, color: '#7C3AED' },
+        { id: 'timetable', label: 'Timetable Schedules', icon: Calendar, color: '#EC4899' },
+      ]
+    },
+    {
+      title: 'NOTICES',
+      items: [
+        { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
+      ]
+    }
+  ] : [
     {
       title: 'CORE OPERATIONS',
       items: [

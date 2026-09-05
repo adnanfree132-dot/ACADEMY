@@ -69,6 +69,269 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
     const todayStr = formatDateIso(new Date());
     const weekday = WEEKDAYS[new Date().getDay()];
     const { period, start: monthStart, end: monthEnd } = monthBounds(todayStr);
+
+    // 1. Student Portal Dashboard Scoping
+    if (_req.user?.role === 'student') {
+      const studentId = _req.user.studentId;
+      const userId = _req.user.userId;
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            studentId ? { id: studentId } : {},
+            userId ? { user_id: userId } : {}
+          ].filter((c) => Object.keys(c).length > 0)
+        },
+        include: {
+          class: true,
+          enrollments: {
+            where: { status: 'active' },
+            include: { batch: true }
+          },
+          feeInvoices: {
+            include: { feePayments: true }
+          }
+        }
+      });
+
+      const sId = student?.id;
+      const enrolledBatchIds = student?.enrollments.map((e) => e.batch_id) || [];
+
+      // Personal attendance
+      const attendanceRecords = sId
+        ? await prisma.attendance.findMany({
+            where: { student_id: sId },
+            select: { status: true, date: true }
+          })
+        : [];
+
+      const totalAttendance = attendanceRecords.length;
+      const presentCount = attendanceRecords.filter((a) => a.status === 'present' || a.status === 'late').length;
+      const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 100;
+
+      // Pending homework
+      const pendingHomework = enrolledBatchIds.length > 0
+        ? await prisma.homework.count({
+            where: {
+              batch_id: { in: enrolledBatchIds },
+              due_date: { gte: todayStr }
+            }
+          })
+        : 0;
+
+      // Upcoming tests
+      const tests = enrolledBatchIds.length > 0
+        ? await prisma.test.findMany({
+            where: {
+              batch_id: { in: enrolledBatchIds },
+              exam_date: { gte: todayStr }
+            },
+            include: { subject: true, batch: true },
+            orderBy: { exam_date: 'asc' },
+            take: 5
+          })
+        : [];
+
+      // Student fees summary
+      const totalInvoiced = (student?.feeInvoices || []).reduce((sum, inv) => sum + inv.net_amount, 0);
+      const totalPaid = (student?.feeInvoices || []).reduce((sum, inv) => {
+        return sum + inv.feePayments.reduce((pSum, p) => pSum + p.amount, 0);
+      }, 0);
+      const pendingFee = Math.max(0, totalInvoiced - totalPaid);
+
+      // Student today schedule
+      const todaySchedule = enrolledBatchIds.length > 0
+        ? await prisma.timetableSlot.findMany({
+            where: {
+              day: weekday,
+              batch_id: { in: enrolledBatchIds }
+            },
+            include: { batch: true, subject: true, teacher: { include: { user: true } } },
+            orderBy: { start_time: 'asc' }
+          })
+        : [];
+
+      // Announcements
+      const announcements = await prisma.announcement.findMany({
+        where: { audience: { in: ['all', 'students'] } },
+        orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }],
+        take: 5
+      });
+
+      return sendSuccess(res, {
+        role: 'student',
+        overview: {
+          attendanceRate,
+          totalAttendance,
+          presentCount,
+          pendingHomework,
+          upcomingTestsCount: tests.length,
+          totalInvoiced,
+          totalPaid,
+          pendingFee,
+          totalStudents: 1,
+          totalTeachers: 0,
+          totalBatches: enrolledBatchIds.length,
+          todayAttendancePct: attendanceRate,
+          totalCollected: totalPaid,
+          totalPending: pendingFee,
+          defaultersCount: 0
+        },
+        student: {
+          id: student?.id,
+          fullName: student?.full_name || _req.user.fullName,
+          admissionNo: student?.admission_no,
+          className: student?.class?.name,
+          batches: student?.enrollments.map((e) => e.batch?.name).filter(Boolean)
+        },
+        todaySchedule: todaySchedule.map((s) => ({
+          id: s.id,
+          startTime: s.start_time,
+          endTime: s.end_time,
+          room: s.room,
+          topic: s.topic,
+          batchName: s.batch?.name || '',
+          subjectName: s.subject?.name || '',
+          teacherName: s.teacher?.user?.full_name || 'Instructor'
+        })),
+        upcomingTests: tests.map((t) => ({
+          id: t.id,
+          title: t.title,
+          examDate: t.exam_date,
+          batchName: t.batch?.name || '',
+          subjectName: t.subject?.name || '',
+          maxMarks: t.max_marks,
+          passMarks: t.pass_marks
+        })),
+        recentAnnouncements: announcements.map((a) => ({
+          id: a.id,
+          title: a.title,
+          body: a.body,
+          pinned: a.pinned,
+          createdAt: a.created_at
+        }))
+      });
+    }
+
+    // 2. Faculty / Teacher Dashboard Scoping
+    if (_req.user?.role === 'teacher' || _req.user?.role === 'faculty') {
+      let teacherId = _req.user.teacherId;
+      if (!teacherId && _req.user.userId) {
+        const t = await prisma.teacher.findUnique({ where: { user_id: _req.user.userId } });
+        teacherId = t?.id;
+      }
+
+      const batches = teacherId
+        ? await prisma.batch.findMany({
+            where: {
+              is_active: true,
+              OR: [
+                { teacher_id: teacherId },
+                { batchSubjects: { some: { teacher_id: teacherId } } }
+              ]
+            },
+            include: { class: true, _count: { select: { enrollments: true } } }
+          })
+        : [];
+
+      const batchIds = batches.map((b) => b.id);
+      const totalStudents = batches.reduce((sum, b) => sum + (b._count?.enrollments || 0), 0);
+
+      const todayAttendance = batchIds.length > 0
+        ? await prisma.attendance.findMany({
+            where: { batch_id: { in: batchIds }, date: todayStr }
+          })
+        : [];
+
+      const markedBatchIds = new Set(todayAttendance.map((a) => a.batch_id));
+      const pendingAttendanceBatches = batches.filter((b) => !markedBatchIds.has(b.id));
+
+      const todaySlots = teacherId
+        ? await prisma.timetableSlot.findMany({
+            where: {
+              day: weekday,
+              OR: [
+                { teacher_id: teacherId },
+                { batch_id: { in: batchIds } }
+              ]
+            },
+            include: { batch: true, subject: true, teacher: { include: { user: true } } },
+            orderBy: { start_time: 'asc' }
+          })
+        : [];
+
+      const upcomingTests = batchIds.length > 0
+        ? await prisma.test.findMany({
+            where: { batch_id: { in: batchIds }, exam_date: { gte: todayStr } },
+            include: {
+              batch: { select: { name: true, _count: { select: { enrollments: true } } } },
+              subject: { select: { name: true } },
+              testMarks: { where: { status: 'scored' }, select: { student_id: true } }
+            },
+            orderBy: { exam_date: 'asc' },
+            take: 10
+          })
+        : [];
+
+      const announcements = await prisma.announcement.findMany({
+        where: { audience: { in: ['all', 'teachers', 'staff'] } },
+        orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }],
+        take: 5
+      });
+
+      return sendSuccess(res, {
+        role: 'teacher',
+        overview: {
+          totalBatches: batches.length,
+          totalStudents,
+          totalTeachers: 1,
+          todayClasses: todaySlots.length,
+          pendingAttendanceCount: pendingAttendanceBatches.length,
+          upcomingTestsCount: upcomingTests.length,
+          todayAttendancePct: batches.length > 0 ? Math.round((markedBatchIds.size / batches.length) * 100) : 100,
+          totalCollected: 0,
+          totalPending: 0,
+          defaultersCount: 0
+        },
+        teacher: {
+          id: teacherId,
+          fullName: _req.user.fullName
+        },
+        batches: batches.map((b) => ({ id: b.id, name: b.name, studentsCount: b._count?.enrollments || 0 })),
+        todaySchedule: todaySlots.map((s) => ({
+          id: s.id,
+          startTime: s.start_time,
+          endTime: s.end_time,
+          room: s.room,
+          topic: s.topic,
+          batchName: s.batch?.name || '',
+          subjectName: s.subject?.name || '',
+          teacherName: s.teacher?.user?.full_name || _req.user?.fullName || 'Teacher'
+        })),
+        unmarkedAttendance: pendingAttendanceBatches.map((b) => ({
+          batchId: b.id,
+          batchName: b.name,
+          enrolled: b._count?.enrollments || 0
+        })),
+        testsWithoutMarks: upcomingTests.map((t) => ({
+          id: t.id,
+          title: t.title,
+          examDate: t.exam_date,
+          batchName: t.batch?.name || '',
+          subjectName: t.subject?.name || '',
+          roster: t.batch?._count?.enrollments || 0,
+          scored: t.testMarks.length
+        })),
+        recentAnnouncements: announcements.map((a) => ({
+          id: a.id,
+          title: a.title,
+          body: a.body,
+          pinned: a.pinned,
+          createdAt: a.created_at
+        }))
+      });
+    }
+
+    // 3. Admin Full Institutional Dashboard
     const settings = await readSettingsMap();
 
     const [

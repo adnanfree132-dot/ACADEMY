@@ -297,6 +297,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* + Create Action Dropdown Popover */}
+        {userRole?.toLowerCase() !== 'student' && (
         <div style={{ position: 'relative' }}>
           <button className="btn-primary" onClick={() => setShowCreateDropdown(!showCreateDropdown)}>
             <Plus size={16} strokeWidth={2.5} />
@@ -373,6 +374,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+        )}
 
         <div style={{ position: 'relative' }}>
           <button className="btn-icon bell-btn" title="Notifications" onClick={() => { setShowNotifications(v => !v); setShowProfileMenu(false); setShowCreateDropdown(false); }}>

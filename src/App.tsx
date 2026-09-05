@@ -18,9 +18,14 @@ import { TimetableView, ExamsView, HomeworkView, SettingsView } from './pages/Se
 import { StudentLeaveView } from './pages/StudentLeaveView';
 import { ConductView } from './pages/ConductView';
 import { LoginView } from './pages/LoginView';
+import { StudentDashboardView } from './components/StudentDashboardView';
+import { TeacherDashboardView } from './components/TeacherDashboardView';
+import { StudentFeeView } from './components/StudentFeeView';
+import { StudentAttendanceView } from './components/StudentAttendanceView';
+import { AccessDeniedView } from './components/AccessDeniedView';
 import { api } from './api/apiClient';
 import { applyAcademySettings } from './lib/academySettings';
-import { readBootstrapSnapshot, writeBootstrapSnapshot, filterDeleted, removeIdFromCaches } from './lib/resourceCache';
+import { readBootstrapSnapshot, writeBootstrapSnapshot, filterDeleted, removeIdFromCaches, cacheClear } from './lib/resourceCache';
 import { useEntityRemoved } from './lib/useEntityRemoved';
 
 import { WhatsAppCenterView } from './pages/WhatsAppCenterView';
@@ -81,13 +86,18 @@ export function App() {
     Array.isArray(snap.notifications) ? snap.notifications.filter((n: any) => !n.is_read).length : 0
   );
 
-  const sessionUser = (() => {
+  const [currentUser, setCurrentUser] = useState<any>(() => {
     try {
       return JSON.parse(localStorage.getItem('user') || '{}');
     } catch {
       return {};
     }
-  })();
+  });
+
+  const userRole = (currentUser?.role || 'admin').toLowerCase();
+  const isStudent = userRole === 'student';
+  const isTeacher = userRole === 'teacher' || userRole === 'faculty';
+  const isAdmin = !isStudent && !isTeacher;
 
   useEntityRemoved((ids) => {
     const gone = new Set(ids);
@@ -105,7 +115,7 @@ export function App() {
       }
     };
 
-    await Promise.all([
+    const initialPromises: Promise<any>[] = [
       run(() => api.getDashboard(), (stats) => {
         if (stats?.overview) {
           setDashboardStats(stats.overview);
@@ -113,21 +123,25 @@ export function App() {
         } else {
           setDashboardLive(stats);
         }
-      }),
-      run(() => api.getSettings(), (backendSettings) => {
-        applyAcademySettings(backendSettings);
-        if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
       })
-    ]);
+    ];
 
-    await Promise.all([
+    if (isAdmin) {
+      initialPromises.push(
+        run(() => api.getSettings(), (backendSettings) => {
+          applyAcademySettings(backendSettings);
+          if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
+        })
+      );
+    }
+
+    await Promise.all(initialPromises);
+
+    const dataPromises: Promise<any>[] = [
       run(() => api.getNotifications(), (backendNotifications) => {
         if (!Array.isArray(backendNotifications)) return;
         setNotifications(backendNotifications);
         setUnreadNotifications(backendNotifications.filter((n: any) => !n.is_read).length);
-      }),
-      run(() => api.getStaffList(), (backendStaff) => {
-        if (Array.isArray(backendStaff)) setStaffList(filterDeleted(backendStaff));
       }),
       run(() => api.getSubjects(), (backendSubjects) => {
         if (!Array.isArray(backendSubjects)) return;
@@ -195,21 +209,6 @@ export function App() {
           };
         }));
       }),
-      run(() => api.getTeachers(), (backendTeachers) => {
-        if (!Array.isArray(backendTeachers)) return;
-        setTeachers(filterDeleted(backendTeachers).map((t: any) => ({
-          id: t.id,
-          name: t.user?.full_name || t.full_name || '',
-          qualification: t.qualification || '',
-          assignedSubjects: (t.batchSubjects || []).map((bs: any) => bs.subject?.name).filter(Boolean),
-          assignedBatches: [
-            ...(t.batches || []).map((b: any) => b.name),
-            ...(t.batchSubjects || []).map((bs: any) => bs.batch?.name)
-          ].filter(Boolean).filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i),
-          phone: t.user?.phone || t.phone || '',
-          email: t.user?.email || t.email || ''
-        })));
-      }),
       run(() => api.getBatches(), (backendBatches) => {
         if (!Array.isArray(backendBatches)) return;
         setBatches(filterDeleted(backendBatches).map((b: any) => ({
@@ -242,37 +241,67 @@ export function App() {
           scheduledFor: a.scheduled_for || a.scheduledFor || null,
           author: a.created_by === 'admin' ? 'Administration' : undefined
         })));
-      }),
-      run(() => api.getInquiries(), (backendInq) => {
-        if (!Array.isArray(backendInq)) return;
-        setLeads(filterDeleted(backendInq).map((i: any) => ({
-          id: i.id,
-          studentName: i.student_name || i.name || '',
-          parentName: i.parent_name || '',
-          phone: i.phone,
-          gradeInterest: i.grade_interest || i.class_interest || '',
-          targetClass: i.grade_interest || i.class_interest || '',
-          source: i.source,
-          status: i.status === 'new' ? 'New' : i.status === 'contacted' ? 'Contacted' : i.status === 'admitted' || i.status === 'converted' ? 'Converted' : i.status,
-          followUpDate: i.follow_up_on || '',
-          date: i.created_at ? String(i.created_at).split('T')[0] : ''
-        })));
-      }),
-      run(() => api.getPayments(), (backendPayments) => {
-        if (!Array.isArray(backendPayments)) return;
-        setTransactions(filterDeleted(backendPayments).map((p: any) => ({
-          id: p.id,
-          receiptNo: p.receipt_no,
-          studentId: p.student_id,
-          studentName: p.student?.full_name || '',
-          regNo: p.student?.admission_no || '',
-          amount: p.amount,
-          date: p.paid_at ? String(p.paid_at).split('T')[0] : '',
-          method: p.method,
-          notes: p.note || p.notes
-        })));
       })
-    ]);
+    ];
+
+    if (isAdmin) {
+      dataPromises.push(
+        run(() => api.getStaffList(), (backendStaff) => {
+          if (Array.isArray(backendStaff)) setStaffList(filterDeleted(backendStaff));
+        }),
+        run(() => api.getTeachers(), (backendTeachers) => {
+          if (!Array.isArray(backendTeachers)) return;
+          setTeachers(filterDeleted(backendTeachers).map((t: any) => ({
+            id: t.id,
+            name: t.user?.full_name || t.full_name || '',
+            qualification: t.qualification || '',
+            assignedSubjects: (t.batchSubjects || []).map((bs: any) => bs.subject?.name).filter(Boolean),
+            assignedBatches: [
+              ...(t.batches || []).map((b: any) => b.name),
+              ...(t.batchSubjects || []).map((bs: any) => bs.batch?.name)
+            ].filter(Boolean).filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i),
+            phone: t.user?.phone || t.phone || '',
+            email: t.user?.email || t.email || ''
+          })));
+        }),
+        run(() => api.getInquiries(), (backendInq) => {
+          if (!Array.isArray(backendInq)) return;
+          setLeads(filterDeleted(backendInq).map((i: any) => ({
+            id: i.id,
+            studentName: i.student_name || i.name || '',
+            parentName: i.parent_name || '',
+            phone: i.phone,
+            gradeInterest: i.grade_interest || i.class_interest || '',
+            targetClass: i.grade_interest || i.class_interest || '',
+            source: i.source,
+            status: i.status === 'new' ? 'New' : i.status === 'contacted' ? 'Contacted' : i.status === 'admitted' || i.status === 'converted' ? 'Converted' : i.status,
+            followUpDate: i.follow_up_on || '',
+            date: i.created_at ? String(i.created_at).split('T')[0] : ''
+          })));
+        })
+      );
+    }
+
+    if (isAdmin || isStudent) {
+      dataPromises.push(
+        run(() => api.getPayments(), (backendPayments) => {
+          if (!Array.isArray(backendPayments)) return;
+          setTransactions(filterDeleted(backendPayments).map((p: any) => ({
+            id: p.id,
+            receiptNo: p.receipt_no,
+            studentId: p.student_id,
+            studentName: p.student?.full_name || '',
+            regNo: p.student?.admission_no || '',
+            amount: p.amount,
+            date: p.paid_at ? String(p.paid_at).split('T')[0] : '',
+            method: p.method,
+            notes: p.note || p.notes
+          })));
+        })
+      );
+    }
+
+    await Promise.all(dataPromises);
   };
 
   useEffect(() => {
@@ -295,27 +324,44 @@ export function App() {
       let m = now.getMonth();
       if (m === 0) { m = 12; y -= 1; }
       const priorMonth = `${y}-${String(m).padStart(2, '0')}`;
-      await Promise.all([
+
+      const prefetchPromises: Promise<any>[] = [
         quiet(api.getHomework()),
         quiet(api.getStudyMaterials()),
         quiet(api.getTests()),
         quiet(api.getTimetableSlots()),
         quiet(api.getLeaves()),
-        quiet(api.getInvoices()),
-        quiet(api.getExpenses()),
-        quiet(api.getConductDesk()),
-        quiet(api.getWhatsAppTemplates()),
-        quiet(api.getWhatsAppLogs()),
-        quiet(api.getStaffTypes()),
-        quiet(api.getClasses()),
-        quiet(api.getLiveStaffPayrollRegister({ month_period: priorMonth })),
-        quiet(api.getStaffAttendanceRoster({ date: today }))
-      ]);
+        quiet(api.getClasses())
+      ];
+
+      if (isAdmin) {
+        prefetchPromises.push(
+          quiet(api.getInvoices()),
+          quiet(api.getExpenses()),
+          quiet(api.getConductDesk()),
+          quiet(api.getWhatsAppTemplates()),
+          quiet(api.getWhatsAppLogs()),
+          quiet(api.getStaffTypes()),
+          quiet(api.getLiveStaffPayrollRegister({ month_period: priorMonth })),
+          quiet(api.getStaffAttendanceRoster({ date: today }))
+        );
+      } else if (isTeacher) {
+        prefetchPromises.push(
+          quiet(api.getConductDesk()),
+          quiet(api.getStaffAttendanceRoster({ date: today }))
+        );
+      } else if (isStudent) {
+        prefetchPromises.push(
+          quiet(api.getInvoices())
+        );
+      }
+
+      await Promise.all(prefetchPromises);
     })();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userRole]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !isAdmin) return;
     writeBootstrapSnapshot({
       dashboardStats,
       dashboardLive,
@@ -330,7 +376,7 @@ export function App() {
       academyName,
       notifications
     });
-  }, [isAuthenticated, dashboardStats, dashboardLive, students, teachers, staffList, batches, transactions, leads, announcements, subjects, academyName, notifications]);
+  }, [isAuthenticated, isAdmin, dashboardStats, dashboardLive, students, teachers, staffList, batches, transactions, leads, announcements, subjects, academyName, notifications]);
 
   // --- Optimistic Instant-Reflect Handlers (0ms UI Updates + Silent Background API) ---
   const handleAddStudent = async (newStudentData: Omit<Student, 'id' | 'regNo' | 'paidFee' | 'dueBalance' | 'isDefaulter'>) => {
@@ -675,7 +721,20 @@ export function App() {
   };
 
   const handleLogout = () => {
+    cacheClear();
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setCurrentUser({});
+    setStudents([]);
+    setTeachers([]);
+    setBatches([]);
+    setTransactions([]);
+    setDashboardStats(null);
+    setDashboardLive(null);
+    setLeads([]);
+    setAnnouncements([]);
+    setSubjects([]);
+    setStaffList([]);
     setIsAuthenticated(false);
   };
 
@@ -723,43 +782,71 @@ export function App() {
   const renderCurrentView = () => (
     <>
       {pane('dashboard', (
-        <DashboardView
-          students={students}
-          teachers={teachers}
-          batches={batches}
-          transactions={transactions}
-          leads={leads}
-          onNavigate={setCurrentTab}
-          dashboardStats={dashboardStats}
-          dashboardLive={dashboardLive}
-        />
+        isStudent ? (
+          <StudentDashboardView
+            student={students[0]}
+            dashboardLive={dashboardLive}
+            onNavigate={setCurrentTab}
+          />
+        ) : isTeacher ? (
+          <TeacherDashboardView
+            teacher={teachers[0]}
+            dashboardLive={dashboardLive}
+            onNavigate={setCurrentTab}
+          />
+        ) : (
+          <DashboardView
+            students={students}
+            teachers={teachers}
+            batches={batches}
+            transactions={transactions}
+            leads={leads}
+            onNavigate={setCurrentTab}
+            dashboardStats={dashboardStats}
+            dashboardLive={dashboardLive}
+          />
+        )
       ))}
       {pane('students', (
-        <StudentsView
-          students={students}
-          batches={batches}
-          onOpenCreateModal={() => {}}
-          onAddStudent={handleAddStudent}
-          onEditStudent={handleEditStudent}
-          onDeleteStudent={handleDeleteStudent}
-          onAddPayment={handleAddPayment}
-          onBulkImport={handleBulkImport}
-          onBulkDelete={handleBulkDelete}
-          onBulkTransfer={handleBulkTransfer}
-          onRefreshStudents={refreshDataFromBackend}
-        />
+        isStudent ? (
+          <AccessDeniedView
+            message="Students do not have permission to view the institutional student directory."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <StudentsView
+            students={students}
+            batches={batches}
+            onOpenCreateModal={() => {}}
+            onAddStudent={handleAddStudent}
+            onEditStudent={handleEditStudent}
+            onDeleteStudent={handleDeleteStudent}
+            onAddPayment={handleAddPayment}
+            onBulkImport={handleBulkImport}
+            onBulkDelete={handleBulkDelete}
+            onBulkTransfer={handleBulkTransfer}
+            onRefreshStudents={refreshDataFromBackend}
+          />
+        )
       ))}
       {pane('teachers', (
-        <TeachersView
-          teachers={teachers}
-          staff={staffList}
-          onUpdateStaffList={setStaffList}
-          batches={batches}
-          students={students}
-          onAddTeacher={handleAddTeacher}
-          onDeleteTeacher={handleDeleteTeacher}
-          onEditTeacher={handleEditTeacher}
-        />
+        isStudent || isTeacher ? (
+          <AccessDeniedView
+            message="You do not have permission to view faculty records and staff payroll."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <TeachersView
+            teachers={teachers}
+            staff={staffList}
+            onUpdateStaffList={setStaffList}
+            batches={batches}
+            students={students}
+            onAddTeacher={handleAddTeacher}
+            onDeleteTeacher={handleDeleteTeacher}
+            onEditTeacher={handleEditTeacher}
+          />
+        )
       ))}
       {pane('batches', (
         <BatchesView
@@ -783,29 +870,82 @@ export function App() {
         />
       ))}
       {pane('attendance', (
-        <AttendanceView batches={batches} students={students} />
+        isStudent ? (
+          <StudentAttendanceView
+            student={students[0]}
+            onNavigate={setCurrentTab}
+          />
+        ) : (
+          <AttendanceView batches={batches} students={students} />
+        )
       ))}
-      {pane('staff_attendance', <StaffAttendanceView />)}
-      {pane('staff_payroll', <StaffPayrollView />)}
+      {pane('staff_attendance', (
+        isStudent ? (
+          <AccessDeniedView
+            message="Students do not have access to staff attendance."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <StaffAttendanceView />
+        )
+      ))}
+      {pane('staff_payroll', (
+        !isAdmin ? (
+          <AccessDeniedView
+            message="You do not have permission to access institutional staff payroll."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <StaffPayrollView />
+        )
+      ))}
       {pane('fees', (
-        <FeeManagementView
-          students={students}
-          transactions={transactions}
-          onOpenCreateModal={() => {}}
-          onAddPayment={handleAddPayment}
-        />
+        isStudent ? (
+          <StudentFeeView
+            student={students[0]}
+            onNavigate={setCurrentTab}
+          />
+        ) : isTeacher ? (
+          <AccessDeniedView
+            message="Faculty members do not have permission to access institutional fee management."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <FeeManagementView
+            students={students}
+            transactions={transactions}
+            onOpenCreateModal={() => {}}
+            onAddPayment={handleAddPayment}
+          />
+        )
       ))}
-      {pane('expenses', <ExpenseManagementView />)}
+      {pane('expenses', (
+        !isAdmin ? (
+          <AccessDeniedView
+            message="You do not have permission to access institutional expenses."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <ExpenseManagementView />
+        )
+      ))}
       {pane('crm', (
-        <CrmView
-          leads={leads}
-          onAddLead={handleAddLead}
-          onConvertLead={(lead) => {
-            setConvertLead(lead);
-            setIsMobileAddStudentOpen(true);
-          }}
-          onLeadsChanged={refreshDataFromBackend}
-        />
+        !isAdmin ? (
+          <AccessDeniedView
+            message="You do not have permission to access admissions CRM and leads."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <CrmView
+            leads={leads}
+            onAddLead={handleAddLead}
+            onConvertLead={(lead) => {
+              setConvertLead(lead);
+              setIsMobileAddStudentOpen(true);
+            }}
+            onLeadsChanged={refreshDataFromBackend}
+          />
+        )
       ))}
       {pane('announcements', (
         <AnnouncementsView
@@ -815,30 +955,68 @@ export function App() {
           onDeleteAnnouncement={handleDeleteAnnouncement}
         />
       ))}
-      {pane('whatsapp', <WhatsAppCenterView />)}
+      {pane('whatsapp', (
+        !isAdmin ? (
+          <AccessDeniedView
+            message="You do not have permission to access administrative WhatsApp messaging."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <WhatsAppCenterView />
+        )
+      ))}
       {pane('timetable', <TimetableView />)}
       {pane('exams', <ExamsView students={students} batches={batches} />)}
       {pane('homework', <HomeworkView />)}
       {pane('leaves', <StudentLeaveView students={students} />)}
-      {pane('conduct', <ConductView />)}
-      {pane('settings', <SettingsView />)}
+      {pane('conduct', (
+        isStudent ? (
+          <AccessDeniedView
+            message="Students do not have permission to access the Conduct Desk."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <ConductView />
+        )
+      ))}
+      {pane('settings', (
+        !isAdmin ? (
+          <AccessDeniedView
+            message="You do not have permission to access academy configuration."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <SettingsView />
+        )
+      ))}
     </>
   );
 
   if (!isAuthenticated) {
-    return <LoginView onLoginSuccess={() => { setIsAuthenticated(true); }} />;
+    return (
+      <LoginView
+        onLoginSuccess={() => {
+          setIsAuthenticated(true);
+          try {
+            setCurrentUser(JSON.parse(localStorage.getItem('user') || '{}'));
+          } catch {
+            setCurrentUser({});
+          }
+        }}
+      />
+    );
   }
 
   const tabTitles: Record<TabType, string> = {
-    dashboard: 'Dashboard',
+    dashboard: isStudent ? 'Student Portal' : isTeacher ? 'Faculty Portal' : 'Dashboard',
     students: 'Students Directory',
     teachers: 'Faculty Directory',
     batches: 'Classes & Batches',
     subjects: 'Course Subjects',
-    attendance: 'Attendance Portal',
+    attendance: isStudent ? 'My Attendance' : 'Attendance Portal',
     staff_attendance: 'Staff Geolocation Attendance',
     staff_payroll: 'Staff Payroll & Salary Management',
-    fees: 'Fee Management',
+    fees: isStudent ? 'My Fee Slips' : 'Fee Management',
     expenses: 'Institutional Expenses',
     crm: 'Inquiries & CRM',
     announcements: 'Announcements',
@@ -851,6 +1029,9 @@ export function App() {
     settings: 'Academy Settings'
   };
 
+  const displayName = currentUser?.name || currentUser?.full_name || currentUser?.username || (isStudent ? 'Student' : isTeacher ? 'Teacher' : 'Admin');
+  const displayRole = currentUser?.role ? (currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)) : (isStudent ? 'Student' : isTeacher ? 'Teacher' : 'Administrator');
+
   return (
     <div className="app-container">
       {/* Mobile Top App Bar */}
@@ -858,20 +1039,25 @@ export function App() {
         academyName={academyName}
         activeViewTitle={tabTitles[currentTab] || 'Dashboard'}
         notificationCount={unreadNotifications}
-        userName={sessionUser.name || sessionUser.full_name || sessionUser.username || 'Admin'}
-        userRole={sessionUser.role || 'Admin'}
+        userName={displayName}
+        userRole={displayRole}
         onOpenNotifications={() => setCurrentTab('announcements')}
         onOpenQuickCreate={() => setIsMobileMoreOpen(true)}
       />
 
       {/* Desktop Sidebar Navigation */}
-      <Sidebar currentTab={currentTab} onSelectTab={setCurrentTab} onLogout={handleLogout} />
+      <Sidebar
+        currentTab={currentTab}
+        onSelectTab={setCurrentTab}
+        onLogout={handleLogout}
+        userRole={userRole}
+      />
 
       {/* Main Content View Container */}
       <main className="main-content">
         <Header
-          userName={sessionUser.name || sessionUser.full_name || sessionUser.username || 'Admin'}
-          userRole={sessionUser.role || 'Admin'}
+          userName={displayName}
+          userRole={displayRole}
           onOpenAction={(type) => setCurrentTab(type === 'student' ? 'students' : type === 'teacher' ? 'teachers' : type === 'fee' ? 'fees' : 'batches')}
           onSearch={setSearchQuery}
           onLogout={handleLogout}
@@ -898,12 +1084,14 @@ export function App() {
         {renderCurrentView()}
       </main>
 
-      {/* Mobile Floating Speed-Dial Action Button */}
-      <MobileSpeedDialFab
-        onAddStudent={() => setIsMobileAddStudentOpen(true)}
-        onAddBatch={() => setIsMobileAddBatchOpen(true)}
-        onRecordPayment={() => setIsMobileRecordFeeOpen(true)}
-      />
+      {/* Mobile Floating Speed-Dial Action Button (Admins only) */}
+      {isAdmin && (
+        <MobileSpeedDialFab
+          onAddStudent={() => setIsMobileAddStudentOpen(true)}
+          onAddBatch={() => setIsMobileAddBatchOpen(true)}
+          onRecordPayment={() => setIsMobileRecordFeeOpen(true)}
+        />
+      )}
 
       {/* Mobile Fixed Bottom Navigation Bar */}
       <MobileBottomNav
@@ -914,6 +1102,7 @@ export function App() {
         }}
         onOpenMore={() => setIsMobileMoreOpen(true)}
         isMoreOpen={isMobileMoreOpen}
+        userRole={userRole}
       />
 
       {/* Mobile More Navigation Drawer */}
@@ -926,8 +1115,8 @@ export function App() {
           setIsMobileMoreOpen(false);
         }}
         onLogout={handleLogout}
-        userName={sessionUser.name || sessionUser.full_name || sessionUser.username || 'Admin'}
-        userRole={sessionUser.role || 'Administrator'}
+        userName={displayName}
+        userRole={displayRole}
       />
 
       {/* Mobile FAB Creation Modals */}
