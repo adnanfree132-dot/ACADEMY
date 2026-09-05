@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Eye,
@@ -73,6 +73,76 @@ export const StaffPermissionsModal: React.FC<StaffPermissionsModalProps> = ({
   });
 
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !staffMember) return;
+
+    let isMounted = true;
+    const loadPermissions = async () => {
+      // 1. First populate from staffMember.permissions if available
+      const existingPerms = (staffMember as any).permissions || initialPermissions;
+      if (existingPerms) {
+        const map: Record<string, { level: 'hidden' | 'view_only' | 'editable'; isGlobal?: boolean }> = {};
+        MODULES_CONFIG.forEach(m => {
+          map[m.key] = { level: (m.defaultLevel as any) || 'hidden', isGlobal: false };
+        });
+
+        if (Array.isArray(existingPerms)) {
+          existingPerms.forEach((p: any) => {
+            const k = (p.module_key || p.moduleKey || '').toLowerCase();
+            if (map[k]) {
+              map[k] = {
+                level: (p.access_level || p.accessLevel || 'hidden') as any,
+                isGlobal: Boolean(p.is_global_scope || p.isGlobalScope)
+              };
+            }
+          });
+        } else if (typeof existingPerms === 'object') {
+          Object.entries(existingPerms).forEach(([k, v]: [string, any]) => {
+            const key = k.toLowerCase();
+            if (map[key]) {
+              if (typeof v === 'string') {
+                map[key].level = v as any;
+              } else if (typeof v === 'object' && v !== null) {
+                map[key].level = v.level || v.access_level || 'hidden';
+                map[key].isGlobal = Boolean(v.isGlobal || v.is_global_scope);
+              }
+            }
+          });
+        }
+        if (isMounted) setPermissions(map);
+      }
+
+      // 2. Fetch latest saved permissions from backend
+      try {
+        const res = await api.getStaffPermissions(staffMember.id);
+        const permsList = Array.isArray(res) ? res : (res as any)?.permissions || [];
+        if (isMounted && Array.isArray(permsList) && permsList.length > 0) {
+          const map: Record<string, { level: 'hidden' | 'view_only' | 'editable'; isGlobal?: boolean }> = {};
+          MODULES_CONFIG.forEach(m => {
+            map[m.key] = { level: (m.defaultLevel as any) || 'hidden', isGlobal: false };
+          });
+          permsList.forEach((p: any) => {
+            const k = (p.module_key || p.moduleKey || '').toLowerCase();
+            if (map[k]) {
+              map[k] = {
+                level: (p.access_level || p.accessLevel || 'hidden') as any,
+                isGlobal: Boolean(p.is_global_scope || p.isGlobalScope)
+              };
+            }
+          });
+          setPermissions(map);
+        }
+      } catch (err) {
+        // Fallback already loaded
+      }
+    };
+
+    loadPermissions();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, staffMember?.id]);
 
   if (!isOpen || !staffMember) return null;
 

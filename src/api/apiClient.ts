@@ -126,10 +126,70 @@ export const api = {
       body: JSON.stringify(credentials)
     }),
 
-  demoLogin: (role: 'admin' | 'teacher' | 'student') =>
+  demoLogin: (role: 'admin' | 'teacher' | 'student' | 'super_admin') =>
     fetchApi<{ user: any; token: string }>('/auth/demo-login', {
       method: 'POST',
       body: JSON.stringify({ role })
+    }),
+
+  registerAcademy: (data: {
+    academyName: string;
+    adminName: string;
+    email: string;
+    password: string;
+    phone?: string;
+    address?: string;
+  }) =>
+    fetchApi<{ token: string; academy: any; user: any }>('/auth/register-academy', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  getQuickStaff: () =>
+    fetchApi<Array<{
+      id: string;
+      staffId: string;
+      fullName: string;
+      role: string;
+      designation: string;
+      phone: string;
+      email?: string;
+      tempPasswordPlain: string;
+      permissionsCount: number;
+      permissionsSummary: string;
+    }>>('/auth/quick-staff'),
+
+  quickStaffLogin: (staffId: string) =>
+    fetchApi<{ user: any; token: string }>('/auth/staff-quick-login', {
+      method: 'POST',
+      body: JSON.stringify({ staffId })
+    }),
+
+  // Super Admin Platform Management
+  getSuperAdminStats: () =>
+    fetchApi<{
+      totalAcademies: number;
+      activeTrials: number;
+      expiredTrials: number;
+      revokedAcademies: number;
+      activeSubscriptions: number;
+      totalUsers: number;
+      totalStudents: number;
+    }>('/super-admin/stats'),
+
+  getSuperAdminAcademies: () =>
+    fetchApi<Array<any>>('/super-admin/academies'),
+
+  extendAcademyTrial: (id: string, days?: number, newEndDate?: string) =>
+    fetchApi<any>(`/super-admin/academies/${id}/extend-trial`, {
+      method: 'POST',
+      body: JSON.stringify({ days, newEndDate })
+    }),
+
+  revokeAcademyAccess: (id: string, revoke?: boolean) =>
+    fetchApi<any>(`/super-admin/academies/${id}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ revoke })
     }),
 
   // Dashboard

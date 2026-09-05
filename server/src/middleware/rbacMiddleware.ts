@@ -375,3 +375,16 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
   }
   next();
 }
+
+/**
+ * Middleware ensuring caller has Platform Super Admin privileges
+ */
+export function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return sendError(res, 'Unauthenticated', 401);
+  }
+  if (req.user.role !== 'super_admin') {
+    return sendError(res, 'Forbidden: Platform Super Admin access required', 403);
+  }
+  next();
+}

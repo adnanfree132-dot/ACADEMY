@@ -23,6 +23,8 @@ import { TeacherDashboardView } from './components/TeacherDashboardView';
 import { StudentFeeView } from './components/StudentFeeView';
 import { StudentAttendanceView } from './components/StudentAttendanceView';
 import { AccessDeniedView } from './components/AccessDeniedView';
+import { SuperAdminDashboardView } from './pages/SuperAdminDashboardView';
+import { hasPermission } from './utils/rbac';
 import { api } from './api/apiClient';
 import { applyAcademySettings } from './lib/academySettings';
 import { readBootstrapSnapshot, writeBootstrapSnapshot, filterDeleted, removeIdFromCaches, cacheClear } from './lib/resourceCache';
@@ -95,9 +97,22 @@ export function App() {
   });
 
   const userRole = (currentUser?.role || 'admin').toLowerCase();
+  const isSuperAdmin = userRole === 'super_admin';
   const isStudent = userRole === 'student';
   const isTeacher = userRole === 'teacher' || userRole === 'faculty';
-  const isAdmin = !isStudent && !isTeacher;
+  const isAdmin = userRole === 'admin' || userRole === 'administrator';
+
+  const currentStudent = students.find(s =>
+    (currentUser?.studentId && s.id === currentUser.studentId) ||
+    (currentUser?.phone && s.phone === currentUser.phone) ||
+    (currentUser?.email && s.email === currentUser.email)
+  ) || students[0];
+
+  const currentTeacher = teachers.find(t =>
+    (currentUser?.teacherId && t.id === currentUser.teacherId) ||
+    (currentUser?.phone && t.phone === currentUser.phone) ||
+    (currentUser?.email && t.email === currentUser.email)
+  ) || teachers[0];
 
   useEntityRemoved((ids) => {
     const gone = new Set(ids);
@@ -782,15 +797,17 @@ export function App() {
   const renderCurrentView = () => (
     <>
       {pane('dashboard', (
-        isStudent ? (
+        currentUser?.role === 'super_admin' ? (
+          <SuperAdminDashboardView />
+        ) : isStudent ? (
           <StudentDashboardView
-            student={students[0]}
+            student={currentStudent}
             dashboardLive={dashboardLive}
             onNavigate={setCurrentTab}
           />
         ) : isTeacher ? (
           <TeacherDashboardView
-            teacher={teachers[0]}
+            teacher={currentTeacher}
             dashboardLive={dashboardLive}
             onNavigate={setCurrentTab}
           />
@@ -807,10 +824,30 @@ export function App() {
           />
         )
       ))}
-      {pane('students', (
-        isStudent ? (
+      {pane('super_admin', (
+        currentUser?.role === 'super_admin' ? (
+          <SuperAdminDashboardView />
+        ) : (
           <AccessDeniedView
-            message="Students do not have permission to view the institutional student directory."
+            message="You do not have permission to access the Super Admin oversight portal."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        )
+      ))}
+      {pane('academies', (
+        currentUser?.role === 'super_admin' ? (
+          <SuperAdminDashboardView />
+        ) : (
+          <AccessDeniedView
+            message="You do not have permission to access the Academies directory."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        )
+      ))}
+      {pane('students', (
+        !hasPermission(currentUser, 'students', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to view the institutional student directory."
             onReturn={() => setCurrentTab('dashboard')}
           />
         ) : (
@@ -830,7 +867,7 @@ export function App() {
         )
       ))}
       {pane('teachers', (
-        isStudent || isTeacher ? (
+        !hasPermission(currentUser, 'teachers', 'view_only') ? (
           <AccessDeniedView
             message="You do not have permission to view faculty records and staff payroll."
             onReturn={() => setCurrentTab('dashboard')}
@@ -849,30 +886,49 @@ export function App() {
         )
       ))}
       {pane('batches', (
-        <BatchesView
-          batches={batches}
-          teachers={teachers}
-          subjects={subjects}
-          students={students}
-          onAddBatch={handleAddBatch}
-          onDeleteBatch={handleDeleteBatch}
-          onEditBatch={handleEditBatch}
-          onRefresh={refreshDataFromBackend}
-        />
+        !hasPermission(currentUser, 'batches', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access classes and batches."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <BatchesView
+            batches={batches}
+            teachers={teachers}
+            subjects={subjects}
+            students={students}
+            onAddBatch={handleAddBatch}
+            onDeleteBatch={handleDeleteBatch}
+            onEditBatch={handleEditBatch}
+            onRefresh={refreshDataFromBackend}
+          />
+        )
       ))}
       {pane('subjects', (
-        <SubjectsView
-          subjects={subjects}
-          onAddSubject={handleAddSubject}
-          onEditSubject={handleEditSubject}
-          onDeleteSubject={handleDeleteSubject}
-          onRefresh={refreshDataFromBackend}
-        />
+        !hasPermission(currentUser, 'subjects', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access course subjects."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <SubjectsView
+            subjects={subjects}
+            onAddSubject={handleAddSubject}
+            onEditSubject={handleEditSubject}
+            onDeleteSubject={handleDeleteSubject}
+            onRefresh={refreshDataFromBackend}
+          />
+        )
       ))}
       {pane('attendance', (
-        isStudent ? (
+        !hasPermission(currentUser, 'attendance', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access attendance records."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : isStudent ? (
           <StudentAttendanceView
-            student={students[0]}
+            student={currentStudent}
             onNavigate={setCurrentTab}
           />
         ) : (
@@ -880,9 +936,9 @@ export function App() {
         )
       ))}
       {pane('staff_attendance', (
-        isStudent ? (
+        !hasPermission(currentUser, 'staff_attendance', 'view_only') ? (
           <AccessDeniedView
-            message="Students do not have access to staff attendance."
+            message="You do not have permission to access staff attendance."
             onReturn={() => setCurrentTab('dashboard')}
           />
         ) : (
@@ -890,7 +946,7 @@ export function App() {
         )
       ))}
       {pane('staff_payroll', (
-        !isAdmin ? (
+        !hasPermission(currentUser, 'staff_payroll', 'view_only') ? (
           <AccessDeniedView
             message="You do not have permission to access institutional staff payroll."
             onReturn={() => setCurrentTab('dashboard')}
@@ -900,15 +956,15 @@ export function App() {
         )
       ))}
       {pane('fees', (
-        isStudent ? (
-          <StudentFeeView
-            student={students[0]}
-            onNavigate={setCurrentTab}
-          />
-        ) : isTeacher ? (
+        !hasPermission(currentUser, 'fees', 'view_only') ? (
           <AccessDeniedView
-            message="Faculty members do not have permission to access institutional fee management."
+            message="You do not have permission to access fee management."
             onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : isStudent ? (
+          <StudentFeeView
+            student={currentStudent}
+            onNavigate={setCurrentTab}
           />
         ) : (
           <FeeManagementView
@@ -920,7 +976,7 @@ export function App() {
         )
       ))}
       {pane('expenses', (
-        !isAdmin ? (
+        !hasPermission(currentUser, 'expenses', 'view_only') ? (
           <AccessDeniedView
             message="You do not have permission to access institutional expenses."
             onReturn={() => setCurrentTab('dashboard')}
@@ -930,7 +986,7 @@ export function App() {
         )
       ))}
       {pane('crm', (
-        !isAdmin ? (
+        !hasPermission(currentUser, 'crm', 'view_only') ? (
           <AccessDeniedView
             message="You do not have permission to access admissions CRM and leads."
             onReturn={() => setCurrentTab('dashboard')}
@@ -948,15 +1004,22 @@ export function App() {
         )
       ))}
       {pane('announcements', (
-        <AnnouncementsView
-          announcements={announcements}
-          onAddAnnouncement={handleAddAnnouncement}
-          onUpdateAnnouncement={handleUpdateAnnouncement}
-          onDeleteAnnouncement={handleDeleteAnnouncement}
-        />
+        !hasPermission(currentUser, 'announcements', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access announcements."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <AnnouncementsView
+            announcements={announcements}
+            onAddAnnouncement={handleAddAnnouncement}
+            onUpdateAnnouncement={handleUpdateAnnouncement}
+            onDeleteAnnouncement={handleDeleteAnnouncement}
+          />
+        )
       ))}
       {pane('whatsapp', (
-        !isAdmin ? (
+        !hasPermission(currentUser, 'whatsapp', 'view_only') ? (
           <AccessDeniedView
             message="You do not have permission to access administrative WhatsApp messaging."
             onReturn={() => setCurrentTab('dashboard')}
@@ -965,14 +1028,50 @@ export function App() {
           <WhatsAppCenterView />
         )
       ))}
-      {pane('timetable', <TimetableView />)}
-      {pane('exams', <ExamsView students={students} batches={batches} />)}
-      {pane('homework', <HomeworkView />)}
-      {pane('leaves', <StudentLeaveView students={students} />)}
-      {pane('conduct', (
-        isStudent ? (
+      {pane('timetable', (
+        !hasPermission(currentUser, 'timetable', 'view_only') ? (
           <AccessDeniedView
-            message="Students do not have permission to access the Conduct Desk."
+            message="You do not have permission to access timetables."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <TimetableView />
+        )
+      ))}
+      {pane('exams', (
+        !hasPermission(currentUser, 'exams', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access exams and results."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <ExamsView students={students} batches={batches} />
+        )
+      ))}
+      {pane('homework', (
+        !hasPermission(currentUser, 'homework', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access homework and study materials."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <HomeworkView />
+        )
+      ))}
+      {pane('leaves', (
+        !hasPermission(currentUser, 'leaves', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access student leaves."
+            onReturn={() => setCurrentTab('dashboard')}
+          />
+        ) : (
+          <StudentLeaveView students={isStudent && currentStudent ? [currentStudent] : students} />
+        )
+      ))}
+      {pane('conduct', (
+        !hasPermission(currentUser, 'conduct', 'view_only') ? (
+          <AccessDeniedView
+            message="You do not have permission to access the Conduct Desk."
             onReturn={() => setCurrentTab('dashboard')}
           />
         ) : (
@@ -980,7 +1079,7 @@ export function App() {
         )
       ))}
       {pane('settings', (
-        !isAdmin ? (
+        !hasPermission(currentUser, 'settings', 'view_only') ? (
           <AccessDeniedView
             message="You do not have permission to access academy configuration."
             onReturn={() => setCurrentTab('dashboard')}
@@ -1008,7 +1107,7 @@ export function App() {
   }
 
   const tabTitles: Record<TabType, string> = {
-    dashboard: isStudent ? 'Student Portal' : isTeacher ? 'Faculty Portal' : 'Dashboard',
+    dashboard: currentUser?.role === 'super_admin' ? 'Super Admin - Academy Oversight' : isStudent ? 'Student Portal' : isTeacher ? 'Faculty Portal' : 'Dashboard',
     students: 'Students Directory',
     teachers: 'Faculty Directory',
     batches: 'Classes & Batches',
@@ -1026,7 +1125,9 @@ export function App() {
     homework: 'Homework & Study',
     leaves: 'Student Leave',
     conduct: 'Conduct Desk',
-    settings: 'Academy Settings'
+    settings: 'Academy Settings',
+    super_admin: 'Super Admin - Academy Oversight',
+    academies: 'Registered Academies Directory'
   };
 
   const displayName = currentUser?.name || currentUser?.full_name || currentUser?.username || (isStudent ? 'Student' : isTeacher ? 'Teacher' : 'Admin');
@@ -1051,6 +1152,7 @@ export function App() {
         onSelectTab={setCurrentTab}
         onLogout={handleLogout}
         userRole={userRole}
+        currentUser={currentUser}
       />
 
       {/* Main Content View Container */}
@@ -1058,6 +1160,7 @@ export function App() {
         <Header
           userName={displayName}
           userRole={displayRole}
+          currentUser={currentUser}
           onOpenAction={(type) => setCurrentTab(type === 'student' ? 'students' : type === 'teacher' ? 'teachers' : type === 'fee' ? 'fees' : 'batches')}
           onSearch={setSearchQuery}
           onLogout={handleLogout}
@@ -1103,6 +1206,7 @@ export function App() {
         onOpenMore={() => setIsMobileMoreOpen(true)}
         isMoreOpen={isMobileMoreOpen}
         userRole={userRole}
+        currentUser={currentUser}
       />
 
       {/* Mobile More Navigation Drawer */}
@@ -1117,6 +1221,7 @@ export function App() {
         onLogout={handleLogout}
         userName={displayName}
         userRole={displayRole}
+        currentUser={currentUser}
       />
 
       {/* Mobile FAB Creation Modals */}

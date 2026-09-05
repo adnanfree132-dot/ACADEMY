@@ -9,10 +9,34 @@ generator client {
   previewFeatures = ["driverAdapters"]
 }
 
+model Academy {
+  id                  String    @id @default(uuid())
+  name                String
+  slug                String    @unique
+  logo_url            String?
+  phone               String?
+  email               String?
+  address             String?
+  subscription_status String    @default("trial") // trial, active, expired, revoked
+  trial_started_at    DateTime  @default(now())
+  trial_ends_at       DateTime
+  is_active           Boolean   @default(true)
+  owner_id            String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  users               User[]
+
+  @@index([slug])
+  @@index([subscription_status])
+}
+
 model User {
   id                    String    @id @default(uuid())
+  academy_id            String?
+  academy               Academy?  @relation(fields: [academy_id], references: [id], onDelete: Cascade)
   username              String?   @unique
-  role                  String    // admin, teacher, student, parent
+  role                  String    // super_admin, admin, teacher, student, parent
   full_name             String
   email                 String?   @unique
   phone                 String?   @unique

@@ -14,8 +14,11 @@ import {
   MessageCircle,
   DollarSign,
   UserCheck,
-  Receipt
+  Receipt,
+  LayoutDashboard,
+  Building2
 } from 'lucide-react';
+import { canAccessModule } from '../utils/rbac';
 
 interface MobileMoreDrawerProps {
   isOpen: boolean;
@@ -25,6 +28,7 @@ interface MobileMoreDrawerProps {
   onLogout?: () => void;
   userName?: string;
   userRole?: string;
+  currentUser?: any;
 }
 
 export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
@@ -34,87 +38,91 @@ export const MobileMoreDrawer: React.FC<MobileMoreDrawerProps> = ({
   onNavigate,
   onLogout,
   userName = 'Admin',
-  userRole = 'Administrator'
+  userRole = 'Administrator',
+  currentUser
 }) => {
   if (!isOpen) return null;
 
-  const role = (userRole || 'admin').toLowerCase();
+  const effectiveUser = currentUser || { role: userRole };
+  const role = (effectiveUser.role || userRole || 'admin').toLowerCase();
+  const isSuperAdmin = role === 'super_admin';
   const isStudent = role === 'student';
-  const isTeacher = role === 'teacher' || role === 'faculty';
 
-  const sections = isStudent ? [
-    {
-      title: 'STUDENT PORTAL',
-      items: [
-        { id: 'dashboard', label: 'My Portal Overview', icon: CheckSquare, color: '#10B981' },
-        { id: 'attendance', label: 'My Attendance', icon: CheckSquare, color: '#10B981' },
-        { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
-        { id: 'exams', label: 'Exams & Marks', icon: Award, color: '#F59E0B' },
-        { id: 'timetable', label: 'Class Timetable', icon: Calendar, color: '#EC4899' },
-        { id: 'fees', label: 'My Fee Slips', icon: Receipt, color: '#059669' },
-        { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
-        { id: 'leaves', label: 'Leave Request', icon: Calendar, color: '#F59E0B' },
-      ]
-    }
-  ] : isTeacher ? [
-    {
-      title: 'TEACHING & CLASSES',
-      items: [
-        { id: 'batches', label: 'Classes & Batches', icon: BookOpen, color: '#3B82F6' },
-        { id: 'students', label: 'Student Roster', icon: UserSquare2, color: '#10B981' },
-        { id: 'attendance', label: 'Attendance Portal', icon: CheckSquare, color: '#10B981' },
-        { id: 'staff_attendance', label: 'Staff Attendance', icon: UserCheck, color: '#0EA5E9' },
-      ]
-    },
-    {
-      title: 'ACADEMICS',
-      items: [
-        { id: 'subjects', label: 'Course Subjects', icon: BookOpen, color: '#3B82F6' },
-        { id: 'exams', label: 'Exams & Results', icon: Award, color: '#F59E0B' },
-        { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
-        { id: 'leaves', label: 'Student Leave', icon: Calendar, color: '#F59E0B' },
-        { id: 'conduct', label: 'Conduct Desk', icon: UserCheck, color: '#7C3AED' },
-        { id: 'timetable', label: 'Timetable Schedules', icon: Calendar, color: '#EC4899' },
-      ]
-    },
-    {
-      title: 'NOTICES',
-      items: [
-        { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
-      ]
-    }
-  ] : [
-    {
-      title: 'CORE OPERATIONS',
-      items: [
-        { id: 'teachers', label: 'Teachers & Staff', icon: UserSquare2, color: '#3B82F6' },
-        { id: 'attendance', label: 'Attendance Portal', icon: CheckSquare, color: '#10B981' },
-        { id: 'staff_attendance', label: 'Staff Attendance', icon: UserCheck, color: '#0EA5E9' },
-        { id: 'staff_payroll', label: 'Staff Payroll', icon: DollarSign, color: '#059669' },
-      ]
-    },
-    {
-      title: 'ACADEMICS',
-      items: [
-        { id: 'subjects', label: 'Course Subjects', icon: BookOpen, color: '#3B82F6' },
-        { id: 'exams', label: 'Exams & Results', icon: Award, color: '#F59E0B' },
-        { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
-        { id: 'leaves', label: 'Student Leave', icon: Calendar, color: '#F59E0B' },
-        { id: 'conduct', label: 'Conduct Desk', icon: UserCheck, color: '#7C3AED' },
-        { id: 'timetable', label: 'Timetable Schedules', icon: Calendar, color: '#EC4899' },
-      ]
-    },
-    {
-      title: 'ADMINISTRATION',
-      items: [
-        { id: 'expenses', label: 'Expenses', icon: Receipt, color: '#F97316' },
-        { id: 'crm', label: 'Inquiries & CRM', icon: UserPlus, color: '#06B6D4' },
-        { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
-        { id: 'whatsapp', label: 'WhatsApp Center', icon: MessageCircle, color: '#22C55E' },
-        { id: 'settings', label: 'Academy Settings', icon: Settings, color: '#64748B' },
-      ]
-    }
-  ];
+  let rawSections: Array<{ title: string; items: Array<{ id: string; label: string; icon: any; color: string }> }> = [];
+
+  if (isSuperAdmin) {
+    rawSections = [
+      {
+        title: 'PLATFORM MANAGEMENT',
+        items: [
+          { id: 'dashboard', label: 'Platform Overview', icon: LayoutDashboard, color: '#3B82F6' },
+          { id: 'academies', label: 'Academies & Trials', icon: Building2, color: '#10B981' }
+        ]
+      }
+    ];
+  } else if (isStudent) {
+    rawSections = [
+      {
+        title: 'STUDENT PORTAL',
+        items: [
+          { id: 'dashboard', label: 'My Portal Overview', icon: CheckSquare, color: '#10B981' },
+          { id: 'attendance', label: 'My Attendance', icon: CheckSquare, color: '#10B981' },
+          { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
+          { id: 'exams', label: 'Exams & Marks', icon: Award, color: '#F59E0B' },
+          { id: 'timetable', label: 'Class Timetable', icon: Calendar, color: '#EC4899' },
+          { id: 'fees', label: 'My Fee Slips', icon: Receipt, color: '#059669' },
+          { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
+          { id: 'leaves', label: 'Leave Request', icon: Calendar, color: '#F59E0B' },
+        ]
+      }
+    ];
+  } else {
+    rawSections = [
+      {
+        title: 'CORE OPERATIONS',
+        items: [
+          { id: 'students', label: 'Student Directory', icon: UserSquare2, color: '#10B981' },
+          { id: 'batches', label: 'Classes & Batches', icon: BookOpen, color: '#3B82F6' },
+          { id: 'teachers', label: 'Teachers & Staff', icon: UserSquare2, color: '#3B82F6' },
+          { id: 'attendance', label: 'Attendance Portal', icon: CheckSquare, color: '#10B981' },
+          { id: 'staff_attendance', label: 'Staff Attendance', icon: UserCheck, color: '#0EA5E9' },
+          { id: 'staff_payroll', label: 'Staff Payroll', icon: DollarSign, color: '#059669' },
+          { id: 'fees', label: 'Fee Management', icon: Receipt, color: '#059669' }
+        ]
+      },
+      {
+        title: 'ACADEMICS',
+        items: [
+          { id: 'subjects', label: 'Course Subjects', icon: BookOpen, color: '#3B82F6' },
+          { id: 'exams', label: 'Exams & Results', icon: Award, color: '#F59E0B' },
+          { id: 'homework', label: 'Homework & Study', icon: BookOpen, color: '#8B5CF6' },
+          { id: 'leaves', label: 'Student Leave', icon: Calendar, color: '#F59E0B' },
+          { id: 'conduct', label: 'Conduct Desk', icon: UserCheck, color: '#7C3AED' },
+          { id: 'timetable', label: 'Timetable Schedules', icon: Calendar, color: '#EC4899' },
+        ]
+      },
+      {
+        title: 'ADMINISTRATION & CRM',
+        items: [
+          { id: 'expenses', label: 'Institutional Expenses', icon: Receipt, color: '#F97316' },
+          { id: 'crm', label: 'Inquiries & CRM', icon: UserPlus, color: '#06B6D4' },
+          { id: 'announcements', label: 'Announcements', icon: Megaphone, color: '#14B8A6' },
+          { id: 'whatsapp', label: 'WhatsApp Center', icon: MessageCircle, color: '#22C55E' },
+          { id: 'settings', label: 'Academy Settings', icon: Settings, color: '#64748B' },
+        ]
+      }
+    ];
+  }
+
+  // Dynamically filter sections and items according to RBAC permissions
+  const sections = isSuperAdmin || isStudent
+    ? rawSections
+    : rawSections
+        .map(sec => ({
+          ...sec,
+          items: sec.items.filter(item => canAccessModule(effectiveUser, item.id))
+        }))
+        .filter(sec => sec.items.length > 0);
 
   return (
     <>

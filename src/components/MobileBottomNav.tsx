@@ -1,5 +1,6 @@
 import React from 'react';
-import { LayoutDashboard, Users, Layers, Receipt, Menu, CheckSquare, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, Layers, Receipt, Menu, CheckSquare, BookOpen, Building2 } from 'lucide-react';
+import { canAccessModule } from '../utils/rbac';
 
 interface MobileBottomNavProps {
   activeTab: string;
@@ -7,6 +8,7 @@ interface MobileBottomNavProps {
   onOpenMore: () => void;
   isMoreOpen?: boolean;
   userRole?: string;
+  currentUser?: any;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
@@ -14,28 +16,39 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onSelectTab,
   onOpenMore,
   isMoreOpen = false,
-  userRole = 'admin'
+  userRole = 'admin',
+  currentUser
 }) => {
-  const role = (userRole || 'admin').toLowerCase();
+  const effectiveUser = currentUser || { role: userRole };
+  const role = (effectiveUser.role || userRole || 'admin').toLowerCase();
+  const isSuperAdmin = role === 'super_admin';
   const isStudent = role === 'student';
-  const isTeacher = role === 'teacher' || role === 'faculty';
 
-  const tabs = isStudent ? [
-    { id: 'dashboard', label: 'Portal', icon: LayoutDashboard },
-    { id: 'attendance', label: 'Attendance', icon: CheckSquare },
-    { id: 'homework', label: 'Homework', icon: BookOpen },
-    { id: 'fees', label: 'My Fees', icon: Receipt }
-  ] : isTeacher ? [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'batches', label: 'Classes', icon: Layers },
-    { id: 'attendance', label: 'Attendance', icon: CheckSquare },
-    { id: 'homework', label: 'Homework', icon: BookOpen }
-  ] : [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'students', label: 'Students', icon: Users },
-    { id: 'batches', label: 'Classes', icon: Layers },
-    { id: 'fees', label: 'Fees', icon: Receipt }
-  ];
+  let tabs: Array<{ id: string; label: string; icon: any }>;
+
+  if (isSuperAdmin) {
+    tabs = [
+      { id: 'dashboard', label: 'Platform', icon: LayoutDashboard },
+      { id: 'academies', label: 'Academies', icon: Building2 }
+    ];
+  } else if (isStudent) {
+    tabs = [
+      { id: 'dashboard', label: 'Portal', icon: LayoutDashboard },
+      { id: 'attendance', label: 'Attendance', icon: CheckSquare },
+      { id: 'homework', label: 'Homework', icon: BookOpen },
+      { id: 'fees', label: 'My Fees', icon: Receipt }
+    ];
+  } else {
+    const candidateTabs = [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'students', label: 'Students', icon: Users },
+      { id: 'batches', label: 'Classes', icon: Layers },
+      { id: 'attendance', label: 'Attendance', icon: CheckSquare },
+      { id: 'fees', label: 'Fees', icon: Receipt },
+      { id: 'homework', label: 'Homework', icon: BookOpen }
+    ];
+    tabs = candidateTabs.filter(t => t.id === 'dashboard' || canAccessModule(effectiveUser, t.id)).slice(0, 4);
+  }
 
   return (
     <nav className="mobile-bottom-nav mobile-only" aria-label="Mobile Navigation">

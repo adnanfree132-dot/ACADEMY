@@ -851,7 +851,10 @@ export async function resetStaffPassword(req: AuthenticatedRequest, res: Respons
       return sendError(res, 'Staff member not found', 404);
     }
 
-    const newTempPassword = generateTemporaryPassword(10);
+    const requestedPassword = req.body?.newPassword || req.body?.temporaryPassword;
+    const newTempPassword = requestedPassword && typeof requestedPassword === 'string' && requestedPassword.trim().length >= 6
+      ? requestedPassword.trim()
+      : generateTemporaryPassword(10);
     const newPasswordHash = await bcrypt.hash(newTempPassword, 10);
 
     await prisma.$transaction(async (tx) => {

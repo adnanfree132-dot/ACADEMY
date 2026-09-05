@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Bell, X, Settings, LogOut, UserPlus, CreditCard, UserSquare2, GraduationCap, Users, BookOpen } from 'lucide-react';
+import { Plus, Search, Bell, X, Settings, LogOut, UserPlus, CreditCard, UserSquare2, GraduationCap, Users, BookOpen, Clock, ShieldCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { Student, Teacher, Batch, TabType } from '../types';
+import { hasPermission } from '../utils/rbac';
 
 interface HeaderProps {
   userName?: string;
   userRole?: string;
+  currentUser?: any;
   onOpenCreateModal?: () => void;
   onOpenAction?: (type: 'student' | 'fee' | 'teacher' | 'batch') => void;
   onSearch: (query: string) => void;
@@ -22,6 +24,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   userName = 'Admin',
   userRole = 'Admin',
+  currentUser,
   onOpenCreateModal,
   onOpenAction,
   onSearch,
@@ -136,10 +139,144 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const effectiveUser = currentUser || { role: userRole };
+  const role = (effectiveUser.role || userRole || '').toLowerCase();
+  const isSuperAdmin = role === 'super_admin';
+
+  const canCreateStudent = !isSuperAdmin && hasPermission(effectiveUser, 'students', 'editable');
+  const canCreateFee = !isSuperAdmin && hasPermission(effectiveUser, 'fees', 'editable');
+  const canCreateTeacher = !isSuperAdmin && hasPermission(effectiveUser, 'teachers', 'editable');
+  const canCreateBatch = !isSuperAdmin && hasPermission(effectiveUser, 'batches', 'editable');
+  const canCreateAny = canCreateStudent || canCreateFee || canCreateTeacher || canCreateBatch;
+
   return (
     <header className="top-header desktop-only">
-      <div className="header-left">
-        <h1 className="title-greeting">Hi, {userName}!</h1>
+      <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h1 className="title-greeting" style={{ margin: 0 }}>Hi, {userName}!</h1>
+
+        {/* Multi-Tenant SaaS Trial / Subscription / Super Admin Status Pill */}
+        {(() => {
+          if (isSuperAdmin) {
+            return (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 12px',
+                  borderRadius: 9999,
+                  background: '#F5F3FF',
+                  border: '1px solid #DDD6FE',
+                  color: '#7C3AED',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <ShieldCheck size={13} color="#7C3AED" />
+                <span>Super Admin</span>
+              </span>
+            );
+          }
+
+          const academy = effectiveUser.academy;
+          if (!academy) return null;
+
+          const days = academy.days_remaining ?? (academy.trial_ends_at ? Math.max(0, Math.ceil((new Date(academy.trial_ends_at).getTime() - Date.now()) / 86400000)) : 0);
+          const isRevoked = academy.subscription_status === 'revoked' || academy.is_active === false;
+          const isExpired = academy.subscription_status === 'expired' || days <= 0;
+          const isActive = academy.subscription_status === 'active';
+
+          if (isRevoked) {
+            return (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 12px',
+                  borderRadius: 9999,
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <AlertCircle size={13} color="#DC2626" />
+                <span>Access Suspended</span>
+              </span>
+            );
+          }
+
+          if (isActive) {
+            return (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 12px',
+                  borderRadius: 9999,
+                  background: '#ECFDF5',
+                  border: '1px solid #A7F3D0',
+                  color: '#047857',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <CheckCircle size={13} color="#059669" />
+                <span>Active Subscription</span>
+              </span>
+            );
+          }
+
+          if (isExpired) {
+            return (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 12px',
+                  borderRadius: 9999,
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <AlertCircle size={13} color="#DC2626" />
+                <span>Trial Expired &bull; Read-Only</span>
+              </span>
+            );
+          }
+
+          return (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 12px',
+                borderRadius: 9999,
+                background: days <= 7 ? '#FFFBEB' : '#ECFDF5',
+                border: days <= 7 ? '1px solid #FDE68A' : '1px solid #A7F3D0',
+                color: days <= 7 ? '#B45309' : '#047857',
+                fontSize: 12,
+                fontWeight: 700,
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <Clock size={13} color={days <= 7 ? '#D97706' : '#059669'} />
+              <span>{days} {days === 1 ? 'Day' : 'Days'} Trial Remaining</span>
+            </span>
+          );
+        })()}
       </div>
 
       <div className="header-right">
@@ -296,8 +433,8 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* + Create Action Dropdown Popover */}
-        {userRole?.toLowerCase() !== 'student' && (
+        {/* + Create Action Dropdown Popover (Guarded by Dynamic Module Permissions) */}
+        {canCreateAny && (
         <div style={{ position: 'relative' }}>
           <button className="btn-primary" onClick={() => setShowCreateDropdown(!showCreateDropdown)}>
             <Plus size={16} strokeWidth={2.5} />
@@ -324,53 +461,61 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               onMouseLeave={() => setShowCreateDropdown(false)}
             >
-              <button 
-                onClick={() => triggerAction('student')}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserPlus size={14} color="#475569" />
-                </div>
-                <span>Register Student</span>
-              </button>
+              {canCreateStudent && (
+                <button 
+                  onClick={() => triggerAction('student')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <UserPlus size={14} color="#475569" />
+                  </div>
+                  <span>Register Student</span>
+                </button>
+              )}
 
-              <button 
-                onClick={() => triggerAction('fee')}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CreditCard size={14} color="#475569" />
-                </div>
-                <span>Record Fee Deposit</span>
-              </button>
+              {canCreateFee && (
+                <button 
+                  onClick={() => triggerAction('fee')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CreditCard size={14} color="#475569" />
+                  </div>
+                  <span>Record Fee Deposit</span>
+                </button>
+              )}
 
-              <button 
-                onClick={() => triggerAction('teacher')}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserSquare2 size={14} color="#475569" />
-                </div>
-                <span>Add Teacher / Staff</span>
-              </button>
+              {canCreateTeacher && (
+                <button 
+                  onClick={() => triggerAction('teacher')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <UserSquare2 size={14} color="#475569" />
+                  </div>
+                  <span>Add Teacher / Staff</span>
+                </button>
+              )}
 
-              <button 
-                onClick={() => triggerAction('batch')}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <GraduationCap size={14} color="#475569" />
-                </div>
-                <span>Create Class / Batch</span>
-              </button>
+              {canCreateBatch && (
+                <button 
+                  onClick={() => triggerAction('batch')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: 13, fontWeight: 600, color: '#0F172A', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <GraduationCap size={14} color="#475569" />
+                  </div>
+                  <span>Create Class / Batch</span>
+                </button>
+              )}
             </div>
           )}
         </div>

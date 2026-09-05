@@ -17,7 +17,9 @@ export type TabType =
   | 'whatsapp'
   | 'settings'
   | 'leaves'
-  | 'conduct';
+  | 'conduct'
+  | 'super_admin'
+  | 'academies';
 
 export type StudentLifecycleStatus = 'Active' | 'On Leave' | 'Graduated' | 'Suspended' | 'Left';
 

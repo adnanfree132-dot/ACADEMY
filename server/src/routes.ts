@@ -8,9 +8,19 @@ import {
   AuthenticatedRequest,
   handleLogin,
   handleDemoLogin,
-  handleChangePassword
+  handleChangePassword,
+  getQuickStaffList,
+  quickStaffLogin,
+  checkAcademySubscription
 } from './auth';
-import { requireModulePermission, requireAdmin } from './middleware/rbacMiddleware';
+import { requireModulePermission, requireAdmin, requireSuperAdmin } from './middleware/rbacMiddleware';
+import {
+  registerAcademy,
+  getSuperAdminStats,
+  getSuperAdminAcademies,
+  extendAcademyTrial,
+  revokeAcademyAccess
+} from './controllers/superAdminController';
 import { createAuditLog } from './common/audit';
 import {
   getStaffTypes,
@@ -159,8 +169,20 @@ const router = Router();
    ========================================================================== */
 router.post('/auth/login', handleLogin);
 router.post('/auth/demo-login', handleDemoLogin);
+router.post('/auth/register-academy', registerAcademy);
+router.get('/auth/quick-staff', getQuickStaffList);
+router.post('/auth/staff-quick-login', quickStaffLogin);
 router.post('/auth/change-password', authenticateJwt, handleChangePassword);
 router.post('/staff/me/change-password', authenticateJwt, handleChangePassword);
+
+// Feature: Super Admin Platform Oversight & Multi-Tenant Trial Control
+router.get('/super-admin/stats', authenticateJwt, requireSuperAdmin, getSuperAdminStats);
+router.get('/super-admin/academies', authenticateJwt, requireSuperAdmin, getSuperAdminAcademies);
+router.post('/super-admin/academies/:id/extend-trial', authenticateJwt, requireSuperAdmin, extendAcademyTrial);
+router.post('/super-admin/academies/:id/revoke', authenticateJwt, requireSuperAdmin, revokeAcademyAccess);
+
+// Enforce Academy Trial and Subscription Status on all mutating endpoints
+router.use(checkAcademySubscription);
 
 // Feature 008: Staff Types Endpoints
 router.get('/staff-types', authenticateJwt, requireModulePermission('staff_types', 'view_only'), getStaffTypes);

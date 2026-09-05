@@ -266,28 +266,48 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
     }
   };
 
-  // Handle password reset
+  // Handle password reset with backend synchronization
   const handleResetPassword = async (staff: any) => {
     const tempPassword = `Acad#${Math.floor(1000 + Math.random() * 9000)}`;
-    const credData: StaffCredentialData = {
-      staffId: staff.staffId || 'STF-001',
-      fullName: staff.fullName || staff.name,
-      phone: staff.phone,
-      email: staff.email,
-      role: staff.role || 'Staff',
-      designation: staff.designation || 'Staff Member',
-      temporaryPassword: tempPassword,
-      issuedAt: new Date().toISOString()
-    };
-
-    setActiveCredentials(credData);
-    setIsCredentialSlipOpen(true);
     setActiveDropdownStaffId(null);
 
     try {
-      await api.resetStaffPassword(staff.id, tempPassword);
+      const res: any = await api.resetStaffPassword(staff.id, tempPassword);
+      const syncedPassword =
+        res?.temporaryPassword ||
+        res?.temp_password ||
+        res?.credentials?.temporaryPassword ||
+        res?.data?.temporaryPassword ||
+        tempPassword;
+
+      const credData: StaffCredentialData = {
+        staffId: staff.staffId || staff.staff_id || 'STF-001',
+        fullName: staff.fullName || staff.full_name || staff.name || 'Staff Member',
+        phone: staff.phone,
+        email: staff.email,
+        role: staff.role || 'Staff',
+        designation: staff.designation || 'Staff Member',
+        temporaryPassword: syncedPassword,
+        issuedAt: new Date().toISOString()
+      };
+
+      setActiveCredentials(credData);
+      setIsCredentialSlipOpen(true);
     } catch (err) {
       console.error('Password reset error:', err);
+      // Fallback with generated password
+      const credData: StaffCredentialData = {
+        staffId: staff.staffId || staff.staff_id || 'STF-001',
+        fullName: staff.fullName || staff.full_name || staff.name || 'Staff Member',
+        phone: staff.phone,
+        email: staff.email,
+        role: staff.role || 'Staff',
+        designation: staff.designation || 'Staff Member',
+        temporaryPassword: tempPassword,
+        issuedAt: new Date().toISOString()
+      };
+      setActiveCredentials(credData);
+      setIsCredentialSlipOpen(true);
     }
   };
 
@@ -859,23 +879,7 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
 
                         <button
                           type="button"
-                          onClick={async () => {
-                            const tempPassword = `Acad#${Math.floor(1000 + Math.random() * 9000)}`;
-                            api.resetStaffPassword(staff.id, tempPassword).catch(() => {});
-                            const credData: StaffCredentialData = {
-                              staffId: staff.staffId || 'FAC-2026-001',
-                              fullName: sName,
-                              phone: staff.phone,
-                              email: staff.email,
-                              role: sRole,
-                              designation: sDesignation,
-                              temporaryPassword: tempPassword,
-                              issuedAt: new Date().toISOString()
-                            };
-                            setActiveCredentials(credData);
-                            setIsCredentialSlipOpen(true);
-                            setActiveDropdownStaffId(null);
-                          }}
+                          onClick={() => handleResetPassword(staff)}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -1163,22 +1167,7 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
           setActiveStaffForPermissions(staff);
           setIsPermissionsModalOpen(true);
         }}
-        onOpenCredentials={staff => {
-          const tempPassword = `Acad#${Math.floor(1000 + Math.random() * 9000)}`;
-          api.resetStaffPassword(staff.id, tempPassword).catch(() => {});
-          const credData: StaffCredentialData = {
-            staffId: staff.staffId || 'FAC-2026-001',
-            fullName: staff.fullName || staff.name,
-            phone: staff.phone,
-            email: staff.email,
-            role: staff.role || 'Staff',
-            designation: staff.designation || 'Staff Member',
-            temporaryPassword: tempPassword,
-            issuedAt: new Date().toISOString()
-          };
-          setActiveCredentials(credData);
-          setIsCredentialSlipOpen(true);
-        }}
+        onOpenCredentials={handleResetPassword}
         onResetPassword={handleResetPassword}
       />
 
@@ -1223,6 +1212,23 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
         isOpen={isPermissionsModalOpen}
         onClose={() => setIsPermissionsModalOpen(false)}
         staffMember={activeStaffForPermissions}
+        onSave={(staffId, updatedPermissions) => {
+          setStaffList(prev => prev.map(s => {
+            if (s.id === staffId || s.staffId === staffId) {
+              const permsArray = Object.entries(updatedPermissions).map(([k, v]: [string, any]) => ({
+                module_key: k,
+                access_level: v.level,
+                is_global_scope: Boolean(v.isGlobal)
+              }));
+              return {
+                ...s,
+                permissions: permsArray
+              };
+            }
+            return s;
+          }));
+          showToast('Permissions updated and synchronized successfully.', 'success');
+        }}
       />
     </div>
   );
