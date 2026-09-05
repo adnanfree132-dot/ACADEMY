@@ -7,6 +7,7 @@ import {
   generateToken,
   AuthenticatedRequest,
   handleLogin,
+  handleDemoLogin,
   handleChangePassword
 } from './auth';
 import { requireModulePermission, requireAdmin } from './middleware/rbacMiddleware';
@@ -157,6 +158,7 @@ const router = Router();
    1. AUTH MODULE (M1 AUTH & M2 SMART AUTH)
    ========================================================================== */
 router.post('/auth/login', handleLogin);
+router.post('/auth/demo-login', handleDemoLogin);
 router.post('/auth/change-password', authenticateJwt, handleChangePassword);
 router.post('/staff/me/change-password', authenticateJwt, handleChangePassword);
 

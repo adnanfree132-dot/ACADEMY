@@ -126,6 +126,12 @@ export const api = {
       body: JSON.stringify(credentials)
     }),
 
+  demoLogin: (role: 'admin' | 'teacher' | 'student') =>
+    fetchApi<{ user: any; token: string }>('/auth/demo-login', {
+      method: 'POST',
+      body: JSON.stringify({ role })
+    }),
+
   // Dashboard
   getDashboard: () => fetchApi<any>('/dashboard'),
 

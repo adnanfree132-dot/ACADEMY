@@ -47,3 +47,54 @@ Integrity mode: `development`
 ### Full-Stack Build & Integrity
 - [ ] Backend routes and database models created and tested cleanly with zero compilation errors.
 - [ ] Frontend builds cleanly (`tsc && vite build`) with 0 errors.
+
+## 2026-09-05T03:09:37Z
+
+Full multi-agent audit team (parallel inspection across modules and architectural layers). Conduct an exhaustive, read-only edge-case audit across the entire Academy Pro OS web application—focusing specifically on Student lifecycle, Staff management, Payroll calculations/disbursements, Fee payments, and related domain modules—to uncover race conditions, transaction hazards, validation gaps, data integrity risks, and state desynchronization, delivering a comprehensive, prioritized remediation blueprint without modifying any code.
+
+Working directory: /home/adnan/Desktop/academy
+Integrity mode: development
+
+## Requirements
+
+### R1. Deep Domain Edge-Case Discovery (Student, Staff, Payroll, Fees)
+Audit all domain workflows for edge-case vulnerabilities, including:
+- **Student Module**: Duplicate admissions, status transition race conditions, soft-delete cascades (batches, enrollments, attendance, dues), leaving certificate edge cases.
+- **Staff & Teacher Module**: Multi-role assignment collisions, batch teacher reassignments, cascade deletion anomalies, teacher-own-batch access boundary escapes.
+- **Payroll Module**: Overlapping pay periods, partial salary disbursements, negative adjustment calculations, prorated leaves, deduction precision rounding, duplicate payroll processing triggers.
+- **Fees & Payments Module**: Concurrent receipt generation, partial vs full payment idempotency, negative discount overflows, invoice status transitions, defaulter calculation boundary shifts.
+- **Batches & Attendance**: Capacity limit race conditions, attendance retroactive lock bypasses, multi-session conflicts.
+
+### R2. Cloudflare Worker & Database Runtime Hazard Analysis
+Cross-examine backend routes against Cloudflare Worker runtime invariants:
+- Sequential Prisma execution constraints and $transaction single-client limitations.
+- Single-connection pool exhaustion and timeout behaviors (ssl: false, DIRECT_URL).
+- AsyncLocalStorage client lifecycle during request termination or timeouts.
+- Worker-to-Worker proxy Authorization header drops between Pages Functions and Worker.
+
+### R3. Strict Zero-Modification Guardrail
+Operate exclusively as a read-only audit. Make zero edits to source files, database migrations, package dependencies, or infrastructure configurations.
+
+### R4. Prioritized Actionable Remediation Plan
+Deliver a structured remediation blueprint categorized by severity (Critical, High, Medium, Low), providing for each finding:
+1. Module & Failure Category
+2. Exact Source File & Line Range
+3. Edge-Case Reproduction Conditions
+4. Architectural Root Cause & Risk Impact
+5. Detailed Remediation Blueprint (step-by-step fix recommendations)
+
+## Acceptance Criteria
+
+### Audit Scope & Module Coverage
+- [ ] Dedicated audit sections provided for Student, Staff, Payroll, Fees/Payments, Batches, and Attendance modules.
+- [ ] Cloudflare Worker execution limits (sequential queries, connection pooling, proxy header forwarding) evaluated for each mutation endpoint.
+- [ ] Soft-delete and relational integrity checks completed against Prisma schema definitions and database foreign key behaviors.
+
+### Non-Destructive Operation
+- [ ] Working tree remains completely clean with zero code or configuration changes (git status --porcelain is clean).
+
+### Actionability & Defect Verification
+- [ ] Every listed edge-case finding cites exact source file paths and line ranges.
+- [ ] Every finding details the specific trigger conditions and business failure impact.
+- [ ] Concrete, phased remediation steps are provided for all identified items, ordered by priority.
+
