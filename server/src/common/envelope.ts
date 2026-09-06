@@ -39,6 +39,18 @@ export function sanitizeErrorMessage(rawError: any): string {
     return 'The database operation could not be completed due to conflicting records. Please verify dependencies.';
   }
 
+  // 5. Database connectivity / Wasm runtime traps / connection drops
+  if (
+    str.includes('unreachable') ||
+    str.includes("Can't reach database") ||
+    str.includes('Connection terminated') ||
+    str.includes('connection closed') ||
+    str.includes('pool timeout') ||
+    str.includes('fetch failed')
+  ) {
+    return 'The backend service is temporarily warming up. Please click again in a moment.';
+  }
+
   return str;
 }
 

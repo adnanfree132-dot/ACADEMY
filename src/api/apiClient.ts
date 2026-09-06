@@ -70,19 +70,20 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       headers
     });
   };
+  const canAutoRetry = isGet || endpoint.startsWith('/auth/');
   try {
     let response: Response;
     try {
       response = await attempt();
     } catch (first) {
-      if (!isGet) throw first;
-      await new Promise(r => setTimeout(r, 400));
+      if (!canAutoRetry) throw first;
+      await new Promise(r => setTimeout(r, 450));
       response = await attempt();
     }
 
     // Auto-retry on ANY 5xx status (500, 502, 503, 504) or edge cold-start
-    if (response.status >= 500) {
-      await new Promise(r => setTimeout(r, 450));
+    if (response.status >= 500 && canAutoRetry) {
+      await new Promise(r => setTimeout(r, 500));
       try {
         const retryResponse = await attempt();
         if (retryResponse.ok || retryResponse.status < 500) {
@@ -92,14 +93,44 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     }
 
     const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
+    let rawText = '';
+    try {
+      rawText = await response.text();
+    } catch {
+      rawText = '';
+    }
+
+    let json: any = null;
+    if (rawText && rawText.trim()) {
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        json = null;
+      }
+    }
+
+    // If body was empty during cold-start on a retryable endpoint, try once more
+    if (!json && canAutoRetry && response.status >= 500) {
+      await new Promise(r => setTimeout(r, 600));
+      try {
+        const retryRes = await attempt();
+        const retryText = await retryRes.text();
+        if (retryText && retryText.trim()) {
+          try {
+            json = JSON.parse(retryText);
+            response = retryRes;
+          } catch {}
+        }
+      } catch {}
+    }
+
+    if (!json) {
       if (response.status >= 500) {
-        throw new Error('Service is temporarily reconnecting. Please click again in a moment.');
+        throw new Error('Service is temporarily warming up. Please click again in a moment.');
       }
       throw new Error(`Server returned an unexpected response (${response.status}). Please retry.`);
     }
 
-    const json = await response.json();
     if (!response.ok || !json.success) {
       if (response.status === 401) {
         localStorage.removeItem('token');
@@ -133,6 +164,16 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     return json.data;
   } catch (err: any) {
     if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) unmarkDeleted(entityId);
+    const msg = String(err?.message || err || '');
+    if (
+      msg.includes('Unexpected end of JSON input') ||
+      msg.includes('unreachable') ||
+      msg.includes('Failed to fetch') ||
+      msg.includes('fetch failed') ||
+      msg.includes('NetworkError')
+    ) {
+      throw new Error('The backend service is temporarily warming up. Please click again in a moment.');
+    }
     throw err;
   }
   })();
