@@ -16,6 +16,7 @@ import { exportToCSV } from '../utils/csvExporter';
 import { ModernSelect } from '../components/ModernSelect';
 import { ModernDatePicker } from '../components/ModernDatePicker';
 import { StaffAttendanceView } from './StaffAttendanceView';
+import { TableSkeleton, CardGridSkeleton } from '../components/Skeleton';
 
 interface AttendanceViewProps {
   students: Student[];
@@ -339,7 +340,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
                 </tr>
               </thead>
               <tbody>
-                {batchStudents.length === 0 ? (
+                {isLoadingAttendance ? (
+                  <TableSkeleton columns={4} rows={6} />
+                ) : batchStudents.length === 0 ? (
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B', fontWeight: 500 }}>
                       No students enrolled in this batch.
@@ -400,7 +403,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ students, batche
 
           {/* Mobile Attendance Touch Cards (< 768px) */}
           <div className="mobile-card-roster mobile-only">
-            {batchStudents.length === 0 ? (
+            {isLoadingAttendance ? (
+              <CardGridSkeleton count={4} gridClassName="mobile-card-roster" />
+            ) : batchStudents.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B', fontWeight: 500, background: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
                 No students enrolled in this batch.
               </div>

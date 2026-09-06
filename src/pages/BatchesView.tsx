@@ -29,6 +29,7 @@ import { SyllabusTrackerModal } from '../components/SyllabusTrackerModal';
 import { api } from '../api/apiClient';
 import { ModernSelect } from '../components/ModernSelect';
 import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
+import { CardGridSkeleton } from '../components/Skeleton';
 
 interface BatchesViewProps {
   batches: Batch[];
@@ -40,6 +41,7 @@ interface BatchesViewProps {
   onDeleteBatch?: (id: string) => void;
   onEditBatch?: (batch: Batch) => void;
   onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
 export const BatchesView: React.FC<BatchesViewProps> = ({
@@ -51,7 +53,8 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
   onAddBatch,
   onDeleteBatch,
   onEditBatch,
-  onRefresh
+  onRefresh,
+  isLoading = false
 }) => {
   // Exclude terminated / inactive teachers from selectors
   const activeTeachers = teachers.filter(t => {
@@ -317,17 +320,30 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
       </div>
 
       {/* Batch Cards Grid */}
-      <div className="card-grid-3">
-        {batches.filter(batch => classFilter === 'ALL' || batch.classLevel === classFilter || (batch as any).class?.name === classFilter).map(batch => (
-          <div
-            key={batch.id}
-            className="card"
-            style={{
-              background: '#FFFFFF',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
+      {isLoading && batches.length === 0 ? (
+        <CardGridSkeleton count={6} />
+      ) : batches.filter(batch => classFilter === 'ALL' || batch.classLevel === classFilter || (batch as any).class?.name === classFilter).length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 20px', background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', color: '#64748B' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+            <Layers size={22} color="#64748B" />
+          </div>
+          <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 14 }}>No classes or batches found</div>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748B' }}>
+            {batches.length === 0 ? 'Create a batch using the "+ Create Batch" button above.' : 'No batches match your selected class level.'}
+          </p>
+        </div>
+      ) : (
+        <div className="card-grid-3">
+          {batches.filter(batch => classFilter === 'ALL' || batch.classLevel === classFilter || (batch as any).class?.name === classFilter).map(batch => (
+            <div
+              key={batch.id}
+              className="card"
+              style={{
+                background: '#FFFFFF',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
               position: 'relative'
             }}
             onClick={() => openBatchDetail(batch)}
@@ -460,7 +476,8 @@ export const BatchesView: React.FC<BatchesViewProps> = ({
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* ==================== Batch Detail Drawer ==================== */}
       {selectedBatch && (

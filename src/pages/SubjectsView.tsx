@@ -3,9 +3,11 @@ import { Subject } from '../types';
 import { BookOpen, Plus, Pencil, Trash2, X, Search, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { showToast } from '../lib/toast';
 import { api } from '../api/apiClient';
+import { CardGridSkeleton } from '../components/Skeleton';
 
 interface SubjectsViewProps {
   subjects: Subject[];
+  isLoading?: boolean;
   onAddSubject?: (subjectData: { name: string; code: string }) => void;
   onEditSubject?: (subjectId: string, subjectData: { name: string; code: string }) => void;
   onDeleteSubject?: (subjectId: string) => void;
@@ -14,6 +16,7 @@ interface SubjectsViewProps {
 
 export const SubjectsView: React.FC<SubjectsViewProps> = ({ 
   subjects, 
+  isLoading = false,
   onAddSubject, 
   onEditSubject, 
   onDeleteSubject,
@@ -126,7 +129,9 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({
       </div>
 
       {/* Subjects Grid */}
-      {filteredSubjects.length > 0 ? (
+      {isLoading && subjects.length === 0 ? (
+        <CardGridSkeleton count={6} />
+      ) : filteredSubjects.length > 0 ? (
         <div className="subjects-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
           {filteredSubjects.map((subject, index) => {
             const color = colors[index % colors.length];

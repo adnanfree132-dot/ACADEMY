@@ -24,6 +24,7 @@ import { Batch, Subject, Teacher } from '../types';
 import { ModernSelect } from '../components/ModernSelect';
 import { timeRangesOverlap } from '../lib/timeOverlap';
 import { showToast } from '../lib/toast';
+import { CardGridSkeleton, TableSkeleton } from '../components/Skeleton';
 
 interface TimetableViewProps {
   batches?: Batch[];
@@ -41,7 +42,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
   const [batches, setBatches] = useState<Batch[]>(propBatches || peekApiCache<any[]>('/batches') || []);
   const [subjects, setSubjects] = useState<Subject[]>(propSubjects || peekApiCache<any[]>('/subjects') || []);
   const [teachers, setTeachers] = useState<Teacher[]>(propTeachers || peekApiCache<any[]>('/teachers') || []);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(() => !peekApiCache<any[]>('/timetable')?.length);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,6 +68,7 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const fetchInitialData = async () => {
+    setLoading(prev => timetableSlots.length === 0 ? true : prev);
     try {
       const [slotsData, batchesData, subjectsData, teachersData] = await Promise.all([
         api.getTimetableSlots().catch(() => []),
@@ -414,36 +416,42 @@ export const TimetableView: React.FC<TimetableViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {Array.from(new Set(timetableSlots.map(s => `${s.start_time}|${s.end_time}`))).sort().map(key => {
-                const [start, end] = key.split('|');
-                return (
-                  <tr key={key}>
-                    <td style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>{start}–{end}</td>
-                    {daysOfWeek.map(day => {
-                      const cell = timetableSlots.filter(s => s.day === day && s.start_time === start && s.end_time === end);
-                      return (
-                        <td key={day} style={{ fontSize: 12, verticalAlign: 'top' }}>
-                          {cell.map(s => (
-                            <div key={s.id} style={{ marginBottom: 6 }}>
-                              <strong>{s.batch?.name || 'Batch'}</strong>
-                              <div>{s.subject?.name || ''}</div>
-                              <div style={{ color: '#64748B' }}>{s.room || ''} {s.teacher?.user?.full_name || ''}</div>
-                            </div>
-                          ))}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
+              {loading && timetableSlots.length === 0 ? (
+                <TableSkeleton columns={8} rows={5} />
+              ) : (
+                Array.from(new Set(timetableSlots.map(s => `${s.start_time}|${s.end_time}`))).sort().map(key => {
+                  const [start, end] = key.split('|');
+                  return (
+                    <tr key={key}>
+                      <td style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>{start}–{end}</td>
+                      {daysOfWeek.map(day => {
+                        const cell = timetableSlots.filter(s => s.day === day && s.start_time === start && s.end_time === end);
+                        return (
+                          <td key={day} style={{ fontSize: 12, verticalAlign: 'top' }}>
+                            {cell.map(s => (
+                              <div key={s.id} style={{ marginBottom: 6 }}>
+                                <strong>{s.batch?.name || 'Batch'}</strong>
+                                <div>{s.subject?.name || ''}</div>
+                                <div style={{ color: '#64748B' }}>{s.room || ''} {s.teacher?.user?.full_name || ''}</div>
+                              </div>
+                            ))}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {timetableSlots.length === 0 && <p style={{ padding: 16, color: '#64748B' }}>No weekly slots yet.</p>}
+          {timetableSlots.length === 0 && !loading && <p style={{ padding: 16, color: '#64748B' }}>No weekly slots yet.</p>}
         </div>
       )}
 
       {/* Timetable Schedule Grid */}
-      {viewMode === 'day' && filteredSlots.length > 0 ? (
+      {viewMode === 'day' && loading && timetableSlots.length === 0 ? (
+        <CardGridSkeleton count={6} />
+      ) : viewMode === 'day' && filteredSlots.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
           {filteredSlots.map((slot) => (
             <div 

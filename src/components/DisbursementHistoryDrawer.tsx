@@ -13,6 +13,7 @@ import {
 import { StaffSalaryDisbursement } from '../types';
 import { api } from '../api/apiClient';
 import { formatCurrencyPKR } from '../utils/payrollUiUtils';
+import { CardSkeleton } from './Skeleton';
 
 interface DisbursementHistoryDrawerProps {
   isOpen: boolean;
@@ -177,8 +178,10 @@ export const DisbursementHistoryDrawer: React.FC<DisbursementHistoryDrawerProps>
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5">
           {isLoading ? (
-            <div className="flex items-center justify-center h-48 text-slate-400 text-xs">
-              Loading payment history...
+            <div className="flex flex-col gap-3">
+              <CardSkeleton height={70} />
+              <CardSkeleton height={70} />
+              <CardSkeleton height={70} />
             </div>
           ) : disbursements.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-center p-6 border border-dashed border-slate-200 rounded-xl">

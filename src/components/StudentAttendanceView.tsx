@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/apiClient';
 import { TabType } from '../types';
+import { TableSkeleton, KpiCardSkeleton } from './Skeleton';
 
 interface StudentAttendanceViewProps {
   student?: any;
@@ -121,6 +122,14 @@ export const StudentAttendanceView: React.FC<StudentAttendanceViewProps> = ({ st
       </div>
 
       {/* 4 Metric Badges */}
+      {loading && records.length === 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginBottom: 24 }}>
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+        </div>
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginBottom: 24 }}>
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -158,6 +167,7 @@ export const StudentAttendanceView: React.FC<StudentAttendanceViewProps> = ({ st
           <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 4 }}>{lateCount} late &bull; {leaveCount} excused</div>
         </div>
       </div>
+      )}
 
       {/* Attendance History Table Card */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}>
@@ -194,8 +204,8 @@ export const StudentAttendanceView: React.FC<StudentAttendanceViewProps> = ({ st
         </div>
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14 }}>
-            Loading attendance records...
+          <div style={{ padding: 16 }}>
+            <TableSkeleton columns={4} rows={6} />
           </div>
         ) : filteredRecords.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center' }}>

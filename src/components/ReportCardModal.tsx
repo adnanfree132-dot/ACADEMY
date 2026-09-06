@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Printer, Award, CheckCircle2, ShieldCheck, Sparkles, BookOpen, User, Calendar, Check, AlertCircle } from 'lucide-react';
 import { Student } from '../types';
 import { api } from '../api/apiClient';
+import { Skeleton, TableSkeleton } from './Skeleton';
 
 interface ReportCardModalProps {
   student: Student;
@@ -126,6 +127,14 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
           flexDirection: 'column',
           gap: 16
         }}>
+          {loading && !reportCardData ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Skeleton height={60} borderRadius={12} />
+              <Skeleton height={80} borderRadius={12} />
+              <TableSkeleton columns={5} rows={4} />
+            </div>
+          ) : (
+            <>
           {/* Printable Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #0F172A', paddingBottom: 14 }}>
             <div>
@@ -253,6 +262,8 @@ export const ReportCardModal: React.FC<ReportCardModalProps> = ({ student, onClo
               <div style={{ fontSize: 10, color: '#64748B', marginTop: 3 }}>Principal / Academic Head</div>
             </div>
           </div>
+            </>
+          )}
         </div>
 
         {/* Island 4: Floating Right-Aligned Paired Action Buttons */}

@@ -12,6 +12,7 @@ import { FeeSlipModal, FeeSlipData } from './FeeSlipModal';
 import { api } from '../api/apiClient';
 import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
 import { openWhatsAppLink } from '../utils/whatsappHelper';
+import { CardSkeleton, Skeleton } from './Skeleton';
 
 interface StudentProfileDrawerProps {
   student: Student | null;
@@ -1040,8 +1041,9 @@ export const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({ stud
 
               {/* Timeline of Conduct Records */}
               {isLoadingLogs ? (
-                <div style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-                  Loading conduct records...
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <CardSkeleton height={80} />
+                  <CardSkeleton height={80} />
                 </div>
               ) : conductLogs.length === 0 ? (
                 <div style={{ padding: 32, textAlign: 'center', background: '#FFFFFF', borderRadius: 16, border: '1px dashed #CBD5E1', color: '#64748B', fontSize: 13 }}>
@@ -1236,8 +1238,9 @@ export const StudentProfileDrawer: React.FC<StudentProfileDrawerProps> = ({ stud
               </div>
 
               {isLoadingInstallments ? (
-                <div style={{ textAlign: 'center', padding: 32, color: '#94A3B8', fontSize: 13 }}>
-                  Loading installment roadmap...
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <CardSkeleton height={70} />
+                  <CardSkeleton height={70} />
                 </div>
               ) : installmentSchedules.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 36, background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>

@@ -13,6 +13,7 @@ import {
 import { api } from '../api/apiClient';
 import { formatCurrencyPKR } from '../utils/payrollUiUtils';
 import { TabType } from '../types';
+import { KpiCardSkeleton, Skeleton } from './Skeleton';
 
 interface StudentFeeViewProps {
   student?: any;
@@ -111,6 +112,13 @@ export const StudentFeeView: React.FC<StudentFeeViewProps> = ({ student }) => {
       </div>
 
       {/* 3 Summary Badges */}
+      {loading && invoices.length === 0 && payments.length === 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 }}>
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+        </div>
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: '#64748B', marginBottom: 8 }}>Total Invoiced Fee</div>
@@ -136,6 +144,7 @@ export const StudentFeeView: React.FC<StudentFeeViewProps> = ({ student }) => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Invoices and Receipts Dual Columns */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: 20 }}>
@@ -147,7 +156,11 @@ export const StudentFeeView: React.FC<StudentFeeViewProps> = ({ student }) => {
           </div>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: '#94A3B8', fontSize: 13 }}>Loading invoices...</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Skeleton height={56} borderRadius={10} />
+              <Skeleton height={56} borderRadius={10} />
+              <Skeleton height={56} borderRadius={10} />
+            </div>
           ) : invoices.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {invoices.map((inv) => (
@@ -208,7 +221,11 @@ export const StudentFeeView: React.FC<StudentFeeViewProps> = ({ student }) => {
           </div>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: '#94A3B8', fontSize: 13 }}>Loading payments...</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Skeleton height={56} borderRadius={10} />
+              <Skeleton height={56} borderRadius={10} />
+              <Skeleton height={56} borderRadius={10} />
+            </div>
           ) : payments.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {payments.map((p) => (

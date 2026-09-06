@@ -3,9 +3,11 @@ import { Announcement } from '../types';
 import { Bell, Plus, AlertCircle, X, Megaphone, Users, GraduationCap, UserCheck, Pin, Pencil, Trash2 } from 'lucide-react';
 import { ModernSelect } from '../components/ModernSelect';
 import { showToast } from '../lib/toast';
+import { CardSkeleton } from '../components/Skeleton';
 
 interface AnnouncementsViewProps {
   announcements: Announcement[];
+  isLoading?: boolean;
   onAddAnnouncement: (data: Omit<Announcement, 'id' | 'date'>) => void;
   onUpdateAnnouncement?: (id: string, data: Partial<Announcement>) => void;
   onDeleteAnnouncement?: (id: string) => void;
@@ -22,6 +24,7 @@ const emptyForm = {
 
 export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({
   announcements,
+  isLoading = false,
   onAddAnnouncement,
   onUpdateAnnouncement,
   onDeleteAnnouncement
@@ -92,14 +95,19 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({
         </div>
       </div>
 
-      {announcements.length === 0 && (
+      {isLoading && announcements.length === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <CardSkeleton height={110} />
+          <CardSkeleton height={110} />
+          <CardSkeleton height={110} />
+        </div>
+      ) : announcements.length === 0 ? (
         <div className="card" style={{ padding: 28, textAlign: 'center', color: '#64748B' }}>
           No notices yet. Publish one for students, parents, or staff.
         </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {announcements.map(notice => (
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {announcements.map(notice => (
           <div key={notice.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, border: notice.pinned ? '1px solid #FDBA74' : undefined }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -139,6 +147,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({
           </div>
         ))}
       </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>

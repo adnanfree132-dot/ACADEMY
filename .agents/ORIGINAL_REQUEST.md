@@ -98,3 +98,47 @@ Deliver a structured remediation blueprint categorized by severity (Critical, Hi
 - [ ] Every finding details the specific trigger conditions and business failure impact.
 - [ ] Concrete, phased remediation steps are provided for all identified items, ordered by priority.
 
+## 2026-09-06T12:47:06Z
+
+Full multi-agent implementation team. Implement the permanent architectural remediation plan across the Academy Pro OS full-stack web application (https://edu.toolnestr.com) to eliminate recurring login failures, proxy stream drops, Wasm panics, and retry storms, delivering a robust, resilient system verified in production.
+
+Working directory: /home/adnan/Desktop/academy
+Integrity mode: development
+
+## Requirements
+
+### R1. Direct Edge Routing & Unified API Client
+Eliminate the Cloudflare Pages double-proxy bottleneck. Configure the frontend API client (src/api/apiClient.ts) to communicate directly with the Cloudflare Worker backend (https://academy-api.adnanfree132.workers.dev/api/v1) in production via standard CORS, retaining clean local fallback (/api/v1) for local development (localhost / 127.0.0.1). Ensure public/_redirects contains only SPA history fallback routing (/* /index.html 200) without conflicting proxy rewrite rules.
+
+### R2. Elimination of Retry Amplification Storms & Misleading Error Masking
+Dismantle the compounding retry loops between the Pages Function (functions/api/[[path]].js) and the frontend client (src/api/apiClient.ts). Simplify the proxy to a single buffered pass-through with CORS headers. Remove recursive error-masking blocks in functions/api/[[path]].js, src/api/apiClient.ts, and server/src/common/envelope.ts that convert real failures into generic "warming up" banners, returning accurate HTTP status codes and actionable, polite error messages.
+
+### R3. Resilient Database Connection Pooling & Wasm Exception Boundaries
+In server/src/prisma.ts, eliminate per-request connection pool creation and teardown on res.finish, maintaining a persistent connection pool across the Cloudflare Worker isolate lifecycle to enable socket reuse and reduce cold-start latency. Support Supabase PgBouncer transaction mode (port 6543) where configured. Guard database query errors so that socket resets or connection drops are caught cleanly without triggering Rust WebAssembly RuntimeError: unreachable traps.
+
+### R4. Frontend Startup Thundering Herd Protection
+In src/App.tsx, stage the post-authentication initial data fetch (fetchData). Replace the burst of 11 simultaneous parallel queries with a staged loader: fetch essential primary data (getMe, getDashboard, getStudents, getBatches) first, followed by secondary modules (getTeachers, getSubjects, getNotifications, getAnnouncements, getCRMLeads, getSettings, getTransactions) in a deferred batch so that database connection limits are never saturated on login.
+
+### R5. End-to-End Build, Deployment & Production Verification
+Verify that both root and server pass TypeScript compilation (npx tsc --noEmit) with zero errors, and that npm run build succeeds cleanly. Deploy the updated Worker (npx wrangler deploy --config server/wrangler.toml) and Pages (npx wrangler pages deploy dist --project-name academy --branch main). Conduct automated live tests against both the direct Worker API and https://edu.toolnestr.com confirming 100% login success rate across all roles (admin, teacher, student, super_admin) with zero error banners.
+
+## Acceptance Criteria
+
+### Edge Routing & Proxy Architecture
+- [ ] src/api/apiClient.ts targets https://academy-api.adnanfree132.workers.dev/api/v1 directly in production with automatic fallback for local environments.
+- [ ] public/_redirects contains only SPA client-side routing (/* /index.html 200) with no conflicting /api/* rule.
+- [ ] functions/api/[[path]].js operates as a single buffered pass-through without nested 3x retry amplification.
+
+### Database Connection Resilience
+- [ ] server/src/prisma.ts preserves connection pools across requests within the Worker isolate rather than destroying them on res.finish.
+- [ ] Supabase connection configuration supports transaction mode pooler (port 6543) without connection starvation.
+- [ ] Database error handling intercepts socket drops safely without Rust Wasm opcode 0x00 (unreachable) traps.
+
+### Concurrency & Error Honesty
+- [ ] Initial data loading in src/App.tsx is staged to prevent 11-request thundering herds on PgBouncer upon login.
+- [ ] Generic "warming up" error masking is eliminated across client, proxy, and server envelope, preserving genuine status codes.
+
+### Build, Deploy & Live Verification
+- [ ] npx tsc --noEmit passes with 0 errors across root and server.
+- [ ] npm run build produces production assets cleanly.
+- [ ] Live automated tests on https://edu.toolnestr.com succeed with HTTP 200 across Admin, Teacher, Student, and Super Admin roles.

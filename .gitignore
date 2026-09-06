@@ -62,6 +62,7 @@ mobile_audit_screenshots/
 .agents/backend_*
 .agents/challenger_*
 .agents/e2e_*
+.agents/explorer_*
 .agents/frontend_*
 .agents/m[0-9]*
 .agents/orchestrator*
@@ -72,6 +73,7 @@ mobile_audit_screenshots/
 .agents/survey_*
 .agents/test_writer_*
 .agents/victory_*
+.agents/worker_*
 *.b64
 *.tmp*
 *.cjs
@@ -81,7 +83,12 @@ create_test.js
 gen_tests.py
 make_suite.py
 test_single_line.txt
+ORIGINAL_REQUEST.md
 
 # Wrangler local state
 .wrangler/
 **/.wrangler/
+
+# Codebase Memory MCP cache
+.codebase-memory/
+

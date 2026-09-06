@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/apiClient';
 import { ModernDatePicker } from '../components/ModernDatePicker';
+import { TableSkeleton, KpiCardSkeleton } from '../components/Skeleton';
 
 interface AcademyRecord {
   id: string;
@@ -364,91 +365,99 @@ export const SuperAdminDashboardView: React.FC = () => {
           gap: 16
         }}
       >
-        <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Total Academies</span>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Building2 size={16} />
+        {loading && academies.length === 0 ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <KpiCardSkeleton key={i} />
+          ))
+        ) : (
+          <>
+            <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Total Academies</span>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Building2 size={16} />
+                </div>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#0F172A' }}>
+                {stats?.totalAcademies ?? academies.length}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
+                Active on platform
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#0F172A' }}>
-            {stats?.totalAcademies ?? academies.length}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
-            Active on platform
-          </div>
-        </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Active 30-Day Trials</span>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={16} />
+            <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Active 30-Day Trials</span>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Clock size={16} />
+                </div>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>
+                {stats?.activeTrials ?? academies.filter(a => {
+                  const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+                  const days = a.days_remaining ?? (a as any).daysRemaining ?? 0;
+                  return isActive && a.subscription_status === 'trial' && days > 0;
+                }).length}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
+                In evaluation window
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>
-            {stats?.activeTrials ?? academies.filter(a => {
-              const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
-              const days = a.days_remaining ?? (a as any).daysRemaining ?? 0;
-              return isActive && a.subscription_status === 'trial' && days > 0;
-            }).length}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
-            In evaluation window
-          </div>
-        </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Expired Trials</span>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FEF2F2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <AlertCircle size={16} />
+            <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Expired Trials</span>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FEF2F2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <AlertCircle size={16} />
+                </div>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#DC2626' }}>
+                {stats?.expiredTrials ?? academies.filter(a => {
+                  const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+                  const days = a.days_remaining ?? (a as any).daysRemaining ?? 0;
+                  return isActive && (a.subscription_status === 'expired' || days <= 0);
+                }).length}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
+                Requires trial extension
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#DC2626' }}>
-            {stats?.expiredTrials ?? academies.filter(a => {
-              const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
-              const days = a.days_remaining ?? (a as any).daysRemaining ?? 0;
-              return isActive && (a.subscription_status === 'expired' || days <= 0);
-            }).length}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
-            Requires trial extension
-          </div>
-        </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Revoked Access</span>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FFF1F2', color: '#E11D48', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShieldAlert size={16} />
+            <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Revoked Access</span>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FFF1F2', color: '#E11D48', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldAlert size={16} />
+                </div>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#E11D48' }}>
+                {stats?.revokedAcademies ?? academies.filter(a => {
+                  const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+                  return a.subscription_status === 'revoked' || !isActive;
+                }).length}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
+                Suspended or blocked
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#E11D48' }}>
-            {stats?.revokedAcademies ?? academies.filter(a => {
-              const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
-              return a.subscription_status === 'revoked' || !isActive;
-            }).length}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
-            Suspended or blocked
-          </div>
-        </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Enrolled Students</span>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F5F3FF', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Users size={16} />
+            <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 20px', boxShadow: '0 2px 4px rgba(15,23,42,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Enrolled Students</span>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F5F3FF', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Users size={16} />
+                </div>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#7C3AED' }}>
+                {stats?.totalStudents ?? academies.reduce((acc, a) => acc + (a.stats?.studentsCount || 0), 0)}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
+                Across all tenant academies
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#7C3AED' }}>
-            {stats?.totalStudents ?? academies.reduce((acc, a) => acc + (a.stats?.studentsCount || 0), 0)}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
-            Across all tenant academies
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Directory & Management Table Card */}
@@ -546,10 +555,12 @@ export const SuperAdminDashboardView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredAcademies.length === 0 ? (
+              {loading && academies.length === 0 ? (
+                <TableSkeleton columns={6} rows={5} />
+              ) : filteredAcademies.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#64748B', fontSize: 13.5 }}>
-                    {loading ? 'Loading platform academies...' : 'No academies found matching your search and filter criteria.'}
+                    No academies found matching your search and filter criteria.
                   </td>
                 </tr>
               ) : (

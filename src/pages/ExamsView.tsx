@@ -29,6 +29,7 @@ import { ModernDatePicker } from '../components/ModernDatePicker';
 import { MarksheetEntryModal } from '../components/MarksheetEntryModal';
 import { ReportCardModal } from '../components/ReportCardModal';
 import { showToast } from '../lib/toast';
+import { TableSkeleton, CardGridSkeleton } from '../components/Skeleton';
 
 interface ExamsViewProps {
   students: Student[];
@@ -39,7 +40,7 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
   const [examsList, setExamsList] = useState<any[]>(() => peekApiCache<any[]>('/tests') || []);
   const [batches, setBatches] = useState<Batch[]>(propBatches || peekApiCache<any[]>('/batches') || []);
   const [subjects, setSubjects] = useState<Subject[]>(() => peekApiCache<any[]>('/subjects') || []);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(() => !peekApiCache<any[]>('/tests')?.length);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +62,7 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
   const [reportStudent, setReportStudent] = useState<Student | null>(null);
 
   const fetchInitialData = async () => {
+    setLoading(prev => examsList.length === 0 ? true : prev);
     try {
       const [testsData, batchesData, subjectsData] = await Promise.all([
         api.getTests().catch(() => []),
@@ -308,7 +310,9 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
             </tr>
           </thead>
           <tbody>
-            {filteredExams.length > 0 ? (
+            {loading && examsList.length === 0 ? (
+              <TableSkeleton columns={7} rows={5} />
+            ) : filteredExams.length > 0 ? (
               filteredExams.map((exam) => (
                 <tr key={exam.id}>
                   <td>
@@ -404,7 +408,9 @@ export const ExamsManagementView: React.FC<ExamsViewProps> = ({ students, batche
 
       {/* Mobile Touch Cards (< 768px) */}
       <div className="mobile-card-roster mobile-only">
-        {filteredExams.length > 0 ? (
+        {loading && examsList.length === 0 ? (
+          <CardGridSkeleton count={4} gridClassName="mobile-card-roster" />
+        ) : filteredExams.length > 0 ? (
           filteredExams.map((exam) => (
             <div key={exam.id} className="mobile-entity-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

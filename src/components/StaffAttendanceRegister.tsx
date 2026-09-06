@@ -26,6 +26,7 @@ import { ModernDatePicker } from './ModernDatePicker';
 import { AdminAttendanceOverrideModal } from './AdminAttendanceOverrideModal';
 import { api } from '../api/apiClient';
 import { exportToCSV } from '../utils/csvExporter';
+import { TableSkeleton } from './Skeleton';
 
 interface StaffAttendanceRegisterProps {
   staffList?: StaffMember[];
@@ -607,7 +608,9 @@ export const StaffAttendanceRegister: React.FC<StaffAttendanceRegisterProps> = (
               </tr>
             </thead>
             <tbody>
-              {filteredDailyRoster.length > 0 ? (
+              {isLoading && rosterRecords.length === 0 ? (
+                <TableSkeleton columns={7} rows={6} />
+              ) : filteredDailyRoster.length > 0 ? (
                 filteredDailyRoster.map(item => {
                   const staffName = item.staff_name || item.staffMember?.full_name || 'Staff Member';
                   const staffCode = item.staff_id || item.staffMember?.staff_id || 'STAFF';

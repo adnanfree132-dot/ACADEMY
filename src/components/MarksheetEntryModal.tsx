@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Save, Award } from 'lucide-react';
 import { api, peekApiCache } from '../api/apiClient';
 import { showToast } from '../lib/toast';
+import { Skeleton } from './Skeleton';
 
 interface MarksheetEntryModalProps {
   test: any | null;
@@ -101,7 +102,19 @@ export const MarksheetEntryModal: React.FC<MarksheetEntryModalProps> = ({
           <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#FFF' }}><X /></button>
         </div>
         <form onSubmit={handleSave} style={{ background: '#FFF', borderRadius: 16, padding: 16, marginTop: 10, maxHeight: '70vh', overflow: 'auto' }}>
-          {loading ? <p>Loading enrolled students…</p> : roster.length === 0 ? (
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 0' }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 90px 120px 1.4fr 50px', gap: 8, alignItems: 'center' }}>
+                  <Skeleton height={32} borderRadius={8} />
+                  <Skeleton height={32} borderRadius={8} />
+                  <Skeleton height={32} borderRadius={8} />
+                  <Skeleton height={32} borderRadius={8} />
+                  <Skeleton height={32} borderRadius={8} />
+                </div>
+              ))}
+            </div>
+          ) : roster.length === 0 ? (
             <p>No enrolled students in this batch.</p>
           ) : roster.map((row, idx) => (
             <div key={row.studentId} style={{ display: 'grid', gridTemplateColumns: '2fr 90px 120px 1.4fr 50px', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #F1F5F9' }}>

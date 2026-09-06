@@ -20,6 +20,7 @@ import { Student } from '../types';
 import { api } from '../api/apiClient';
 import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
 import { FeeSlipModal, FeeSlipData } from './FeeSlipModal';
+import { TableSkeleton } from './Skeleton';
 
 interface StudentLedgerModalProps {
   isOpen: boolean;
@@ -367,7 +368,9 @@ export const StudentLedgerModal: React.FC<StudentLedgerModalProps> = ({
               </h3>
 
               {loading ? (
-                <div style={{ padding: 20, textAlign: 'center', color: '#64748B', fontSize: 12 }}>Loading financial records...</div>
+                <div style={{ padding: '8px 0' }}>
+                  <TableSkeleton columns={4} rows={3} />
+                </div>
               ) : payments.length > 0 ? (
                 <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

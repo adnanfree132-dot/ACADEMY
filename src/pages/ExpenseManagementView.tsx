@@ -24,6 +24,7 @@ import { ExpenseModal } from '../components/ExpenseModal';
 import { ModernSelect, ModernSelectOption } from '../components/ModernSelect';
 import { exportToCSV } from '../utils/csvExporter';
 import { formatCurrencyPKR } from '../utils/payrollUiUtils';
+import { TableSkeleton, KpiCardSkeleton } from '../components/Skeleton';
 
 export const ExpenseManagementView: React.FC = () => {
   // Derive prior completed month as default
@@ -288,6 +289,21 @@ export const ExpenseManagementView: React.FC = () => {
       </div>
 
       {/* 3 Summary Analytics Cards */}
+      {isLoading && expenses.length === 0 ? (
+        <div 
+          className="card-grid-3"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: 14,
+            width: '100%'
+          }}
+        >
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+        </div>
+      ) : (
       <div 
         className="card-grid-3"
         style={{
@@ -411,6 +427,7 @@ export const ExpenseManagementView: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Toolbar & Category Filters */}
       <div 
@@ -489,11 +506,7 @@ export const ExpenseManagementView: React.FC = () => {
           </thead>
           <tbody>
             {isLoading && expenses.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#94A3B8', fontSize: 13 }}>
-                  Loading expenses ledger...
-                </td>
-              </tr>
+              <TableSkeleton columns={7} rows={6} />
             ) : expenses.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px' }}>

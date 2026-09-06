@@ -4,12 +4,14 @@ import { api, peekApiCache } from '../api/apiClient';
 import { useApiCacheSync } from '../lib/useApiCacheSync';
 import { showToast } from '../lib/toast';
 import { exportToCSV } from '../utils/csvExporter';
+import { CardGridSkeleton } from '../components/Skeleton';
 
 export const HomeworkView: React.FC = () => {
   const [homeworkList, setHomeworkList] = useState<any[]>(() => peekApiCache<any[]>('/homework') || []);
   const [materialsList, setMaterialsList] = useState<any[]>(() => peekApiCache<any[]>('/study-materials') || []);
   const [batches, setBatches] = useState<any[]>(() => peekApiCache<any[]>('/batches') || []);
   const [subjects, setSubjects] = useState<any[]>(() => peekApiCache<any[]>('/subjects') || []);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !peekApiCache<any[]>('/homework')?.length);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMaterialOpen, setIsMaterialOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -26,16 +28,21 @@ export const HomeworkView: React.FC = () => {
   const [libraryTab, setLibraryTab] = useState<'homework' | 'notes'>('homework');
 
   const fetchData = async () => {
-    const [hw, sm, b, s] = await Promise.all([
-      api.getHomework().catch(() => []),
-      api.getStudyMaterials().catch(() => []),
-      api.getBatches().catch(() => []),
-      api.getSubjects().catch(() => [])
-    ]);
-    if (Array.isArray(hw)) setHomeworkList(hw);
-    if (Array.isArray(sm)) setMaterialsList(sm);
-    if (Array.isArray(b)) setBatches(b);
-    if (Array.isArray(s)) setSubjects(s);
+    setIsLoading(prev => (homeworkList.length === 0 && materialsList.length === 0) ? true : prev);
+    try {
+      const [hw, sm, b, s] = await Promise.all([
+        api.getHomework().catch(() => []),
+        api.getStudyMaterials().catch(() => []),
+        api.getBatches().catch(() => []),
+        api.getSubjects().catch(() => [])
+      ]);
+      if (Array.isArray(hw)) setHomeworkList(hw);
+      if (Array.isArray(sm)) setMaterialsList(sm);
+      if (Array.isArray(b)) setBatches(b);
+      if (Array.isArray(s)) setSubjects(s);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -89,7 +96,9 @@ export const HomeworkView: React.FC = () => {
         <button type="button" className={libraryTab === 'notes' ? 'btn-primary' : 'btn-secondary'} onClick={() => setLibraryTab('notes')}>Notes library ({materialsList.length})</button>
       </div>
 
-      {libraryTab === 'homework' && (homeworkList.length === 0 ? (
+      {libraryTab === 'homework' && (isLoading && homeworkList.length === 0 ? (
+        <CardGridSkeleton count={4} />
+      ) : homeworkList.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 48 }}>
           <FileText size={44} color="#94A3B8" />
           <h3>No homework yet</h3>
@@ -115,7 +124,9 @@ export const HomeworkView: React.FC = () => {
         </div>
       ))}
 
-      {libraryTab === 'notes' && (materialsList.length === 0 ? (
+      {libraryTab === 'notes' && (isLoading && materialsList.length === 0 ? (
+        <CardGridSkeleton count={4} />
+      ) : materialsList.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 48 }}>
           <h3>No study notes yet</h3>
           <p style={{ color: '#64748B' }}>Upload a Drive/PDF link attached to a batch and subject. Teacher is taken from the batch.</p>

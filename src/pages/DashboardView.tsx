@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Student, Teacher, Batch, FeeTransaction, CRMLead, TabType } from '../types';
 import { formatCurrencyPKR } from '../utils/payrollUiUtils';
+import { Skeleton, DashboardOverviewSkeleton } from '../components/Skeleton';
 
 interface DashboardViewProps {
   students: Student[];
@@ -25,6 +26,7 @@ interface DashboardViewProps {
   transactions: FeeTransaction[];
   leads: CRMLead[];
   onNavigate: (tab: TabType) => void;
+  isLoading?: boolean;
   dashboardStats?: {
     totalStudents: number;
     totalTeachers: number;
@@ -95,9 +97,126 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   transactions,
   leads,
   onNavigate,
+  isLoading = false,
   dashboardStats,
   dashboardLive
 }) => {
+  if (isLoading && !dashboardStats && students.length === 0) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-quick-actions">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} width={130} height={38} borderRadius={10} />
+          ))}
+        </div>
+
+        <div className="dashboard-grid-top">
+          <DashboardOverviewSkeleton />
+
+          <div className="card trend-card">
+            <div className="card-header-flex">
+              <div>
+                <Skeleton width={120} height={16} borderRadius={6} />
+                <Skeleton width={160} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+              </div>
+              <Skeleton width={32} height={32} borderRadius={8} />
+            </div>
+            <div className="dashboard-attention-list" style={{ marginTop: 14 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="dashboard-attention-row" style={{ cursor: 'default' }}>
+                  <Skeleton width="55%" height={14} borderRadius={6} />
+                  <Skeleton width="30%" height={14} borderRadius={6} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card collections-card">
+            <div className="card-header-flex">
+              <div>
+                <Skeleton width={130} height={16} borderRadius={6} />
+                <Skeleton width={180} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+              </div>
+              <Skeleton width={32} height={32} borderRadius={8} />
+            </div>
+
+            <div className="collections-main-stat" style={{ margin: '14px 0' }}>
+              <Skeleton width={180} height={34} borderRadius={8} />
+            </div>
+
+            <div className="target-progress-group">
+              <div className="target-flex">
+                <Skeleton width="60%" height={12} borderRadius={4} />
+                <Skeleton width="15%" height={12} borderRadius={4} />
+              </div>
+              <div className="progress-bar-bg" style={{ marginTop: 8 }}>
+                <Skeleton width="100%" height={8} borderRadius={9999} />
+              </div>
+            </div>
+
+            <div className="financial-columns" style={{ marginTop: 16 }}>
+              <div className="fin-col">
+                <Skeleton width="60%" height={10} borderRadius={4} />
+                <Skeleton width="80%" height={14} borderRadius={6} style={{ marginTop: 4 }} />
+              </div>
+              <div className="fin-col">
+                <Skeleton width="60%" height={10} borderRadius={4} />
+                <Skeleton width="80%" height={14} borderRadius={6} style={{ marginTop: 4 }} />
+              </div>
+              <div className="fin-col">
+                <Skeleton width="60%" height={10} borderRadius={4} />
+                <Skeleton width="80%" height={14} borderRadius={6} style={{ marginTop: 4 }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-grid-mid">
+          <div className="card crm-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <Skeleton width={32} height={32} borderRadius={8} />
+              <div style={{ flex: 1 }}>
+                <Skeleton width={120} height={16} borderRadius={6} />
+                <Skeleton width={180} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} width="100%" height={32} borderRadius={8} />
+              ))}
+            </div>
+          </div>
+
+          <div className="card schedule-card">
+            <div className="card-header-flex">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Skeleton width={20} height={20} borderRadius={6} />
+                <Skeleton width={140} height={16} borderRadius={6} />
+              </div>
+              <Skeleton width={70} height={20} borderRadius={9999} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} width="100%" height={32} borderRadius={8} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="notice-banner-card">
+          <div className="notice-left">
+            <Skeleton width={36} height={36} borderRadius="50%" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Skeleton width={140} height={16} borderRadius={6} />
+              <Skeleton width={260} height={12} borderRadius={4} />
+            </div>
+          </div>
+          <Skeleton width={150} height={36} borderRadius={10} />
+        </div>
+      </div>
+    );
+  }
+
   const totalStudents = dashboardStats?.totalStudents ?? students.length;
   const totalTeachers = dashboardStats?.totalTeachers ?? teachers.length;
   const totalBatches = dashboardStats?.totalBatches ?? batches.length;

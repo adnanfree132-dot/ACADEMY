@@ -22,6 +22,7 @@ import { LeavingCertificateModal } from '../components/LeavingCertificateModal';
 import { ModernSelect } from '../components/ModernSelect';
 import { EnrollStudentBatchModal } from '../components/EnrollStudentBatchModal';
 import { api } from '../api/apiClient';
+import { TableSkeleton, CardGridSkeleton } from '../components/Skeleton';
 
 import { getUnitHeader, getFilterLabel } from '../utils/academyModeHelper';
 import { Batch, FeeTransaction } from '../types';
@@ -706,21 +707,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 );
               })
             ) : isLoading && students.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '56px 24px', color: '#64748B' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Loader2 size={22} color="#0F172A" className="animate-spin" />
-                    </div>
-                    <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 14 }}>
-                      Loading enrolled students...
-                    </div>
-                    <p style={{ margin: 0, fontSize: 12.5, color: '#64748B', maxWidth: 360 }}>
-                      Fetching institutional student directory from the database.
-                    </p>
-                  </div>
-                </td>
-              </tr>
+              <TableSkeleton columns={7} rows={6} />
             ) : (
               <tr>
                 <td colSpan={7} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748B' }}>
@@ -970,15 +957,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             );
           })
         ) : isLoading && students.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B', background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <Loader2 size={22} color="#0F172A" className="animate-spin" />
-            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 13.5 }}>
-              Loading students...
-            </div>
-            <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>
-              Fetching live student records...
-            </p>
-          </div>
+          <CardGridSkeleton count={6} gridClassName="responsive-grid-auto" />
         ) : (
           <div style={{ textAlign: 'center', padding: '36px 20px', color: '#64748B', background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -29,6 +29,7 @@ import { ModernDatePicker } from '../components/ModernDatePicker';
 import { AdminAttendanceOverrideModal } from '../components/AdminAttendanceOverrideModal';
 import { CampusGeofenceSettings } from '../components/CampusGeofenceSettings';
 import { exportToCSV } from '../utils/csvExporter';
+import { TableSkeleton } from '../components/Skeleton';
 
 export const StaffAttendanceView: React.FC = () => {
   // Active Navigation Sub-Tab State: Attendance Roster and Campus Geofence Settings
@@ -1394,6 +1395,8 @@ export const StaffAttendanceView: React.FC = () => {
                   </tr>
                 );
               })
+            ) : isLoading && rosterRecords.length === 0 ? (
+              <TableSkeleton columns={7} rows={6} />
             ) : (
               <tr>
                 <td colSpan={7} style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8' }}>

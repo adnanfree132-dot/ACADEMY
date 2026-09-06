@@ -13,6 +13,7 @@ import {
 import { DEFAULT_WHATSAPP_TEMPLATES, WhatsAppTemplate, openWhatsAppLink } from '../utils/whatsappHelper';
 import { api, peekApiCache } from '../api/apiClient';
 import { showToast } from '../lib/toast';
+import { TableSkeleton } from '../components/Skeleton';
 
 type WaTab = 'templates' | 'compose' | 'absence_dispatcher' | 'fee_reminders' | 'logs';
 
@@ -387,21 +388,25 @@ export const WhatsAppCenterView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {logs.length > 0 ? logs.map((log, idx) => (
-                <tr key={log.id || idx}>
-                  <td style={{ fontSize: 11.5, color: '#64748B' }}>{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</td>
-                  <td><strong>{log.studentName || log.student?.full_name || 'Direct'}</strong></td>
-                  <td><span className="badge badge-gray" style={{ fontFamily: 'monospace' }}>{log.phone}</span></td>
-                  <td><span className="badge badge-blue">{log.template_code || log.template_name || 'MANUAL'}</span></td>
-                  <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{log.body_snapshot || log.message || log.body}</td>
-                  <td>
-                    <span className={log.status === 'failed' ? 'badge badge-red' : 'badge badge-green'}>{log.status || 'logged'}</span>
-                  </td>
-                </tr>
-              )) : (
+              {loading && logs.length === 0 ? (
+                <TableSkeleton columns={6} rows={5} />
+              ) : logs.length > 0 ? (
+                logs.map((log, idx) => (
+                  <tr key={log.id || idx}>
+                    <td style={{ fontSize: 11.5, color: '#64748B' }}>{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</td>
+                    <td><strong>{log.studentName || log.student?.full_name || 'Direct'}</strong></td>
+                    <td><span className="badge badge-gray" style={{ fontFamily: 'monospace' }}>{log.phone}</span></td>
+                    <td><span className="badge badge-blue">{log.template_code || log.template_name || 'MANUAL'}</span></td>
+                    <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{log.body_snapshot || log.message || log.body}</td>
+                    <td>
+                      <span className={log.status === 'failed' ? 'badge badge-red' : 'badge badge-green'}>{log.status || 'logged'}</span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: 32, color: '#94A3B8' }}>
-                    {loading ? 'Loading logs…' : 'No WhatsApp logs yet.'}
+                    No WhatsApp logs yet.
                   </td>
                 </tr>
               )}

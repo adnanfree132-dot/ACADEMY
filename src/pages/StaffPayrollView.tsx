@@ -48,6 +48,7 @@ import { api, peekApiCache } from '../api/apiClient';
 import { useEntityRemoved } from '../lib/useEntityRemoved';
 import { exportToCSV } from '../utils/csvExporter';
 import { formatCurrencyPKR, getGlobalCurrencySymbol } from '../utils/payrollUiUtils';
+import { TableSkeleton } from '../components/Skeleton';
 
 export const StaffPayrollView: React.FC = () => {
   const currencySymbol = getGlobalCurrencySymbol();
@@ -620,11 +621,7 @@ export const StaffPayrollView: React.FC = () => {
               </thead>
               <tbody>
                 {isLoading && liveRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#94A3B8', fontSize: 13 }}>
-                      Loading live staff payroll register...
-                    </td>
-                  </tr>
+                  <TableSkeleton columns={8} rows={6} />
                 ) : filteredRows.length === 0 ? (
                   <tr>
                     <td colSpan={8} style={{ textAlign: 'center', padding: '40px 16px' }}>

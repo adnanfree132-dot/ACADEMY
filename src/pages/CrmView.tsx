@@ -4,6 +4,7 @@ import { Plus, Phone, X, MessageSquare, Calendar, UserPlus } from 'lucide-react'
 import { api } from '../api/apiClient';
 import { showToast } from '../lib/toast';
 import { openWhatsAppLink } from '../utils/whatsappHelper';
+import { CardSkeleton } from '../components/Skeleton';
 
 const COLUMNS: { key: string; label: string; statuses: string[] }[] = [
   { key: 'new', label: 'New', statuses: ['new', 'New', 'New Inquiry'] },
@@ -15,12 +16,13 @@ const COLUMNS: { key: string; label: string; statuses: string[] }[] = [
 
 interface CrmViewProps {
   leads: CRMLead[];
+  isLoading?: boolean;
   onAddLead: (data: any) => void;
   onConvertLead?: (lead: CRMLead) => void;
   onLeadsChanged?: () => void;
 }
 
-export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead, onConvertLead, onLeadsChanged }) => {
+export const CrmView: React.FC<CrmViewProps> = ({ leads, isLoading = false, onAddLead, onConvertLead, onLeadsChanged }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [studentName, setStudentName] = useState('');
   const [parentName, setParentName] = useState('');
@@ -88,7 +90,13 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead, onConvertLea
               <strong>{col.label}</strong>
               <span className="badge badge-gray">{grouped[col.key].length}</span>
             </div>
-            {grouped[col.key].map(lead => (
+            {isLoading && leads.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <CardSkeleton height={100} />
+                <CardSkeleton height={100} />
+              </div>
+            ) : (
+              grouped[col.key].map(lead => (
               <div key={lead.id} className="card" style={{ padding: 12, marginBottom: 8 }}>
                 <div style={{ fontWeight: 800 }}>{lead.studentName}</div>
                 <div style={{ fontSize: 12, color: '#64748B' }}>{lead.parentName || '—'} · {lead.phone}</div>
@@ -116,7 +124,7 @@ export const CrmView: React.FC<CrmViewProps> = ({ leads, onAddLead, onConvertLea
                 )}
                 <button className="btn-secondary btn-sm" style={{ marginTop: 6, width: '100%' }} onClick={() => setActiveLead(lead)}>Follow-up note</button>
               </div>
-            ))}
+            )))}
           </div>
         ))}
       </div>

@@ -95,6 +95,8 @@ export function App() {
   const [dashboardLive, setDashboardLive] = useState<any>(snap.dashboardLive ?? null);
   const [students, setStudents] = useState<Student[]>(snap.students || []);
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
+  const [isLoadingCore, setIsLoadingCore] = useState<boolean>(false);
+  const [isLoadingSecondary, setIsLoadingSecondary] = useState<boolean>(false);
   const [teachers, setTeachers] = useState<Teacher[]>(snap.teachers || []);
   const [staffList, setStaffList] = useState<any[]>(snap.staffList || []);
   const [batches, setBatches] = useState<Batch[]>(snap.batches || []);
@@ -208,6 +210,8 @@ export function App() {
     if (!token && !isAuthenticated) return;
 
     setIsLoadingStudents(true);
+    setIsLoadingCore(true);
+    setIsLoadingSecondary(true);
 
     const run = async (loader: () => Promise<any>, onData: (value: any) => void) => {
       try {
@@ -308,13 +312,15 @@ export function App() {
     } finally {
       // Release student loading indicator immediately once Stage 1 completes
       setIsLoadingStudents(false);
+      setIsLoadingCore(false);
     }
 
     // --- YIELD MICRO-PAUSE (50ms) ---
     // Yield execution to allow DOM painting and connection buffer drain
     await new Promise(r => setTimeout(r, 50));
 
-    // --- STAGE 2: Secondary Modules (Sequential to avoid Worker crashes) ---
+    try {
+      // --- STAGE 2: Secondary Modules (Sequential to avoid Worker crashes) ---
     // getMe is deferred here since login already provides user data
     await run(() => api.getMe(), (res) => {
       if (res?.user) {
@@ -421,6 +427,9 @@ export function App() {
           notes: p.note || p.notes
         })));
       });
+    }
+    } finally {
+      setIsLoadingSecondary(false);
     }
   };
 
@@ -952,12 +961,14 @@ export function App() {
           <StudentDashboardView
             student={currentStudent}
             dashboardLive={dashboardLive}
+            isLoading={isLoadingCore && !dashboardLive}
             onNavigate={setCurrentTab}
           />
         ) : isTeacher ? (
           <TeacherDashboardView
             teacher={currentTeacher}
             dashboardLive={dashboardLive}
+            isLoading={isLoadingCore && !dashboardLive}
             onNavigate={setCurrentTab}
           />
         ) : (
@@ -970,6 +981,7 @@ export function App() {
             onNavigate={setCurrentTab}
             dashboardStats={dashboardStats}
             dashboardLive={dashboardLive}
+            isLoading={isLoadingCore && !dashboardStats}
           />
         )
       ))}
@@ -1032,6 +1044,7 @@ export function App() {
             onAddTeacher={handleAddTeacher}
             onDeleteTeacher={handleDeleteTeacher}
             onEditTeacher={handleEditTeacher}
+            isLoading={isLoadingSecondary && teachers.length === 0}
           />
         )
       ))}
@@ -1051,6 +1064,7 @@ export function App() {
             onDeleteBatch={handleDeleteBatch}
             onEditBatch={handleEditBatch}
             onRefresh={refreshDataFromBackend}
+            isLoading={isLoadingCore && batches.length === 0}
           />
         )
       ))}
@@ -1063,6 +1077,7 @@ export function App() {
         ) : (
           <SubjectsView
             subjects={subjects}
+            isLoading={isLoadingSecondary && subjects.length === 0}
             onAddSubject={handleAddSubject}
             onEditSubject={handleEditSubject}
             onDeleteSubject={handleDeleteSubject}
@@ -1122,6 +1137,7 @@ export function App() {
             transactions={transactions}
             onOpenCreateModal={() => {}}
             onAddPayment={handleAddPayment}
+            isLoading={(isLoadingCore || isLoadingSecondary) && transactions.length === 0}
           />
         )
       ))}
@@ -1144,6 +1160,7 @@ export function App() {
         ) : (
           <CrmView
             leads={leads}
+            isLoading={isLoadingSecondary && leads.length === 0}
             onAddLead={handleAddLead}
             onConvertLead={(lead) => {
               setConvertLead(lead);
@@ -1162,6 +1179,7 @@ export function App() {
         ) : (
           <AnnouncementsView
             announcements={announcements}
+            isLoading={isLoadingSecondary && announcements.length === 0}
             onAddAnnouncement={handleAddAnnouncement}
             onUpdateAnnouncement={handleUpdateAnnouncement}
             onDeleteAnnouncement={handleDeleteAnnouncement}

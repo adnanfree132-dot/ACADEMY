@@ -34,6 +34,7 @@ import { StaffDetailDrawer } from '../components/StaffDetailDrawer';
 import { api } from '../api/apiClient';
 import { showToast } from '../lib/toast';
 import { removeIdsFromCaches } from '../lib/resourceCache';
+import { CardGridSkeleton } from '../components/Skeleton';
 
 interface TeachersViewProps {
   teachers: Teacher[];
@@ -45,6 +46,7 @@ interface TeachersViewProps {
   onAddTeacher?: (teacherData: any) => void;
   onDeleteTeacher?: (id: string) => void;
   onEditTeacher?: (teacher: Teacher) => void;
+  isLoading?: boolean;
 }
 
 const DEFAULT_STAFF_TYPES: StaffTypeItem[] = [
@@ -66,7 +68,8 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
   onOpenCreateModal,
   onAddTeacher,
   onDeleteTeacher,
-  onEditTeacher
+  onEditTeacher,
+  isLoading = false
 }) => {
   // Modal states
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -666,8 +669,21 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
       </div>
 
       {/* 3. Staff Grid Cards */}
-      <div className="card-grid-3" style={{ width: '100%', minWidth: 0 }}>
-        {sortedFilteredStaff.map((staff: any) => {
+      {isLoading && sortedFilteredStaff.length === 0 ? (
+        <CardGridSkeleton count={6} />
+      ) : sortedFilteredStaff.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 20px', background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', color: '#64748B' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+            <Users size={22} color="#64748B" />
+          </div>
+          <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 14 }}>No staff members found</div>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748B' }}>
+            No staff records match your selected filter criteria.
+          </p>
+        </div>
+      ) : (
+        <div className="card-grid-3" style={{ width: '100%', minWidth: 0 }}>
+          {sortedFilteredStaff.map((staff: any) => {
           const sName = staff.fullName || staff.name || 'Staff Member';
           const sRole = staff.role || staff.staffType?.name || 'Staff';
           const sDesignation = staff.designation || 'Staff Member';
@@ -1162,7 +1178,8 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Modals & Drawers */}
       <StaffDetailDrawer

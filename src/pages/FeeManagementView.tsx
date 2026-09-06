@@ -25,19 +25,22 @@ import { StudentLedgerModal } from '../components/StudentLedgerModal';
 import { formatCurrency, formatCoveragePeriod } from '../utils/feeCalculator';
 import { showToast } from '../lib/toast';
 import { formatCurrencyPKR } from '../utils/payrollUiUtils';
+import { TableSkeleton, KpiCardSkeleton } from '../components/Skeleton';
 
 interface FeeManagementViewProps {
   students: Student[];
   transactions: FeeTransaction[];
   onOpenCreateModal: () => void;
   onAddPayment?: (payment: Omit<FeeTransaction, 'id' | 'receiptNo'>) => void;
+  isLoading?: boolean;
 }
 
 export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
   students,
   transactions,
   onOpenCreateModal,
-  onAddPayment
+  onAddPayment,
+  isLoading = false
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'ledgers' | 'invoices' | 'defaulters' | 'history' | 'dayend'>('ledgers');
   const [dayEnd, setDayEnd] = useState<any>(null);
@@ -240,25 +243,33 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
       )}
 
       {/* Financial KPI Summary Cards */}
-      <div className="card-grid-3">
-        <div className="card" style={{ background: '#FFFFFF' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#64748B' }}>TOTAL COLLECTIONS</span>
-          <h3 style={{ fontSize: 26, fontWeight: 800, color: '#16A34A', margin: '4px 0' }}>PKR {formatCurrency(totalCollected)}</h3>
-          <span style={{ fontSize: 12, color: '#64748B' }}>{transactions.length} Total Receipts Recorded</span>
+      {isLoading && students.length === 0 ? (
+        <div className="card-grid-3">
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
+          <KpiCardSkeleton />
         </div>
+      ) : (
+        <div className="card-grid-3">
+          <div className="card" style={{ background: '#FFFFFF' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#64748B' }}>TOTAL COLLECTIONS</span>
+            <h3 style={{ fontSize: 26, fontWeight: 800, color: '#16A34A', margin: '4px 0' }}>PKR {formatCurrency(totalCollected)}</h3>
+            <span style={{ fontSize: 12, color: '#64748B' }}>{transactions.length} Total Receipts Recorded</span>
+          </div>
 
-        <div className="card" style={{ background: '#FFFFFF' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#64748B' }}>TOTAL OVERDUE DUES</span>
-          <h3 style={{ fontSize: 26, fontWeight: 800, color: '#DC2626', margin: '4px 0' }}>PKR {formatCurrency(totalOverdue)}</h3>
-          <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>{defaultersList.length} Active Defaulters</span>
-        </div>
+          <div className="card" style={{ background: '#FFFFFF' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#64748B' }}>TOTAL OVERDUE DUES</span>
+            <h3 style={{ fontSize: 26, fontWeight: 800, color: '#DC2626', margin: '4px 0' }}>PKR {formatCurrency(totalOverdue)}</h3>
+            <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>{defaultersList.length} Active Defaulters</span>
+          </div>
 
-        <div className="card" style={{ background: '#FFFFFF' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#64748B' }}>NET ASSIGNED ACADEMIC FEES</span>
-          <h3 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: '4px 0' }}>PKR {formatCurrency(totalAssigned)}</h3>
-          <span style={{ fontSize: 12, color: '#64748B' }}>{students.length} Enrolled Student Plans</span>
+          <div className="card" style={{ background: '#FFFFFF' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#64748B' }}>NET ASSIGNED ACADEMIC FEES</span>
+            <h3 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: '4px 0' }}>PKR {formatCurrency(totalAssigned)}</h3>
+            <span style={{ fontSize: 12, color: '#64748B' }}>{students.length} Enrolled Student Plans</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Search Input */}
       <div style={{ display: 'flex', gap: 10 }}>
@@ -331,64 +342,74 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.map(student => (
-                <tr key={student.id}>
-                  <td>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 800, color: '#0F172A' }}>{student.name}</span>
-                      <span style={{ fontSize: 11, color: '#64748B' }}>{student.regNo}</span>
-                    </div>
-                  </td>
-                  <td><span className="badge badge-gray">{student.gradeBatch}</span></td>
-                  <td>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>
-                      {student.billingAnchorDay || 1}th of month
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 700, color: '#0F172A' }}>
-                      PKR {formatCurrency(student.baseMonthlyFee || student.totalFee)}
-                    </div>
-                    {student.scholarshipType && student.scholarshipType !== 'none' && (
-                      <span style={{ fontSize: 10, color: '#16A34A', fontWeight: 600 }}>
-                        {student.scholarshipType === 'percentage' ? `${student.scholarshipValue}% Disc` : `PKR ${student.scholarshipValue} Disc`}
-                      </span>
-                    )}
-                  </td>
-                  <td><span style={{ color: '#16A34A', fontWeight: 700 }}>PKR {formatCurrency(student.paidFee)}</span></td>
-                  <td>
-                    <span style={{ color: student.dueBalance > 0 ? '#DC2626' : '#0F172A', fontWeight: 800 }}>
-                      PKR {formatCurrency(student.dueBalance)}
-                    </span>
-                  </td>
-                  <td>
-                    {student.isDefaulter ? (
-                      <span className="badge badge-red"><AlertTriangle size={12} /> Defaulter</span>
-                    ) : (
-                      <span className="badge badge-green"><CheckCircle2 size={12} /> Clear</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                      <button
-                        className="btn-secondary btn-sm"
-                        onClick={() => setSelectedStudentForLedger(student)}
-                      >
-                        <FileText size={13} /> Ledger
-                      </button>
-                      <button
-                        className="btn-primary btn-sm"
-                        onClick={() => {
-                          setSelectedStudentForPay(student);
-                          setIsRecordFeeModalOpen(true);
-                        }}
-                      >
-                        <DollarSign size={13} /> Pay
-                      </button>
-                    </div>
+              {isLoading && students.length === 0 ? (
+                <TableSkeleton columns={8} rows={6} />
+              ) : filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748B' }}>
+                    No student fee records found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredStudents.map(student => (
+                  <tr key={student.id}>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: 800, color: '#0F172A' }}>{student.name}</span>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>{student.regNo}</span>
+                      </div>
+                    </td>
+                    <td><span className="badge badge-gray">{student.gradeBatch}</span></td>
+                    <td>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>
+                        {student.billingAnchorDay || 1}th of month
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 700, color: '#0F172A' }}>
+                        PKR {formatCurrency(student.baseMonthlyFee || student.totalFee)}
+                      </div>
+                      {student.scholarshipType && student.scholarshipType !== 'none' && (
+                        <span style={{ fontSize: 10, color: '#16A34A', fontWeight: 600 }}>
+                          {student.scholarshipType === 'percentage' ? `${student.scholarshipValue}% Disc` : `PKR ${student.scholarshipValue} Disc`}
+                        </span>
+                      )}
+                    </td>
+                    <td><span style={{ color: '#16A34A', fontWeight: 700 }}>PKR {formatCurrency(student.paidFee)}</span></td>
+                    <td>
+                      <span style={{ color: student.dueBalance > 0 ? '#DC2626' : '#0F172A', fontWeight: 800 }}>
+                        PKR {formatCurrency(student.dueBalance)}
+                      </span>
+                    </td>
+                    <td>
+                      {student.isDefaulter ? (
+                        <span className="badge badge-red"><AlertTriangle size={12} /> Defaulter</span>
+                      ) : (
+                        <span className="badge badge-green"><CheckCircle2 size={12} /> Clear</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                        <button
+                          className="btn-secondary btn-sm"
+                          onClick={() => setSelectedStudentForLedger(student)}
+                        >
+                          <FileText size={13} /> Ledger
+                        </button>
+                        <button
+                          className="btn-primary btn-sm"
+                          onClick={() => {
+                            setSelectedStudentForPay(student);
+                            setIsRecordFeeModalOpen(true);
+                          }}
+                        >
+                          <DollarSign size={13} /> Pay
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -412,91 +433,101 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredInvoices.map(inv => (
-                <tr key={inv.id}>
-                  <td>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 800, color: '#0F172A' }}>
-                        {inv.student?.full_name || 'Student'}
-                      </span>
-                      <span style={{ fontSize: 11, color: '#64748B' }}>
-                        {inv.student?.admission_no || inv.id.slice(0, 8)}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 700, color: '#1E3A8A' }}>
-                      {formatCoveragePeriod(inv.fee_period_start, inv.fee_period_end)}
-                    </div>
-                  </td>
-                  <td>
-                    {inv.installment_number ? (
-                      <span style={{ background: '#DBEAFE', color: '#1E40AF', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 700 }}>
-                        Inst {inv.installment_number} of {inv.total_installments}
-                      </span>
-                    ) : (
-                      <span style={{ background: '#F1F5F9', color: '#475569', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 600 }}>
-                        Monthly (Anchor: {inv.billing_anchor_day || 1}th)
-                      </span>
-                    )}
-                  </td>
-                  <td>PKR {formatCurrency(inv.amount)}</td>
-                  <td>
-                    <span style={{ color: inv.discount > 0 ? '#16A34A' : '#64748B', fontWeight: 600 }}>
-                      {inv.discount > 0 ? `-PKR ${formatCurrency(inv.discount)}` : 'PKR 0'}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontWeight: 800, color: '#0F172A' }}>
-                      PKR {formatCurrency(inv.net_amount)}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: 12, color: '#475569' }}>
-                      {inv.due_date}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        padding: '3px 9px',
-                        borderRadius: 9999,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        textTransform: 'capitalize',
-                        background: inv.status === 'paid' ? '#DCFCE7' : inv.status === 'overdue' ? '#FEE2E2' : '#EFF6FF',
-                        color: inv.status === 'paid' ? '#166534' : inv.status === 'overdue' ? '#991B1B' : '#1E40AF',
-                        border: `1px solid ${inv.status === 'paid' ? '#BBF7D0' : inv.status === 'overdue' ? '#FECACA' : '#BFDBFE'}`
-                      }}
-                    >
-                      {inv.status}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                      <button
-                        className="btn-secondary btn-sm"
-                        onClick={() => openSlipForInvoice(inv)}
-                      >
-                        <Printer size={13} /> Voucher Slip
-                      </button>
-                      {inv.status !== 'paid' && (
-                        <button
-                          className="btn-primary btn-sm"
-                          onClick={() => {
-                            const st = students.find(s => s.id === inv.student_id);
-                            if (st) setSelectedStudentForPay(st);
-                            setSelectedInvoiceForPay(inv);
-                            setIsRecordFeeModalOpen(true);
-                          }}
-                        >
-                          <DollarSign size={13} /> Receive
-                        </button>
-                      )}
-                    </div>
+              {loadingInvoices && invoices.length === 0 ? (
+                <TableSkeleton columns={9} rows={5} />
+              ) : filteredInvoices.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748B' }}>
+                    No fee vouchers or invoices found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredInvoices.map(inv => (
+                  <tr key={inv.id}>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: 800, color: '#0F172A' }}>
+                          {inv.student?.full_name || 'Student'}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>
+                          {inv.student?.admission_no || inv.id.slice(0, 8)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 700, color: '#1E3A8A' }}>
+                        {formatCoveragePeriod(inv.fee_period_start, inv.fee_period_end)}
+                      </div>
+                    </td>
+                    <td>
+                      {inv.installment_number ? (
+                        <span style={{ background: '#DBEAFE', color: '#1E40AF', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 700 }}>
+                          Inst {inv.installment_number} of {inv.total_installments}
+                        </span>
+                      ) : (
+                        <span style={{ background: '#F1F5F9', color: '#475569', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 600 }}>
+                          Monthly (Anchor: {inv.billing_anchor_day || 1}th)
+                        </span>
+                      )}
+                    </td>
+                    <td>PKR {formatCurrency(inv.amount)}</td>
+                    <td>
+                      <span style={{ color: inv.discount > 0 ? '#16A34A' : '#64748B', fontWeight: 600 }}>
+                        {inv.discount > 0 ? `-PKR ${formatCurrency(inv.discount)}` : 'PKR 0'}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontWeight: 800, color: '#0F172A' }}>
+                        PKR {formatCurrency(inv.net_amount)}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: 12, color: '#475569' }}>
+                        {inv.due_date}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          padding: '3px 9px',
+                          borderRadius: 9999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform: 'capitalize',
+                          background: inv.status === 'paid' ? '#DCFCE7' : inv.status === 'overdue' ? '#FEE2E2' : '#EFF6FF',
+                          color: inv.status === 'paid' ? '#166534' : inv.status === 'overdue' ? '#991B1B' : '#1E40AF',
+                          border: `1px solid ${inv.status === 'paid' ? '#BBF7D0' : inv.status === 'overdue' ? '#FECACA' : '#BFDBFE'}`
+                        }}
+                      >
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                        <button
+                          className="btn-secondary btn-sm"
+                          onClick={() => openSlipForInvoice(inv)}
+                        >
+                          <Printer size={13} /> Voucher Slip
+                        </button>
+                        {inv.status !== 'paid' && (
+                          <button
+                            className="btn-primary btn-sm"
+                            onClick={() => {
+                              const st = students.find(s => s.id === inv.student_id);
+                              if (st) setSelectedStudentForPay(st);
+                              setSelectedInvoiceForPay(inv);
+                              setIsRecordFeeModalOpen(true);
+                            }}
+                          >
+                            <DollarSign size={13} /> Receive
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -580,55 +611,65 @@ export const FeeManagementView: React.FC<FeeManagementViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {transactions.map(t => (
-                <tr key={t.id}>
-                  <td><span style={{ fontWeight: 800, color: '#0F172A' }}>{t.receiptNo}</span></td>
-                  <td>{t.studentName}</td>
-                  <td><span className="badge badge-gray">{t.regNo}</span></td>
-                  <td><span style={{ fontWeight: 800, color: '#16A34A' }}>PKR {formatCurrency(t.amount)}</span></td>
-                  <td>{t.date}</td>
-                  <td><span className="badge badge-blue">{t.method}</span></td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button
-                      className="btn-secondary btn-sm"
-                      onClick={() => {
-                        setSelectedSlipData({
-                          receiptNo: t.receiptNo,
-                          studentName: t.studentName,
-                          admissionNo: t.regNo,
-                          grossAmount: t.amount,
-                          discountAmount: 0,
-                          netAmount: t.amount,
-                          paidAmount: t.amount,
-                          balanceAmount: 0,
-                          dueDate: t.date,
-                          status: 'paid',
-                          paymentMethod: t.method
-                        });
-                      }}
-                    >
-                      <Printer size={13} /> Printable Receipt
-                    </button>
-                    <button
-                      className="btn-secondary btn-sm"
-                      style={{ marginLeft: 6 }}
-                      onClick={async () => {
-                        const reason = window.prompt('Void reason (required)');
-                        if (!reason) return;
-                        try {
-                          await api.voidFeePayment(t.id, reason);
-                          showToast('Receipt voided.', 'success');
-                          fetchInvoices();
-                        } catch (err: any) {
-                          showToast(err.message || 'Could not void.', 'error');
-                        }
-                      }}
-                    >
-                      Void
-                    </button>
+              {isLoading && transactions.length === 0 ? (
+                <TableSkeleton columns={7} rows={5} />
+              ) : transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748B' }}>
+                    No payment receipts recorded yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                transactions.map(t => (
+                  <tr key={t.id}>
+                    <td><span style={{ fontWeight: 800, color: '#0F172A' }}>{t.receiptNo}</span></td>
+                    <td>{t.studentName}</td>
+                    <td><span className="badge badge-gray">{t.regNo}</span></td>
+                    <td><span style={{ fontWeight: 800, color: '#16A34A' }}>PKR {formatCurrency(t.amount)}</span></td>
+                    <td>{t.date}</td>
+                    <td><span className="badge badge-blue">{t.method}</span></td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="btn-secondary btn-sm"
+                        onClick={() => {
+                          setSelectedSlipData({
+                            receiptNo: t.receiptNo,
+                            studentName: t.studentName,
+                            admissionNo: t.regNo,
+                            grossAmount: t.amount,
+                            discountAmount: 0,
+                            netAmount: t.amount,
+                            paidAmount: t.amount,
+                            balanceAmount: 0,
+                            dueDate: t.date,
+                            status: 'paid',
+                            paymentMethod: t.method
+                          });
+                        }}
+                      >
+                        <Printer size={13} /> Printable Receipt
+                      </button>
+                      <button
+                        className="btn-secondary btn-sm"
+                        style={{ marginLeft: 6 }}
+                        onClick={async () => {
+                          const reason = window.prompt('Void reason (required)');
+                          if (!reason) return;
+                          try {
+                            await api.voidFeePayment(t.id, reason);
+                            showToast('Receipt voided.', 'success');
+                            window.location.reload();
+                          } catch (err: any) {
+                            showToast(err.message || 'Could not void receipt.', 'error');
+                          }
+                        }}
+                      >
+                        Void
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
