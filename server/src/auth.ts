@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 import { sendSuccess, sendError } from './common/envelope';
 import { AccessLevelString, CANONICAL_MODULE_KEYS, normalizeAccessLevel } from './types/staff';
+import { ensureSyncedDemoData } from './controllers/superAdminController';
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'academiapro_access_secret_key_2026';
 
 export interface JwtPayload {
@@ -183,6 +184,20 @@ export function resolveStaffPermissions(
     map.announcements = 'view_only';
     map.whatsapp = 'hidden';
     map.settings = 'hidden';
+  } else if (lowerRole === 'student') {
+    map.students = 'view_only';
+    map.teachers = 'hidden';
+    map.batches = 'view_only';
+    map.subjects = 'view_only';
+    map.attendance = 'view_only';
+    map.fees = 'view_only';
+    map.exams = 'view_only';
+    map.homework = 'view_only';
+    map.timetable = 'view_only';
+    map.crm = 'hidden';
+    map.announcements = 'view_only';
+    map.whatsapp = 'hidden';
+    map.settings = 'hidden';
   }
 
   // Merge StaffType base_permissions JSON
@@ -234,14 +249,25 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
   try {
     const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as JwtPayload;
 
-    // Real-time 0-second session revocation check for suspended/terminated/resigned accounts
-    if (decoded.staffId || (decoded.userId && decoded.userId !== 'admin-id')) {
+    // 1. Check user status in Prisma User table
+    if (decoded.userId && decoded.userId !== 'admin-id') {
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { is_active: true }
+      });
+      if (user && user.is_active === false) {
+        return sendError(res, 'Account is suspended or deactivated', 403);
+      }
+    }
+
+    // 2. Real-time 0-second session revocation check for staff accounts
+    const isStaffRole = decoded.staffId || (decoded.role && !['admin', 'super_admin', 'student', 'parent'].includes(decoded.role));
+    if (isStaffRole) {
       const staff = await prisma.staffMember.findFirst({
         where: {
           OR: [
             decoded.staffId ? { staff_id: { equals: decoded.staffId, mode: 'insensitive' as const } } : {},
-            decoded.userId ? { user_id: decoded.userId } : {},
-            decoded.userId ? { id: decoded.userId } : {}
+            decoded.userId ? { user_id: decoded.userId } : {}
           ].filter((c) => Object.keys(c).length > 0)
         },
         select: { status: true, user: { select: { is_active: true } } }
@@ -558,7 +584,12 @@ export async function handleDemoLogin(req: Request, res: Response) {
 
     if (roleParam === 'teacher' || roleParam === 'faculty') {
       let teacher = await prisma.teacher.findFirst({
-        where: { user: { is_active: true } },
+        where: {
+          OR: [
+            { user: { email: 'teacher@academiapro.edu' } },
+            { staffMember: { staff_id: 'FAC-2026-001' } }
+          ]
+        },
         include: {
           user: true,
           staffMember: {
@@ -570,38 +601,40 @@ export async function handleDemoLogin(req: Request, res: Response) {
         }
       });
 
-      if (!teacher) {
-        const teacherUser = await prisma.user.findFirst({
-          where: { role: 'teacher', is_active: true }
-        });
-        if (teacherUser) {
-          teacher = await prisma.teacher.upsert({
-            where: { user_id: teacherUser.id },
-            update: {},
-            create: { user_id: teacherUser.id, qualification: 'Senior Faculty' },
-            include: {
-              user: true,
-              staffMember: {
-                include: {
-                  staffType: { include: { defaultPermissions: true } },
-                  permissions: true
-                }
+      if (!teacher || !teacher.user) {
+        await ensureSyncedDemoData();
+        teacher = await prisma.teacher.findFirst({
+          where: {
+            OR: [
+              { user: { email: 'teacher@academiapro.edu' } },
+              { staffMember: { staff_id: 'FAC-2026-001' } }
+            ]
+          },
+          include: {
+            user: true,
+            staffMember: {
+              include: {
+                staffType: { include: { defaultPermissions: true } },
+                permissions: true
               }
             }
-          });
-        }
+          }
+        });
       }
 
       const staffMember = teacher?.staffMember || null;
       const user = teacher?.user || null;
       const resolvedPermissions = resolveStaffPermissions('faculty', 'FAC', staffMember?.staffType?.base_permissions, staffMember?.permissions);
+      const academyData = user ? await getAcademyDataForUser(user, staffMember) : null;
+      const effectiveAcademyId = academyData?.id || user?.academy_id || 'default-academy-id';
 
       const tokenPayload: JwtPayload = {
         userId: user?.id || teacher?.user_id || 'demo-teacher-id',
-        staffId: staffMember?.staff_id || 'FAC-2026-DEMO',
+        academyId: effectiveAcademyId,
+        staffId: staffMember?.staff_id || 'FAC-2026-001',
         role: 'faculty',
-        fullName: user?.full_name || staffMember?.full_name || 'Ms. Sarah Jenkins (Faculty)',
-        name: user?.full_name || staffMember?.full_name || 'Ms. Sarah Jenkins (Faculty)',
+        fullName: user?.full_name || staffMember?.full_name || 'Prof. Tariq Mahmood',
+        name: user?.full_name || staffMember?.full_name || 'Prof. Tariq Mahmood',
         email: user?.email || 'teacher@academiapro.edu',
         phone: user?.phone || '+923011111111',
         staffTypeId: staffMember?.staff_type_id,
@@ -622,145 +655,166 @@ export async function handleDemoLogin(req: Request, res: Response) {
           email: tokenPayload.email,
           phone: tokenPayload.phone,
           role: 'faculty',
-          designation: staffMember?.designation || 'Senior Faculty Lecturer',
+          designation: staffMember?.designation || 'Senior Faculty / Mathematics Specialist',
           staffTypeId: staffMember?.staff_type_id,
           teacherId: tokenPayload.teacherId,
+          academyId: effectiveAcademyId,
+          academy: academyData,
           isPasswordChanged: true,
           is_password_changed: true,
           permissions: resolvedPermissions
         }
       });
     } else if (roleParam === 'student') {
-      const student = await prisma.student.findFirst({
-        where: { status: 'active' },
+      let student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            { admission_no: 'ADM-2026-DEMO' },
+            { email: 'demo.student@academiapro.edu' }
+          ]
+        },
         include: { user: true, class: true }
       });
 
-      let studentUser = student?.user || null;
-      if (!studentUser) {
-        studentUser = await prisma.user.findFirst({
-          where: { role: 'student', is_active: true }
+      if (!student || !student.user) {
+        await ensureSyncedDemoData();
+        student = await prisma.student.findFirst({
+          where: {
+            OR: [
+              { admission_no: 'ADM-2026-DEMO' },
+              { email: 'demo.student@academiapro.edu' }
+            ]
+          },
+          include: { user: true, class: true }
         });
       }
 
-      if (!studentUser) {
-        const dummyHash = await bcrypt.hash('student123', 10);
-        studentUser = await prisma.user.create({
-          data: {
-            role: 'student',
-            full_name: student?.full_name || 'Zaid Khan (Student)',
-            email: 'demo.student@academiapro.edu',
-            phone: '+923001234567',
-            password_hash: dummyHash,
-            is_active: true
-          }
-        });
-        if (student) {
-          await prisma.student.update({
-            where: { id: student.id },
-            data: { user_id: studentUser.id }
-          });
-        }
-      }
-
+      const studentUser = student?.user || null;
       const resolvedPermissions = resolveStaffPermissions('student');
       resolvedPermissions.students = 'view_only';
       resolvedPermissions.homework = 'view_only';
       resolvedPermissions.attendance = 'view_only';
       resolvedPermissions.announcements = 'view_only';
 
-      const academyData = await getAcademyDataForUser(studentUser);
+      const academyData = studentUser ? await getAcademyDataForUser(studentUser) : null;
+      const effectiveAcademyId = academyData?.id || studentUser?.academy_id || 'default-academy-id';
 
       const tokenPayload: JwtPayload = {
-          userId: studentUser.id,
-          academyId: academyData?.id || null,
-          role: 'student',
-          fullName: studentUser.full_name,
-          name: studentUser.full_name,
-          email: studentUser.email,
-          phone: studentUser.phone,
+        userId: studentUser?.id || student?.user_id || 'demo-student-id',
+        academyId: effectiveAcademyId,
+        role: 'student',
+        fullName: studentUser?.full_name || student?.full_name || 'Hamza Tariq',
+        name: studentUser?.full_name || student?.full_name || 'Hamza Tariq',
+        email: studentUser?.email || student?.email || 'demo.student@academiapro.edu',
+        phone: studentUser?.phone || student?.phone || '+923001234567',
+        studentId: student?.id,
+        isPasswordChanged: true,
+        permissions: resolvedPermissions
+      };
+
+      const token = generateToken(tokenPayload);
+      return sendSuccess(res, {
+        token,
+        user: {
+          id: tokenPayload.userId,
           studentId: student?.id,
+          admissionNo: student?.admission_no || 'ADM-2026-DEMO',
+          fullName: tokenPayload.fullName,
+          name: tokenPayload.fullName,
+          email: tokenPayload.email,
+          phone: tokenPayload.phone,
+          role: 'student',
+          academyId: effectiveAcademyId,
+          academy: academyData,
           isPasswordChanged: true,
+          is_password_changed: true,
           permissions: resolvedPermissions
-        };
-
-        const token = generateToken(tokenPayload);
-        return sendSuccess(res, {
-          token,
-          user: {
-            id: studentUser.id,
-            studentId: student?.id,
-            admissionNo: student?.admission_no || 'ADM-2026-DEMO',
-            fullName: studentUser.full_name,
-            name: studentUser.full_name,
-            email: studentUser.email,
-            phone: studentUser.phone,
-            role: 'student',
-            academyId: academyData?.id || null,
-            academy: academyData,
-            isPasswordChanged: true,
-            is_password_changed: true,
-            permissions: resolvedPermissions
-          }
-        });
-      } else if (roleParam === 'super_admin' || roleParam === 'superadmin') {
-        let superAdmin = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { role: 'super_admin' },
-              { username: 'superadmin' },
-              { email: 'superadmin@academiapro.io' }
-            ]
-          }
-        });
-
-        if (!superAdmin) {
-          const superHash = await bcrypt.hash('superadmin123', 10);
-          superAdmin = await prisma.user.create({
-            data: {
-              role: 'super_admin',
-              full_name: 'Platform Super Admin',
-              username: 'superadmin',
-              email: 'superadmin@academiapro.io',
-              phone: '+923009999999',
-              password_hash: superHash,
-              must_change_password: false,
-              is_active: true
-            }
-          });
         }
+      });
+    } else if (roleParam === 'super_admin' || roleParam === 'superadmin') {
+      let superAdmin = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { role: 'super_admin' },
+            { username: 'superadmin' },
+            { email: 'superadmin@academiapro.io' }
+          ]
+        }
+      });
 
-        const resolvedPermissions = resolveStaffPermissions('super_admin');
+      if (!superAdmin) {
+        const superHash = await bcrypt.hash('superadmin123', 10);
+        superAdmin = await prisma.user.create({
+          data: {
+            role: 'super_admin',
+            full_name: 'Platform Super Admin',
+            username: 'superadmin',
+            email: 'superadmin@academiapro.io',
+            phone: '+923009999999',
+            password_hash: superHash,
+            must_change_password: false,
+            is_active: true
+          }
+        });
+      }
 
-        const tokenPayload: JwtPayload = {
-          userId: superAdmin.id,
-          role: 'super_admin',
+      const resolvedPermissions = resolveStaffPermissions('super_admin');
+
+      const tokenPayload: JwtPayload = {
+        userId: superAdmin.id,
+        role: 'super_admin',
+        fullName: superAdmin.full_name,
+        name: superAdmin.full_name,
+        email: superAdmin.email,
+        phone: superAdmin.phone,
+        isPasswordChanged: true,
+        permissions: resolvedPermissions
+      };
+
+      const token = generateToken(tokenPayload);
+      return sendSuccess(res, {
+        token,
+        user: {
+          id: superAdmin.id,
           fullName: superAdmin.full_name,
           name: superAdmin.full_name,
           email: superAdmin.email,
           phone: superAdmin.phone,
+          role: 'super_admin',
           isPasswordChanged: true,
+          is_password_changed: true,
           permissions: resolvedPermissions
-        };
-
-        const token = generateToken(tokenPayload);
-        return sendSuccess(res, {
-          token,
-          user: {
-            id: superAdmin.id,
-            fullName: superAdmin.full_name,
-            name: superAdmin.full_name,
-            email: superAdmin.email,
-            phone: superAdmin.phone,
-            role: 'super_admin',
-            isPasswordChanged: true,
-            is_password_changed: true,
-            permissions: resolvedPermissions
+        }
+      });
+    } else {
+      let adminUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: 'admin@academiapro.edu' },
+            { username: 'admin' },
+            { role: 'admin', is_active: true }
+          ]
+        },
+        include: {
+          staffMember: {
+            include: {
+              staffType: { include: { defaultPermissions: true } },
+              permissions: true
+            }
           }
-        });
-      } else {
-        let adminUser = await prisma.user.findFirst({
-          where: { role: 'admin', is_active: true },
+        }
+      });
+
+      if (!adminUser) {
+        await ensureSyncedDemoData();
+        adminUser = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: 'admin@academiapro.edu' },
+              { username: 'admin' },
+              { role: 'admin', is_active: true }
+            ]
+          },
           include: {
             staffMember: {
               include: {
@@ -770,74 +824,53 @@ export async function handleDemoLogin(req: Request, res: Response) {
             }
           }
         });
-
-        if (!adminUser) {
-          const adminHash = await bcrypt.hash('admin', 10);
-          adminUser = await prisma.user.create({
-            data: {
-              role: 'admin',
-              full_name: 'Academy Administrator',
-              email: 'admin@academiapro.edu',
-              username: 'admin',
-              phone: '+923000000000',
-              password_hash: adminHash,
-              is_active: true
-            },
-            include: {
-              staffMember: {
-                include: {
-                  staffType: { include: { defaultPermissions: true } },
-                  permissions: true
-                }
-              }
-            }
-          });
-        }
-
-        const staffMember = (adminUser as any).staffMember || null;
-        const resolvedPermissions = resolveStaffPermissions('admin', 'ADM');
-        const academyData = await getAcademyDataForUser(adminUser, staffMember);
-
-        const tokenPayload: JwtPayload = {
-          userId: adminUser.id,
-          academyId: academyData?.id || adminUser.academy_id || null,
-          staffId: staffMember?.staff_id || 'ADM-2026-001',
-          role: 'admin',
-          fullName: adminUser.full_name || 'Academy Administrator',
-          name: adminUser.full_name || 'Academy Administrator',
-          email: adminUser.email,
-          phone: adminUser.phone,
-          staffTypeId: staffMember?.staff_type_id,
-          isPasswordChanged: true,
-          permissions: resolvedPermissions
-        };
-
-        const token = generateToken(tokenPayload);
-        return sendSuccess(res, {
-          token,
-          user: {
-            id: adminUser.id,
-            staffId: tokenPayload.staffId,
-            staff_id: tokenPayload.staffId,
-            fullName: tokenPayload.fullName,
-            name: tokenPayload.fullName,
-            email: tokenPayload.email,
-            phone: tokenPayload.phone,
-            role: 'admin',
-            designation: staffMember?.designation || 'Head of Academy',
-            staffTypeId: staffMember?.staff_type_id,
-            academyId: tokenPayload.academyId,
-            academy: academyData,
-            isPasswordChanged: true,
-            is_password_changed: true,
-            permissions: resolvedPermissions
-          }
-        });
       }
-    } catch (err: any) {
-      return sendError(res, err.message || 'Demo login failed', 500);
+
+      const staffMember = (adminUser as any)?.staffMember || null;
+      const resolvedPermissions = resolveStaffPermissions('admin', 'ADM');
+      const academyData = adminUser ? await getAcademyDataForUser(adminUser, staffMember) : null;
+      const effectiveAcademyId = academyData?.id || adminUser?.academy_id || 'default-academy-id';
+
+      const tokenPayload: JwtPayload = {
+        userId: adminUser!.id,
+        academyId: effectiveAcademyId,
+        staffId: staffMember?.staff_id || 'ADM-2026-001',
+        role: 'admin',
+        fullName: adminUser!.full_name || 'Academy Administrator',
+        name: adminUser!.full_name || 'Academy Administrator',
+        email: adminUser!.email,
+        phone: adminUser!.phone,
+        staffTypeId: staffMember?.staff_type_id,
+        isPasswordChanged: true,
+        permissions: resolvedPermissions
+      };
+
+      const token = generateToken(tokenPayload);
+      return sendSuccess(res, {
+        token,
+        user: {
+          id: adminUser!.id,
+          staffId: tokenPayload.staffId,
+          staff_id: tokenPayload.staffId,
+          fullName: tokenPayload.fullName,
+          name: tokenPayload.fullName,
+          email: tokenPayload.email,
+          phone: tokenPayload.phone,
+          role: 'admin',
+          designation: staffMember?.designation || 'Head of Academy',
+          staffTypeId: staffMember?.staff_type_id,
+          academyId: effectiveAcademyId,
+          academy: academyData,
+          isPasswordChanged: true,
+          is_password_changed: true,
+          permissions: resolvedPermissions
+        }
+      });
     }
+  } catch (err: any) {
+    return sendError(res, err.message || 'Demo login failed', 500);
   }
+}
 
   /**
    * Quick Real Staff Roster for 1-Click Login & RBAC Testing

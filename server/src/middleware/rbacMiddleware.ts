@@ -84,7 +84,8 @@ export async function getEffectiveStaffPermission(
       'announcements',
       'leaves',
       'fees',
-      'batches'
+      'batches',
+      'subjects'
     ];
     if (studentAllowedModules.includes(moduleKey)) {
       return {
@@ -111,8 +112,7 @@ export async function getEffectiveStaffPermission(
       where: {
         OR: [
           user.staffId ? { staff_id: { equals: user.staffId, mode: 'insensitive' as const } } : {},
-          user.userId ? { user_id: user.userId } : {},
-          user.userId ? { id: user.userId } : {}
+          user.userId ? { user_id: user.userId } : {}
         ].filter((c) => Object.keys(c).length > 0)
       },
       include: {

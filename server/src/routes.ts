@@ -347,7 +347,7 @@ router.get('/students', authenticateJwt, requireModulePermission('students', 'vi
     // Faculty Scoping Check
     let teacherBatchIds: string[] | null = null;
     const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
-    const isGlobal = (req as any).modulePermission?.isGlobalScope || req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    const isGlobal = (req as any).modulePermission?.isGlobalScope || req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.role === 'administrator';
 
     if (isTeacherRole && !isGlobal && req.user) {
       let teacherId = req.user.teacherId;
@@ -1338,10 +1338,11 @@ router.get('/students/:id/leaving-certificate', authenticateJwt, requireModulePe
   }
 });
 
-/* ==========================================================================
-   4. TEACHERS MODULE (M4 TCH)
-   ========================================================================== */
-router.get('/teachers', authenticateJwt, requireModulePermission('teachers', 'view_only'), async (req, res) => {
+router.get('/teachers', authenticateJwt, (req: AuthenticatedRequest, res, next) => {
+  const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
+  if (isTeacherRole) return next();
+  return requireModulePermission('teachers', 'view_only')(req, res, next);
+}, async (req, res) => {
   try {
     const teachers = await prisma.teacher.findMany({
       include: {

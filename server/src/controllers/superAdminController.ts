@@ -76,8 +76,582 @@ export async function ensureDefaultAcademy() {
       });
       console.log('Created Platform Super Admin account (superadmin / superadmin123)');
     }
+
+    // Ensure synchronized demo triad: Admin, Teacher (Prof. Tariq Mahmood), and Student (Hamza Tariq)
+    await ensureSyncedDemoData(defaultAcademy.id);
   } catch (err) {
     console.error('Error in ensureDefaultAcademy:', err);
+  }
+}
+
+/**
+ * Ensures the synchronized Demo Triad (Admin, Teacher, Student) exists,
+ * strictly linked to the same default Academy, with real active batch assignment,
+ * student enrollment, attendance, timetable slots, and fee records.
+ */
+export async function ensureSyncedDemoData(academyId: string = 'default-academy-id') {
+  try {
+    // 1. Staff Types (ADM, FAC)
+    let adminType = await prisma.staffType.findFirst({ where: { code: 'ADM' } });
+    if (!adminType) {
+      adminType = await prisma.staffType.create({
+        data: { name: 'Administrative Staff', code: 'ADM', description: 'System administrators with full privileges' }
+      });
+    }
+    let facultyType = await prisma.staffType.findFirst({ where: { code: 'FAC' } });
+    const facultyBasePerms = {
+      crm: { access_level: 'hidden', is_global_scope: false },
+      fees: { access_level: 'hidden', is_global_scope: false },
+      exams: { access_level: 'editable', is_global_scope: false },
+      batches: { access_level: 'view_only', is_global_scope: false },
+      reports: { access_level: 'hidden', is_global_scope: false },
+      homework: { access_level: 'editable', is_global_scope: false },
+      settings: { access_level: 'hidden', is_global_scope: false },
+      students: { access_level: 'view_only', is_global_scope: false },
+      subjects: { access_level: 'view_only', is_global_scope: false },
+      teachers: { access_level: 'view_only', is_global_scope: false },
+      whatsapp: { access_level: 'hidden', is_global_scope: false },
+      analytics: { access_level: 'hidden', is_global_scope: false },
+      timetable: { access_level: 'view_only', is_global_scope: false },
+      attendance: { access_level: 'editable', is_global_scope: false },
+      staff_types: { access_level: 'hidden', is_global_scope: false },
+      staff_portal: { access_level: 'editable', is_global_scope: false },
+      announcements: { access_level: 'view_only', is_global_scope: false }
+    };
+    if (!facultyType) {
+      facultyType = await prisma.staffType.create({
+        data: {
+          name: 'Teaching Faculty',
+          code: 'FAC',
+          slug: 'faculty',
+          description: 'Academic teachers and lecturers',
+          base_permissions: facultyBasePerms
+        }
+      });
+    } else {
+      await prisma.staffType.update({
+        where: { id: facultyType.id },
+        data: { base_permissions: facultyBasePerms }
+      });
+      await prisma.staffPermission.updateMany({
+        where: {
+          staff_type_id: facultyType.id,
+          module_key: 'teachers'
+        },
+        data: { access_level: 'view_only' }
+      });
+    }
+
+    const adminHash = await bcrypt.hash('admin', 10);
+    const teacherHash = await bcrypt.hash('teacher123', 10);
+    const studentHash = await bcrypt.hash('student123', 10);
+
+    // 2. Demo Admin User
+    let adminUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: 'admin@academiapro.edu' },
+          { username: 'admin', role: 'admin' }
+        ]
+      }
+    });
+
+    if (adminUser) {
+      adminUser = await prisma.user.update({
+        where: { id: adminUser.id },
+        data: {
+          role: 'admin',
+          email: 'admin@academiapro.edu',
+          username: 'admin',
+          full_name: 'Academy Administrator',
+          phone: '+923000000001',
+          academy_id: academyId,
+          password_hash: adminHash,
+          is_active: true,
+          must_change_password: false
+        }
+      });
+    } else {
+      adminUser = await prisma.user.create({
+        data: {
+          role: 'admin',
+          email: 'admin@academiapro.edu',
+          username: 'admin',
+          full_name: 'Academy Administrator',
+          phone: '+923000000001',
+          academy_id: academyId,
+          password_hash: adminHash,
+          is_active: true,
+          must_change_password: false
+        }
+      });
+    }
+
+    // Admin StaffMember
+    let adminStaff = await prisma.staffMember.findFirst({
+      where: { user_id: adminUser.id }
+    });
+    if (!adminStaff) {
+      const existingAdm = await prisma.staffMember.findUnique({ where: { staff_id: 'ADM-2026-001' } });
+      if (existingAdm) {
+        await prisma.staffMember.update({
+          where: { id: existingAdm.id },
+          data: { staff_id: 'ADM-2026-OLD' }
+        });
+      }
+      adminStaff = await prisma.staffMember.create({
+        data: {
+          user_id: adminUser.id,
+          staff_id: 'ADM-2026-001',
+          full_name: 'Academy Administrator',
+          email: 'admin@academiapro.edu',
+          phone: '+923000000001',
+          role: 'admin',
+          designation: 'Head of Academy',
+          status: 'active',
+          staff_type_id: adminType.id,
+          password_hash: adminHash,
+          temp_password_plain: 'admin',
+          is_password_changed: true
+        }
+      });
+    } else {
+      adminStaff = await prisma.staffMember.update({
+        where: { id: adminStaff.id },
+        data: {
+          staff_id: 'ADM-2026-001',
+          full_name: 'Academy Administrator',
+          email: 'admin@academiapro.edu',
+          phone: '+923000000001',
+          role: 'admin',
+          designation: 'Head of Academy',
+          status: 'active',
+          staff_type_id: adminType?.id,
+          password_hash: adminHash,
+          temp_password_plain: 'admin',
+          is_password_changed: true
+        }
+      });
+    }
+
+    // 3. Demo Teacher User
+    let teacherUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: 'teacher@academiapro.edu' },
+          { username: 'teacher' }
+        ]
+      }
+    });
+
+    if (teacherUser) {
+      teacherUser = await prisma.user.update({
+        where: { id: teacherUser.id },
+        data: {
+          role: 'teacher',
+          email: 'teacher@academiapro.edu',
+          username: 'teacher',
+          full_name: 'Prof. Tariq Mahmood',
+          phone: '+923011111111',
+          academy_id: academyId,
+          password_hash: teacherHash,
+          is_active: true,
+          must_change_password: false
+        }
+      });
+    } else {
+      teacherUser = await prisma.user.create({
+        data: {
+          role: 'teacher',
+          email: 'teacher@academiapro.edu',
+          username: 'teacher',
+          full_name: 'Prof. Tariq Mahmood',
+          phone: '+923011111111',
+          academy_id: academyId,
+          password_hash: teacherHash,
+          is_active: true,
+          must_change_password: false
+        }
+      });
+    }
+
+    // Teacher record
+    let teacher = await prisma.teacher.findFirst({
+      where: { user_id: teacherUser.id }
+    });
+    if (!teacher) {
+      teacher = await prisma.teacher.create({
+        data: {
+          user_id: teacherUser.id,
+          qualification: 'M.Sc. Mathematics, Senior Faculty Specialist'
+        }
+      });
+    } else {
+      teacher = await prisma.teacher.update({
+        where: { id: teacher.id },
+        data: { qualification: 'M.Sc. Mathematics, Senior Faculty Specialist' }
+      });
+    }
+
+    // Free staff_id FAC-2026-001 if held by another staff
+    const existingFac1 = await prisma.staffMember.findUnique({ where: { staff_id: 'FAC-2026-001' } });
+    if (existingFac1 && existingFac1.user_id !== teacherUser.id) {
+      await prisma.staffMember.update({
+        where: { id: existingFac1.id },
+        data: { staff_id: 'FAC-2026-999' }
+      });
+    }
+
+    // Ensure Teacher StaffMember
+    let teacherStaff = await prisma.staffMember.findFirst({
+      where: { user_id: teacherUser.id }
+    });
+    if (teacherStaff) {
+      teacherStaff = await prisma.staffMember.update({
+        where: { id: teacherStaff.id },
+        data: {
+          staff_id: 'FAC-2026-001',
+          teacher_id: teacher.id,
+          full_name: 'Prof. Tariq Mahmood',
+          email: 'teacher@academiapro.edu',
+          phone: '+923011111111',
+          role: 'faculty',
+          designation: 'Senior Faculty / Mathematics Specialist',
+          status: 'active',
+          staff_type_id: facultyType?.id,
+          password_hash: teacherHash,
+          temp_password_plain: 'teacher123',
+          is_password_changed: true
+        }
+      });
+    } else {
+      teacherStaff = await prisma.staffMember.create({
+        data: {
+          user_id: teacherUser.id,
+          staff_id: 'FAC-2026-001',
+          teacher_id: teacher.id,
+          full_name: 'Prof. Tariq Mahmood',
+          email: 'teacher@academiapro.edu',
+          phone: '+923011111111',
+          gender: 'Male',
+          role: 'faculty',
+          designation: 'Senior Faculty / Mathematics Specialist',
+          status: 'active',
+          staff_type_id: facultyType.id,
+          password_hash: teacherHash,
+          temp_password_plain: 'teacher123',
+          is_password_changed: true
+        }
+      });
+    }
+
+    // Ensure Teacher has proper permissions (no 'hidden' for teachers, students, batches, etc.)
+    await prisma.staffPermission.deleteMany({
+      where: {
+        staff_member_id: teacherStaff.id,
+        module_key: { in: ['teachers', 'students', 'batches', 'subjects', 'attendance', 'homework', 'exams', 'timetable', 'announcements'] },
+        access_level: 'hidden'
+      }
+    });
+
+    // 4. Shared Academic Structure: Class, Subject, Batch
+    let demoClass = await prisma.class.findFirst({ where: { name: 'Grade 10' } });
+    if (!demoClass) {
+      demoClass = await prisma.class.create({ data: { name: 'Grade 10', is_active: true } });
+    }
+
+    let demoSubject = await prisma.subject.findFirst({
+      where: { OR: [{ code: 'MATH-10' }, { name: 'Mathematics' }] }
+    });
+    if (!demoSubject) {
+      demoSubject = await prisma.subject.create({ data: { name: 'Mathematics', code: 'MATH-10' } });
+    }
+
+    let demoBatch = await prisma.batch.findFirst({ where: { name: 'Grade 10 - Section A' } });
+    if (!demoBatch) {
+      demoBatch = await prisma.batch.create({
+        data: {
+          name: 'Grade 10 - Section A',
+          class_id: demoClass.id,
+          teacher_id: teacher.id,
+          start_time: '09:00',
+          end_time: '10:30',
+          room: 'Room 101',
+          capacity: 35,
+          is_active: true,
+          course_type: 'regular',
+          total_fee: 12000
+        }
+      });
+    } else {
+      demoBatch = await prisma.batch.update({
+        where: { id: demoBatch.id },
+        data: {
+          class_id: demoClass.id,
+          teacher_id: teacher.id,
+          is_active: true
+        }
+      });
+    }
+
+    // BatchSubject
+    let batchSubject = await prisma.batchSubject.findFirst({
+      where: { batch_id: demoBatch.id, subject_id: demoSubject.id }
+    });
+    if (!batchSubject) {
+      await prisma.batchSubject.create({
+        data: {
+          batch_id: demoBatch.id,
+          subject_id: demoSubject.id,
+          teacher_id: teacher.id
+        }
+      });
+    } else if (batchSubject.teacher_id !== teacher.id) {
+      await prisma.batchSubject.update({
+        where: {
+          batch_id_subject_id: {
+            batch_id: demoBatch.id,
+            subject_id: demoSubject.id
+          }
+        },
+        data: { teacher_id: teacher.id }
+      });
+    }
+
+    // Weekday Timetable slots
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    for (const day of weekdays) {
+      const existing = await prisma.timetableSlot.findFirst({ where: { batch_id: demoBatch.id, day } });
+      if (!existing) {
+        await prisma.timetableSlot.create({
+          data: {
+            batch_id: demoBatch.id,
+            subject_id: demoSubject.id,
+            teacher_id: teacher.id,
+            day,
+            start_time: '09:00',
+            end_time: '10:30',
+            room: 'Room 101',
+            topic: day === 'Monday' ? 'Quadratic Equations' : day === 'Wednesday' ? 'Trigonometry' : 'Algebraic Functions'
+          }
+        });
+      } else {
+        await prisma.timetableSlot.update({
+          where: { id: existing.id },
+          data: {
+            subject_id: demoSubject.id,
+            teacher_id: teacher.id,
+            room: 'Room 101'
+          }
+        });
+      }
+    }
+
+    // 5. Demo Student User
+    let studentUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: 'demo.student@academiapro.edu' },
+          { username: 'demo.student' }
+        ]
+      }
+    });
+
+    if (studentUser) {
+      studentUser = await prisma.user.update({
+        where: { id: studentUser.id },
+        data: {
+          role: 'student',
+          email: 'demo.student@academiapro.edu',
+          username: 'demo.student',
+          full_name: 'Hamza Tariq',
+          phone: '+923001234567',
+          academy_id: academyId,
+          password_hash: studentHash,
+          is_active: true,
+          must_change_password: false
+        }
+      });
+    } else {
+      studentUser = await prisma.user.create({
+        data: {
+          role: 'student',
+          email: 'demo.student@academiapro.edu',
+          username: 'demo.student',
+          full_name: 'Hamza Tariq',
+          phone: '+923001234567',
+          academy_id: academyId,
+          password_hash: studentHash,
+          is_active: true,
+          must_change_password: false
+        }
+      });
+    }
+
+    // Student record
+    let student = await prisma.student.findFirst({
+      where: {
+        OR: [
+          { user_id: studentUser.id },
+          { admission_no: 'ADM-2026-DEMO' },
+          { email: 'demo.student@academiapro.edu' }
+        ]
+      }
+    });
+
+    if (student) {
+      student = await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          user_id: studentUser.id,
+          admission_no: 'ADM-2026-DEMO',
+          full_name: 'Hamza Tariq',
+          phone: '+923001234567',
+          email: 'demo.student@academiapro.edu',
+          class_id: demoClass.id,
+          status: 'active',
+          custom_fields: { parentName: 'Tariq Mahmood' }
+        }
+      });
+    } else {
+      student = await prisma.student.create({
+        data: {
+          user_id: studentUser.id,
+          admission_no: 'ADM-2026-DEMO',
+          full_name: 'Hamza Tariq',
+          phone: '+923001234567',
+          email: 'demo.student@academiapro.edu',
+          class_id: demoClass.id,
+          status: 'active',
+          custom_fields: { parentName: 'Tariq Mahmood' }
+        }
+      });
+    }
+
+    // 6. Enrollment of Student in Demo Batch
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        student_id_batch_id: {
+          student_id: student.id,
+          batch_id: demoBatch.id
+        }
+      }
+    });
+    if (!enrollment) {
+      await prisma.enrollment.create({
+        data: {
+          student_id: student.id,
+          batch_id: demoBatch.id,
+          status: 'active'
+        }
+      });
+    } else if (enrollment.status !== 'active') {
+      await prisma.enrollment.update({
+        where: { id: enrollment.id },
+        data: { status: 'active' }
+      });
+    }
+
+    // 7. Fee Plan & Invoice
+    let feePlan = await prisma.studentFeePlan.findUnique({ where: { student_id: student.id } });
+    if (!feePlan) {
+      feePlan = await prisma.studentFeePlan.create({
+        data: { student_id: student.id, monthly_amount: 12000, billing_anchor_day: 1 }
+      });
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const monthStr = todayStr.slice(0, 7);
+
+    let feeInvoice = await prisma.feeInvoice.findFirst({
+      where: { student_id: student.id, period: monthStr }
+    });
+    if (!feeInvoice) {
+      feeInvoice = await prisma.feeInvoice.create({
+        data: {
+          student_id: student.id,
+          period: monthStr,
+          amount: 12000,
+          discount: 0,
+          net_amount: 12000,
+          status: 'paid',
+          due_date: monthStr + '-10'
+        }
+      });
+      await prisma.feePayment.create({
+        data: {
+          student_id: student.id,
+          invoice_id: feeInvoice.id,
+          receipt_no: 'REC-DEMO-' + Date.now().toString().slice(-4),
+          amount: 12000,
+          method: 'cash',
+          cleared_status: 'cleared',
+          note: 'Tuition Fee - Verified',
+          recorded_by: 'admin'
+        }
+      });
+    }
+
+    // 8. Attendance Record for today
+    const att = await prisma.attendance.findUnique({
+      where: {
+        batch_id_student_id_date: {
+          batch_id: demoBatch.id,
+          student_id: student.id,
+          date: todayStr
+        }
+      }
+    });
+    if (!att) {
+      await prisma.attendance.create({
+        data: {
+          batch_id: demoBatch.id,
+          student_id: student.id,
+          date: todayStr,
+          status: 'present',
+          marked_by: 'Prof. Tariq Mahmood'
+        }
+      });
+    }
+
+    // 9. Homework & Test
+    const hw = await prisma.homework.findFirst({
+      where: { batch_id: demoBatch.id, subject_id: demoSubject.id }
+    });
+    if (!hw) {
+      const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      await prisma.homework.create({
+        data: {
+          batch_id: demoBatch.id,
+          subject_id: demoSubject.id,
+          teacher_id: teacher.id,
+          title: 'Quadratic Equations Exercise 3.2',
+          description: 'Solve questions 1 through 15 from Chapter 3 on Quadratic Equations.',
+          due_date: dueDate
+        }
+      });
+    }
+
+    const test = await prisma.test.findFirst({
+      where: { batch_id: demoBatch.id, subject_id: demoSubject.id }
+    });
+    if (!test) {
+      const examDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      await prisma.test.create({
+        data: {
+          batch_id: demoBatch.id,
+          subject_id: demoSubject.id,
+          title: 'Mathematics Mid-Term Assessment',
+          exam_date: examDate,
+          max_marks: 100,
+          pass_marks: 50
+        }
+      });
+    }
+
+    console.log('[SYNC] Synced Demo Triad verified: Admin, Prof. Tariq Mahmood, and Hamza Tariq in Apex International Academy.');
+  } catch (syncErr) {
+    console.error('Error ensuring synced demo data:', syncErr);
   }
 }
 

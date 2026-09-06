@@ -74,6 +74,7 @@ export function App() {
   const [dashboardStats, setDashboardStats] = useState<any>(snap.dashboardStats ?? null);
   const [dashboardLive, setDashboardLive] = useState<any>(snap.dashboardLive ?? null);
   const [students, setStudents] = useState<Student[]>(snap.students || []);
+  const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
   const [teachers, setTeachers] = useState<Teacher[]>(snap.teachers || []);
   const [staffList, setStaffList] = useState<any[]>(snap.staffList || []);
   const [batches, setBatches] = useState<Batch[]>(snap.batches || []);
@@ -121,6 +122,7 @@ export function App() {
   });
 
   const refreshDataFromBackend = async () => {
+    setIsLoadingStudents(true);
     const run = async (loader: () => Promise<any>, onData: (value: any) => void) => {
       try {
         const value = await loader();
@@ -130,7 +132,7 @@ export function App() {
       }
     };
 
-    const initialPromises: Promise<any>[] = [
+    const promises: Promise<any>[] = [
       run(() => api.getDashboard(), (stats) => {
         if (stats?.overview) {
           setDashboardStats(stats.overview);
@@ -138,37 +140,6 @@ export function App() {
         } else {
           setDashboardLive(stats);
         }
-      })
-    ];
-
-    if (isAdmin) {
-      initialPromises.push(
-        run(() => api.getSettings(), (backendSettings) => {
-          applyAcademySettings(backendSettings);
-          if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
-        })
-      );
-    }
-
-    await Promise.all(initialPromises);
-
-    const dataPromises: Promise<any>[] = [
-      run(() => api.getNotifications(), (backendNotifications) => {
-        if (!Array.isArray(backendNotifications)) return;
-        setNotifications(backendNotifications);
-        setUnreadNotifications(backendNotifications.filter((n: any) => !n.is_read).length);
-      }),
-      run(() => api.getSubjects(), (backendSubjects) => {
-        if (!Array.isArray(backendSubjects)) return;
-        setSubjects(filterDeleted(backendSubjects).map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          code: s.code,
-          batchCount: s._count?.batchSubjects || 0,
-          homeworkCount: s._count?.homeworks || 0,
-          testCount: s._count?.tests || 0,
-          slotCount: s._count?.timetableSlots || 0
-        })));
       }),
       run(() => api.getStudents(), (backendStudents) => {
         if (!Array.isArray(backendStudents)) return;
@@ -223,6 +194,8 @@ export function App() {
             isDefaulter: s.isDefaulter !== undefined ? s.isDefaulter : dueBalance > 0
           };
         }));
+      }).finally(() => {
+        setIsLoadingStudents(false);
       }),
       run(() => api.getBatches(), (backendBatches) => {
         if (!Array.isArray(backendBatches)) return;
@@ -243,6 +216,23 @@ export function App() {
           sectionName: b.section_name
         })));
       }),
+      run(() => api.getNotifications(), (backendNotifications) => {
+        if (!Array.isArray(backendNotifications)) return;
+        setNotifications(backendNotifications);
+        setUnreadNotifications(backendNotifications.filter((n: any) => !n.is_read).length);
+      }),
+      run(() => api.getSubjects(), (backendSubjects) => {
+        if (!Array.isArray(backendSubjects)) return;
+        setSubjects(filterDeleted(backendSubjects).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          batchCount: s._count?.batchSubjects || 0,
+          homeworkCount: s._count?.homeworks || 0,
+          testCount: s._count?.tests || 0,
+          slotCount: s._count?.timetableSlots || 0
+        })));
+      }),
       run(() => api.getAnnouncements(), (backendAnn) => {
         if (!Array.isArray(backendAnn)) return;
         setAnnouncements(filterDeleted(backendAnn).map((a: any) => ({
@@ -260,10 +250,16 @@ export function App() {
     ];
 
     if (isAdmin) {
-      dataPromises.push(
-        run(() => api.getStaffList(), (backendStaff) => {
-          if (Array.isArray(backendStaff)) setStaffList(filterDeleted(backendStaff));
-        }),
+      promises.push(
+        run(() => api.getSettings(), (backendSettings) => {
+          applyAcademySettings(backendSettings);
+          if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
+        })
+      );
+    }
+
+    if (isAdmin || isTeacher) {
+      promises.push(
         run(() => api.getTeachers(), (backendTeachers) => {
           if (!Array.isArray(backendTeachers)) return;
           setTeachers(filterDeleted(backendTeachers).map((t: any) => ({
@@ -278,6 +274,14 @@ export function App() {
             phone: t.user?.phone || t.phone || '',
             email: t.user?.email || t.email || ''
           })));
+        })
+      );
+    }
+
+    if (isAdmin) {
+      promises.push(
+        run(() => api.getStaffList(), (backendStaff) => {
+          if (Array.isArray(backendStaff)) setStaffList(filterDeleted(backendStaff));
         }),
         run(() => api.getInquiries(), (backendInq) => {
           if (!Array.isArray(backendInq)) return;
@@ -298,7 +302,7 @@ export function App() {
     }
 
     if (isAdmin || isStudent) {
-      dataPromises.push(
+      promises.push(
         run(() => api.getPayments(), (backendPayments) => {
           if (!Array.isArray(backendPayments)) return;
           setTransactions(filterDeleted(backendPayments).map((p: any) => ({
@@ -316,7 +320,7 @@ export function App() {
       );
     }
 
-    await Promise.all(dataPromises);
+    await Promise.all(promises);
   };
 
   useEffect(() => {
@@ -377,6 +381,9 @@ export function App() {
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
+    if ((dashboardStats?.totalStudents || 0) > 0 && students.length === 0) {
+      return;
+    }
     writeBootstrapSnapshot({
       dashboardStats,
       dashboardLive,
@@ -853,6 +860,7 @@ export function App() {
         ) : (
           <StudentsView
             students={students}
+            isLoading={isLoadingStudents}
             batches={batches}
             onOpenCreateModal={() => {}}
             onAddStudent={handleAddStudent}

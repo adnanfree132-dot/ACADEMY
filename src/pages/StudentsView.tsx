@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student } from '../types';
-import { Search, Plus, Filter, AlertCircle, CheckCircle2, Download, Edit, Trash2, DollarSign, MessageCircle, Phone, PhoneCall, Clock, PieChart, ChevronRight, ChevronDown, MoreVertical, UploadCloud, ShieldCheck, Award, Users, Wallet, TrendingUp, Key, UserCheck, FileCheck2, RefreshCw, X } from 'lucide-react';
+import { Search, Plus, Filter, AlertCircle, CheckCircle2, Download, Edit, Trash2, DollarSign, MessageCircle, Phone, PhoneCall, Clock, PieChart, ChevronRight, ChevronDown, MoreVertical, UploadCloud, ShieldCheck, Award, Users, Wallet, TrendingUp, Key, UserCheck, FileCheck2, RefreshCw, X, Loader2 } from 'lucide-react';
 
 import { exportToCSV } from '../utils/csvExporter';
 import { StudentProfileDrawer } from '../components/StudentProfileDrawer';
@@ -28,6 +28,7 @@ import { Batch, FeeTransaction } from '../types';
 
 interface StudentsViewProps {
   students: Student[];
+  isLoading?: boolean;
   batches: Batch[];
   onOpenCreateModal: () => void;
   onAddStudent?: (studentData: any) => void;
@@ -41,7 +42,8 @@ interface StudentsViewProps {
 }
 
 export const StudentsView: React.FC<StudentsViewProps> = ({ 
-  students, 
+  students,
+  isLoading = false,
   batches,
   onOpenCreateModal,
   onAddStudent, 
@@ -101,6 +103,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     document.addEventListener('mousedown', handleDocumentClick);
     return () => document.removeEventListener('mousedown', handleDocumentClick);
   }, []);
+
+  // Auto-refresh student list if array is empty on mount
+  useEffect(() => {
+    if (students.length === 0 && onRefreshStudents) {
+      onRefreshStudents();
+    }
+  }, [students.length, onRefreshStudents]);
 
   const availableBatches: string[] = Array.from(new Set(
     [...batches.map(b => b.name || b.classLevel), ...students.map(s => s.gradeBatch)].filter((b): b is string => Boolean(b))
@@ -696,10 +705,64 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                   </tr>
                 );
               })
+            ) : isLoading && students.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '56px 24px', color: '#64748B' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Loader2 size={22} color="#0F172A" className="animate-spin" />
+                    </div>
+                    <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 14 }}>
+                      Loading enrolled students...
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12.5, color: '#64748B', maxWidth: 360 }}>
+                      Fetching institutional student directory from the database.
+                    </p>
+                  </div>
+                </td>
+              </tr>
             ) : (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#94A3B8' }}>
-                  No student records match your query.
+                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748B' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Users size={22} color="#64748B" />
+                    </div>
+                    <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 14 }}>
+                      {students.length === 0 ? 'No students currently loaded in directory' : 'No student records match your filter criteria'}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12.5, color: '#64748B', maxWidth: 360 }}>
+                      {students.length === 0 
+                        ? 'Try refreshing the student directory from the database.' 
+                        : 'Try resetting your search query, lifecycle status, or batch filters to see all students.'}
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      {students.length === 0 && onRefreshStudents ? (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => onRefreshStudents()}
+                          style={{ padding: '8px 16px', fontSize: 12.5, borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <RefreshCw size={13} /> Refresh Students
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            setSearchTerm('');
+                            setStatusFilter('All');
+                            setLifecycleFilter('All');
+                            setBatchFilter('All');
+                          }}
+                          style={{ padding: '8px 16px', fontSize: 12.5, borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <X size={13} /> Clear Filters
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </td>
               </tr>
             )}
@@ -906,9 +969,48 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
               </div>
             );
           })
+        ) : isLoading && students.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B', background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <Loader2 size={22} color="#0F172A" className="animate-spin" />
+            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 13.5 }}>
+              Loading students...
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>
+              Fetching live student records...
+            </p>
+          </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: 28, color: '#94A3B8', background: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-            No student records match your query.
+          <div style={{ textAlign: 'center', padding: '36px 20px', color: '#64748B', background: '#FFFFFF', borderRadius: 14, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Users size={20} color="#64748B" />
+            </div>
+            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 13.5 }}>
+              {students.length === 0 ? 'No students loaded' : 'No matching students'}
+            </div>
+            {students.length === 0 && onRefreshStudents ? (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => onRefreshStudents()}
+                style={{ padding: '8px 14px', fontSize: 12, borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <RefreshCw size={12} /> Refresh
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('All');
+                  setLifecycleFilter('All');
+                  setBatchFilter('All');
+                }}
+                style={{ padding: '8px 14px', fontSize: 12, borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <X size={12} /> Clear Filters
+              </button>
+            )}
           </div>
         )}
       </div>

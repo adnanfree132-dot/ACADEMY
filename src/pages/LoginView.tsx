@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { api } from '../api/apiClient';
 import { 
   Shield, 
@@ -7,33 +7,17 @@ import {
   Sparkles, 
   Loader2, 
   Building2, 
-  ShieldCheck, 
-  Users, 
   Lock, 
   Mail, 
   Phone, 
   MapPin, 
   CheckCircle2, 
-  ArrowRight,
   User
 } from 'lucide-react';
 import { cacheClear } from '../lib/resourceCache';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
-}
-
-interface QuickStaffItem {
-  id: string;
-  staffId: string;
-  fullName: string;
-  role: string;
-  designation: string;
-  phone: string;
-  email?: string;
-  tempPasswordPlain: string;
-  permissionsCount: number;
-  permissionsSummary: string;
 }
 
 export function LoginView({ onLoginSuccess }: LoginViewProps) {
@@ -44,12 +28,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [password, setPassword] = useState('admin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [demoRole, setDemoRole] = useState<'admin' | 'teacher' | 'student' | 'super_admin' | null>(null);
-
-  // Real Staff Quick Login Helper State
-  const [staffList, setStaffList] = useState<QuickStaffItem[]>([]);
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
-  const [staffLoading, setStaffLoading] = useState(false);
+  const [demoRole, setDemoRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
 
   // Self-Serve Academy Registration State
   const [regAcademyName, setRegAcademyName] = useState('');
@@ -60,24 +39,6 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [regAddress, setRegAddress] = useState('');
   const [regLoading, setRegLoading] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
-
-  // Load real staff for quick testing
-  useEffect(() => {
-    let isMounted = true;
-    api.getQuickStaff()
-      .then(items => {
-        if (isMounted && Array.isArray(items)) {
-          setStaffList(items);
-          if (items.length > 0) {
-            setSelectedStaffId(items[0].staffId);
-          }
-        }
-      })
-      .catch(() => {
-        // Non-fatal if quick-staff fails (e.g. fresh DB before seeding)
-      });
-    return () => { isMounted = false; };
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +61,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
   };
 
-  const handleQuickDemoLogin = async (role: 'admin' | 'teacher' | 'student' | 'super_admin') => {
+  const handleQuickDemoLogin = async (role: 'admin' | 'teacher' | 'student') => {
     setError('');
     setLoading(true);
     setDemoRole(role);
@@ -110,13 +71,10 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
       setPassword('admin');
     } else if (role === 'teacher') {
       setEmail('teacher@academiapro.edu');
-      setPassword('••••••••');
+      setPassword('teacher123');
     } else if (role === 'student') {
       setEmail('demo.student@academiapro.edu');
-      setPassword('••••••••');
-    } else if (role === 'super_admin') {
-      setEmail('superadmin');
-      setPassword('superadmin123');
+      setPassword('student123');
     }
 
     try {
@@ -133,26 +91,6 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     } finally {
       setLoading(false);
       setDemoRole(null);
-    }
-  };
-
-  const handleQuickStaffLogin = async () => {
-    if (!selectedStaffId) return;
-    setError('');
-    setStaffLoading(true);
-
-    try {
-      const result = await api.quickStaffLogin(selectedStaffId);
-      
-      cacheClear();
-      localStorage.setItem('token', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      
-      onLoginSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Quick staff login failed.');
-    } finally {
-      setStaffLoading(false);
     }
   };
 
@@ -185,8 +123,6 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
       setRegLoading(false);
     }
   };
-
-  const selectedStaffMember = staffList.find(s => s.staffId === selectedStaffId);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-app)', padding: '24px 16px' }}>
@@ -348,7 +284,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
               {/* Admin */}
               <button
                 type="button"
@@ -359,20 +295,20 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px',
-                  padding: '8px 2px',
+                  gap: '6px',
+                  padding: '11px 6px',
                   backgroundColor: '#F8FAFC',
-                  border: '1px solid #CBD5E1',
-                  borderRadius: '9px',
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: '11px',
                   color: '#0F172A',
-                  fontSize: '11px',
+                  fontSize: '11.5px',
                   fontWeight: 600,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   opacity: loading && demoRole !== 'admin' ? 0.5 : 1,
-                  transition: 'all 0.15s ease'
+                  transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
                 }}
               >
-                {demoRole === 'admin' ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
+                {demoRole === 'admin' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <Shield size={16} color="#475569" />}
                 <span>Admin</span>
               </button>
 
@@ -386,21 +322,21 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px',
-                  padding: '8px 2px',
-                  backgroundColor: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
-                  borderRadius: '9px',
-                  color: '#1D4ED8',
-                  fontSize: '11px',
+                  gap: '6px',
+                  padding: '11px 6px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: '11px',
+                  color: '#0F172A',
+                  fontSize: '11.5px',
                   fontWeight: 600,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   opacity: loading && demoRole !== 'teacher' ? 0.5 : 1,
-                  transition: 'all 0.15s ease'
+                  transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
                 }}
               >
-                {demoRole === 'teacher' ? <Loader2 size={14} className="animate-spin" /> : <GraduationCap size={14} />}
-                <span>Teacher</span>
+                {demoRole === 'teacher' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <GraduationCap size={16} color="#475569" />}
+                <span>Teacher (Staff)</span>
               </button>
 
               {/* Student */}
@@ -413,124 +349,23 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px',
-                  padding: '8px 2px',
-                  backgroundColor: '#ECFDF5',
-                  border: '1px solid #A7F3D0',
-                  borderRadius: '9px',
-                  color: '#047857',
-                  fontSize: '11px',
+                  gap: '6px',
+                  padding: '11px 6px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: '11px',
+                  color: '#0F172A',
+                  fontSize: '11.5px',
                   fontWeight: 600,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   opacity: loading && demoRole !== 'student' ? 0.5 : 1,
-                  transition: 'all 0.15s ease'
+                  transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
                 }}
               >
-                {demoRole === 'student' ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                {demoRole === 'student' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <UserCheck size={16} color="#475569" />}
                 <span>Student</span>
               </button>
-
-              {/* Super Admin */}
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleQuickDemoLogin('super_admin')}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  padding: '8px 2px',
-                  backgroundColor: '#F5F3FF',
-                  border: '1px solid #DDD6FE',
-                  borderRadius: '9px',
-                  color: '#7C3AED',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading && demoRole !== 'super_admin' ? 0.5 : 1,
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {demoRole === 'super_admin' ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                <span>Platform</span>
-              </button>
             </div>
-
-            {/* Test Real Staff Account Helper */}
-            {staffList.length > 0 && (
-              <div 
-                style={{ 
-                  marginTop: 22, 
-                  padding: 14, 
-                  background: '#F8FAFC', 
-                  borderRadius: 12, 
-                  border: '1px solid #E2E8F0' 
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <Users size={14} color="#0F172A" />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>
-                    Test Real Staff Account (RBAC)
-                  </span>
-                </div>
-                <p style={{ margin: '0 0 10px', fontSize: 11.5, color: '#64748B', lineHeight: 1.35 }}>
-                  Select a live staff member to test dynamic permissions and restricted view gates.
-                </p>
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <select
-                    value={selectedStaffId}
-                    onChange={e => setSelectedStaffId(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      border: '1px solid #CBD5E1',
-                      fontSize: 12,
-                      background: '#FFFFFF',
-                      color: '#0F172A'
-                    }}
-                  >
-                    {staffList.map(s => (
-                      <option key={s.id} value={s.staffId}>
-                        {s.fullName} ({s.designation || s.role})
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={handleQuickStaffLogin}
-                    disabled={staffLoading || !selectedStaffId}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: 'none',
-                      background: '#0F172A',
-                      color: '#FFFFFF',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {staffLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-                    <span>Test Login</span>
-                  </button>
-                </div>
-
-                {selectedStaffMember && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: '#475569', background: '#FFFFFF', padding: '6px 8px', borderRadius: 6, border: '1px solid #E2E8F0' }}>
-                    <span style={{ fontWeight: 700 }}>Permissions:</span> {selectedStaffMember.permissionsSummary}
-                  </div>
-                )}
-              </div>
-            )}
           </>
         )}
 

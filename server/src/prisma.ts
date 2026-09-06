@@ -15,10 +15,10 @@ interface PrismaInstance {
 
 function createPrismaInstance(): PrismaInstance {
   const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
-  if (process.env.CLOUDFLARE_WORKER === '1' && url) {
+  if (url) {
     const pool = new Pool({
       connectionString: url,
-      max: 5,
+      max: process.env.CLOUDFLARE_WORKER === '1' ? 5 : 20,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 15000,
       allowExitOnIdle: true,

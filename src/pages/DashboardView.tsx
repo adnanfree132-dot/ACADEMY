@@ -156,7 +156,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="overview-primary-stats">
-            <div className="primary-stat-item">
+            <div 
+              className="primary-stat-item" 
+              onClick={() => onNavigate('students')} 
+              style={{ cursor: 'pointer' }}
+              title="View Enrolled Students Directory"
+            >
               <div className="stat-icon-wrapper">
                 <GraduationCap size={22} />
               </div>
@@ -165,7 +170,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="stat-label">Enrolled Students</span>
               </div>
             </div>
-            <div className="primary-stat-item">
+            <div 
+              className="primary-stat-item" 
+              onClick={() => onNavigate('teachers')} 
+              style={{ cursor: 'pointer' }}
+              title="View Faculty Members Directory"
+            >
               <div className="stat-icon-wrapper">
                 <Users size={22} />
               </div>
