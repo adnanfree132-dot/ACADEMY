@@ -18,9 +18,9 @@ function createPrismaInstance(): PrismaInstance {
   if (url) {
     const pool = new Pool({
       connectionString: url,
-      max: process.env.CLOUDFLARE_WORKER === '1' ? 5 : 20,
+      max: process.env.CLOUDFLARE_WORKER === '1' ? 1 : 10,
       idleTimeoutMillis: 10000,
-      connectionTimeoutMillis: 15000,
+      connectionTimeoutMillis: 10000,
       allowExitOnIdle: true,
       ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
     });
@@ -50,14 +50,17 @@ export function attachRequestPrisma(req: Request, res: Response, next: NextFunct
     return;
   }
   const { client, pool } = createPrismaInstance();
+  let released = false;
   const release = () => {
+    if (released) return;
+    released = true;
     client.$disconnect().catch(() => {});
     if (pool) {
       pool.end().catch(() => {});
     }
   };
-  res.on('finish', release);
-  res.on('close', release);
+  res.once('finish', release);
+  res.once('close', release);
   prismaAls.run(client, () => next());
 }
 

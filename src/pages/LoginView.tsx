@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api/apiClient';
 import { 
   Shield, 
+  ShieldCheck,
   GraduationCap, 
   UserCheck, 
   Sparkles, 
@@ -28,7 +29,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [password, setPassword] = useState('admin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [demoRole, setDemoRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
+  const [demoRole, setDemoRole] = useState<'super_admin' | 'admin' | 'teacher' | 'student' | null>(null);
 
   // Self-Serve Academy Registration State
   const [regAcademyName, setRegAcademyName] = useState('');
@@ -61,12 +62,15 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
   };
 
-  const handleQuickDemoLogin = async (role: 'admin' | 'teacher' | 'student') => {
+  const handleQuickDemoLogin = async (role: 'super_admin' | 'admin' | 'teacher' | 'student') => {
     setError('');
     setLoading(true);
     setDemoRole(role);
 
-    if (role === 'admin') {
+    if (role === 'super_admin') {
+      setEmail('superadmin@academiapro.io');
+      setPassword('superadmin123');
+    } else if (role === 'admin') {
       setEmail('admin');
       setPassword('admin');
     } else if (role === 'teacher') {
@@ -221,15 +225,26 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '12.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
                   Username / Email / Staff ID
                 </label>
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <input
                     type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    style={{ width: '100%', padding: '9px 14px 9px 36px', borderRadius: '10px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '13px', background: '#FFFFFF', boxSizing: 'border-box' }}
+                    className="input-with-icon-left"
+                    style={{ 
+                      width: '100%', 
+                      padding: '9px 14px 9px 38px', 
+                      paddingLeft: '38px',
+                      borderRadius: '10px', 
+                      border: '1px solid #CBD5E1', 
+                      outline: 'none', 
+                      fontSize: '13px', 
+                      background: '#FFFFFF', 
+                      boxSizing: 'border-box' 
+                    }}
                     required
                   />
-                  <Mail size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 11 }} />
+                  <Mail size={15} color="#94A3B8" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 </div>
               </div>
 
@@ -237,15 +252,26 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '12.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
                   Password
                 </label>
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    style={{ width: '100%', padding: '9px 14px 9px 36px', borderRadius: '10px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '13px', background: '#FFFFFF', boxSizing: 'border-box' }}
+                    className="input-with-icon-left"
+                    style={{ 
+                      width: '100%', 
+                      padding: '9px 14px 9px 38px', 
+                      paddingLeft: '38px',
+                      borderRadius: '10px', 
+                      border: '1px solid #CBD5E1', 
+                      outline: 'none', 
+                      fontSize: '13px', 
+                      background: '#FFFFFF', 
+                      boxSizing: 'border-box' 
+                    }}
                     required
                   />
-                  <Lock size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 11 }} />
+                  <Lock size={15} color="#94A3B8" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 </div>
               </div>
 
@@ -275,7 +301,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               </button>
             </form>
 
-            {/* Quick Demo Login Grid */}
+            {/* Quick Demo Login Grid (4 Roles: Super Admin, Admin, Teacher, Student) */}
             <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', gap: '10px' }}>
               <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
               <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -284,7 +310,35 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               <div style={{ flex: 1, height: '1px', backgroundColor: '#E2E8F0' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+              {/* Super Admin */}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickDemoLogin('super_admin')}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '10px 4px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: '11px',
+                  color: '#0F172A',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading && demoRole !== 'super_admin' ? 0.5 : 1,
+                  transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
+                }}
+                title="Platform Super Admin (All Academies & SaaS Oversight)"
+              >
+                {demoRole === 'super_admin' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <ShieldCheck size={16} color="#0F172A" />}
+                <span>Super Admin</span>
+              </button>
+
               {/* Admin */}
               <button
                 type="button"
@@ -296,17 +350,18 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
-                  padding: '11px 6px',
+                  padding: '10px 4px',
                   backgroundColor: '#F8FAFC',
                   border: '1.5px solid #CBD5E1',
                   borderRadius: '11px',
                   color: '#0F172A',
-                  fontSize: '11.5px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   opacity: loading && demoRole !== 'admin' ? 0.5 : 1,
                   transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
                 }}
+                title="Academy Administrator"
               >
                 {demoRole === 'admin' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <Shield size={16} color="#475569" />}
                 <span>Admin</span>
@@ -323,20 +378,21 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
-                  padding: '11px 6px',
+                  padding: '10px 4px',
                   backgroundColor: '#F8FAFC',
                   border: '1.5px solid #CBD5E1',
                   borderRadius: '11px',
                   color: '#0F172A',
-                  fontSize: '11.5px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   opacity: loading && demoRole !== 'teacher' ? 0.5 : 1,
                   transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
                 }}
+                title="Faculty Teacher (Assigned Batch & Students)"
               >
                 {demoRole === 'teacher' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <GraduationCap size={16} color="#475569" />}
-                <span>Teacher (Staff)</span>
+                <span>Teacher</span>
               </button>
 
               {/* Student */}
@@ -350,17 +406,18 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
-                  padding: '11px 6px',
+                  padding: '10px 4px',
                   backgroundColor: '#F8FAFC',
                   border: '1.5px solid #CBD5E1',
                   borderRadius: '11px',
                   color: '#0F172A',
-                  fontSize: '11.5px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   opacity: loading && demoRole !== 'student' ? 0.5 : 1,
                   transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease'
                 }}
+                title="Student (Enrolled in Grade 10 - Section A)"
               >
                 {demoRole === 'student' ? <Loader2 size={16} className="animate-spin" color="#0F172A" /> : <UserCheck size={16} color="#475569" />}
                 <span>Student</span>
@@ -400,16 +457,17 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               <label style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 Academy / Institute Name *
               </label>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                   type="text"
                   placeholder="e.g. Apex International Academy"
                   value={regAcademyName}
                   onChange={e => setRegAcademyName(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  className="input-with-icon-left"
+                  style={{ width: '100%', padding: '8px 12px 8px 38px', paddingLeft: '38px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                   required
                 />
-                <Building2 size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: 10 }} />
+                <Building2 size={14} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               </div>
             </div>
 
@@ -418,16 +476,17 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               <label style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 Administrator Full Name *
               </label>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                   type="text"
                   placeholder="e.g. Sarah Jenkins"
                   value={regAdminName}
                   onChange={e => setRegAdminName(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  className="input-with-icon-left"
+                  style={{ width: '100%', padding: '8px 12px 8px 38px', paddingLeft: '38px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                   required
                 />
-                <User size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: 10 }} />
+                <User size={14} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               </div>
             </div>
 
@@ -436,16 +495,17 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               <label style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 Work Email Address *
               </label>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                   type="email"
                   placeholder="admin@youracademy.com"
                   value={regEmail}
                   onChange={e => setRegEmail(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  className="input-with-icon-left"
+                  style={{ width: '100%', padding: '8px 12px 8px 38px', paddingLeft: '38px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                   required
                 />
-                <Mail size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: 10 }} />
+                <Mail size={14} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               </div>
             </div>
 
@@ -454,17 +514,18 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
               <label style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 Create Admin Password *
               </label>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                   type="password"
                   placeholder="Minimum 6 characters"
                   value={regPassword}
                   onChange={e => setRegPassword(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  className="input-with-icon-left"
+                  style={{ width: '100%', padding: '8px 12px 8px 38px', paddingLeft: '38px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                   required
                   minLength={6}
                 />
-                <Lock size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: 10 }} />
+                <Lock size={14} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               </div>
             </div>
 
@@ -474,15 +535,16 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                   Phone Number
                 </label>
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <input
                     type="tel"
                     placeholder="+1 (555) 0123"
                     value={regPhone}
                     onChange={e => setRegPhone(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px 8px 30px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 12.5, outline: 'none', boxSizing: 'border-box' }}
+                    className="input-with-icon-left"
+                    style={{ width: '100%', padding: '8px 10px 8px 34px', paddingLeft: '34px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 12.5, outline: 'none', boxSizing: 'border-box' }}
                   />
-                  <Phone size={13} color="#94A3B8" style={{ position: 'absolute', left: 9, top: 10 }} />
+                  <Phone size={13} color="#94A3B8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 </div>
               </div>
 
@@ -490,15 +552,16 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                   City / Campus
                 </label>
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <input
                     type="text"
                     placeholder="e.g. West Campus"
                     value={regAddress}
                     onChange={e => setRegAddress(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px 8px 30px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 12.5, outline: 'none', boxSizing: 'border-box' }}
+                    className="input-with-icon-left"
+                    style={{ width: '100%', padding: '8px 10px 8px 34px', paddingLeft: '34px', borderRadius: 9, border: '1px solid #CBD5E1', fontSize: 12.5, outline: 'none', boxSizing: 'border-box' }}
                   />
-                  <MapPin size={13} color="#94A3B8" style={{ position: 'absolute', left: 9, top: 10 }} />
+                  <MapPin size={13} color="#94A3B8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 </div>
               </div>
             </div>

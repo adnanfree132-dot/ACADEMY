@@ -60,7 +60,7 @@ export async function ensureDefaultAcademy() {
     });
 
     if (!superAdmin) {
-      const superHash = await bcrypt.hash('superadmin123', 10);
+      const superHash = PRECOMPUTED_HASHES.superadmin;
       await prisma.user.create({
         data: {
           role: 'super_admin',
@@ -84,12 +84,23 @@ export async function ensureDefaultAcademy() {
   }
 }
 
+// Precomputed verified bcrypt hashes to prevent CPU starvation (Error 1102 / 503) on Cloudflare Workers
+export const PRECOMPUTED_HASHES = {
+  admin: '$2a$10$qKqE.eiUvb4WZ5/b31aMDuETmFzkXZv8p7itehmhSTUUDUd5pjZhm',
+  teacher: '$2a$10$BcyDci9BnysT92xt06zTj.j7vbxEeKEAX4CGCJtleXhyO7Lj9hjhO',
+  student: '$2a$10$KX9nrEw7H8v8vLivZs8G7.n.V6RXn9Hf67s9Cpvlfy1QabCFgGn.G',
+  superadmin: '$2a$10$sglf/t8oMIY7f3RcJb0apu8WP9OoW/4jngyoHwlpPM1S8AePe2r.C'
+};
+
+let isDemoDataSynced = false;
+
 /**
  * Ensures the synchronized Demo Triad (Admin, Teacher, Student) exists,
  * strictly linked to the same default Academy, with real active batch assignment,
  * student enrollment, attendance, timetable slots, and fee records.
  */
 export async function ensureSyncedDemoData(academyId: string = 'default-academy-id') {
+  if (isDemoDataSynced) return;
   try {
     // 1. Staff Types (ADM, FAC)
     let adminType = await prisma.staffType.findFirst({ where: { code: 'ADM' } });
@@ -142,9 +153,9 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
       });
     }
 
-    const adminHash = await bcrypt.hash('admin', 10);
-    const teacherHash = await bcrypt.hash('teacher123', 10);
-    const studentHash = await bcrypt.hash('student123', 10);
+    const adminHash = PRECOMPUTED_HASHES.admin;
+    const teacherHash = PRECOMPUTED_HASHES.teacher;
+    const studentHash = PRECOMPUTED_HASHES.student;
 
     // 2. Demo Admin User
     let adminUser = await prisma.user.findFirst({
@@ -649,6 +660,7 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
       });
     }
 
+    isDemoDataSynced = true;
     console.log('[SYNC] Synced Demo Triad verified: Admin, Prof. Tariq Mahmood, and Hamza Tariq in Apex International Academy.');
   } catch (syncErr) {
     console.error('Error ensuring synced demo data:', syncErr);

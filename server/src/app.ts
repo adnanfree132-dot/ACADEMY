@@ -47,3 +47,20 @@ app.use('/api/v1', routes);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'AcademiaPro OS Express API', time: new Date().toISOString() });
 });
+
+app.get('/api/v1/health', (req, res) => {
+  res.json({ status: 'ok', service: 'AcademiaPro OS Express API', time: new Date().toISOString() });
+});
+
+// JSON fallback for unknown endpoints (preventing Express default HTML 404)
+app.use((req, res) => {
+  res.status(404).json({ success: false, error: `Endpoint not found: ${req.method} ${req.originalUrl}` });
+});
+
+// Global Express error handler (preventing Express default HTML error page)
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Express Request Error:', err?.message || err);
+  const status = typeof err?.status === 'number' ? err.status : 500;
+  const message = err?.message || 'Internal Server Error';
+  res.status(status).json({ success: false, error: message });
+});

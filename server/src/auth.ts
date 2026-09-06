@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 import { sendSuccess, sendError } from './common/envelope';
 import { AccessLevelString, CANONICAL_MODULE_KEYS, normalizeAccessLevel } from './types/staff';
-import { ensureSyncedDemoData } from './controllers/superAdminController';
+import { ensureSyncedDemoData, PRECOMPUTED_HASHES } from './controllers/superAdminController';
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'academiapro_access_secret_key_2026';
 
 export interface JwtPayload {
@@ -743,7 +743,7 @@ export async function handleDemoLogin(req: Request, res: Response) {
       });
 
       if (!superAdmin) {
-        const superHash = await bcrypt.hash('superadmin123', 10);
+        const superHash = PRECOMPUTED_HASHES.superadmin;
         superAdmin = await prisma.user.create({
           data: {
             role: 'super_admin',

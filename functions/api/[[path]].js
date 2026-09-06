@@ -17,14 +17,44 @@ export async function onRequest(context) {
   const headers = new Headers(context.request.headers);
   headers.set('Host', 'academy-api.adnanfree132.workers.dev');
 
-  const init = {
-    method: context.request.method,
-    headers: headers,
-    redirect: 'manual'
-  };
+  let bodyData = null;
   if (context.request.method !== 'GET' && context.request.method !== 'HEAD') {
-    init.body = context.request.body;
-    init.duplex = 'half';
+    bodyData = await context.request.arrayBuffer();
   }
-  return fetch(target, init);
+
+  const doFetch = async () => {
+    const init = {
+      method: context.request.method,
+      headers: headers,
+      redirect: 'manual'
+    };
+    if (bodyData) {
+      init.body = bodyData;
+    }
+    return fetch(target, init);
+  };
+
+  try {
+    let res = await doFetch();
+    // If backend returns 502/503 during cold-start or isolate recycling, perform one fast retry
+    if (res.status === 502 || res.status === 503) {
+      await new Promise(r => setTimeout(r, 400));
+      try {
+        const retryRes = await doFetch();
+        if (retryRes.ok || retryRes.status < 500) return retryRes;
+      } catch {}
+    }
+    return res;
+  } catch (err) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Backend API service is warming up. Please retry in a moment.'
+    }), {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
 }

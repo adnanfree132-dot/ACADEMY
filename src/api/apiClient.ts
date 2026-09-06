@@ -80,8 +80,22 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       response = await attempt();
     }
 
+    // Auto-retry on 502/503/504 edge cold-start or temporary isolate reload
+    if (response.status >= 502 && response.status <= 504) {
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        const retryResponse = await attempt();
+        if (retryResponse.ok || retryResponse.status < 500) {
+          response = retryResponse;
+        }
+      } catch {}
+    }
+
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
+      if (response.status >= 502 && response.status <= 504) {
+        throw new Error('Service is temporarily warming up or reconnecting. Please click again in a moment.');
+      }
       throw new Error(`Server returned non-JSON response (${response.status})`);
     }
 
