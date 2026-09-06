@@ -624,6 +624,14 @@ export async function handleDemoLogin(req: Request, res: Response) {
 
       const staffMember = teacher?.staffMember || null;
       const user = teacher?.user || null;
+
+      if (staffMember && ['suspended', 'terminated', 'resigned', 'inactive'].includes(staffMember.status)) {
+        return sendError(res, `Account is ${staffMember.status}. Access has been revoked by administration.`, 403);
+      }
+      if (user && user.is_active === false) {
+        return sendError(res, 'Account is deactivated. Access has been revoked by administration.', 403);
+      }
+
       const resolvedPermissions = resolveStaffPermissions('faculty', 'FAC', staffMember?.staffType?.base_permissions, staffMember?.permissions);
       const academyData = user ? await getAcademyDataForUser(user, staffMember) : null;
       const effectiveAcademyId = academyData?.id || user?.academy_id || 'default-academy-id';
@@ -690,6 +698,14 @@ export async function handleDemoLogin(req: Request, res: Response) {
       }
 
       const studentUser = student?.user || null;
+
+      if (student && ['suspended', 'terminated', 'left', 'inactive', 'alumni'].includes(student.status)) {
+        return sendError(res, `Student account status is ${student.status}. Access has been restricted.`, 403);
+      }
+      if (studentUser && studentUser.is_active === false) {
+        return sendError(res, 'Student account is deactivated. Access has been restricted.', 403);
+      }
+
       const resolvedPermissions = resolveStaffPermissions('student');
       resolvedPermissions.students = 'view_only';
       resolvedPermissions.homework = 'view_only';
@@ -826,7 +842,15 @@ export async function handleDemoLogin(req: Request, res: Response) {
         });
       }
 
+      if (adminUser && adminUser.is_active === false) {
+        return sendError(res, 'Administrator account is deactivated.', 403);
+      }
+
       const staffMember = (adminUser as any)?.staffMember || null;
+      if (staffMember && ['suspended', 'terminated', 'resigned', 'inactive'].includes(staffMember.status)) {
+        return sendError(res, `Administrator staff record is ${staffMember.status}.`, 403);
+      }
+
       const resolvedPermissions = resolveStaffPermissions('admin', 'ADM');
       const academyData = adminUser ? await getAcademyDataForUser(adminUser, staffMember) : null;
       const effectiveAcademyId = academyData?.id || adminUser?.academy_id || 'default-academy-id';
@@ -869,6 +893,198 @@ export async function handleDemoLogin(req: Request, res: Response) {
     }
   } catch (err: any) {
     return sendError(res, err.message || 'Demo login failed', 500);
+  }
+}
+
+/**
+ * Real-time Session & Permissions Verification Handler
+ * GET /api/v1/auth/me
+ */
+export async function handleGetMe(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user || !req.user.userId) {
+      return sendError(res, 'Unauthenticated', 401);
+    }
+
+    const { userId, staffId } = req.user;
+
+    // 1. Look up User
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: userId },
+          staffId ? { staffMember: { staff_id: staffId } } : {}
+        ].filter((c) => Object.keys(c).length > 0)
+      },
+      include: {
+        staffMember: {
+          include: {
+            staffType: { include: { defaultPermissions: true } },
+            permissions: true,
+            teacher: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      let directStaff = null;
+      if (staffId) {
+        directStaff = await prisma.staffMember.findFirst({
+          where: { staff_id: { equals: staffId, mode: 'insensitive' as const } },
+          include: {
+            staffType: { include: { defaultPermissions: true } },
+            permissions: true,
+            teacher: true,
+            user: true
+          }
+        });
+      }
+
+      if (!directStaff) {
+        return sendError(res, 'User session not found', 401);
+      }
+
+      if (['suspended', 'terminated', 'resigned', 'inactive'].includes(directStaff.status)) {
+        return sendError(res, `Account is ${directStaff.status}. Access has been revoked by administration.`, 403);
+      }
+
+      const effectiveRole = directStaff.staffType?.slug || directStaff.role || 'staff';
+      const resolvedPermissions = resolveStaffPermissions(
+        effectiveRole,
+        directStaff.staffType?.code,
+        directStaff.staffType?.base_permissions,
+        directStaff.permissions
+      );
+
+      const academyData = await getAcademyDataForUser(directStaff.user, directStaff);
+
+      return sendSuccess(res, {
+        user: {
+          id: directStaff.user_id || directStaff.id,
+          staffId: directStaff.staff_id,
+          staff_id: directStaff.staff_id,
+          fullName: directStaff.full_name,
+          name: directStaff.full_name,
+          email: directStaff.email,
+          phone: directStaff.phone,
+          role: effectiveRole,
+          designation: directStaff.designation,
+          status: directStaff.status,
+          staffTypeId: directStaff.staff_type_id,
+          teacherId: directStaff.teacher_id,
+          academyId: directStaff.user?.academy_id || academyData?.id || null,
+          academy: academyData,
+          isPasswordChanged: directStaff.is_password_changed,
+          permissions: resolvedPermissions
+        }
+      });
+    }
+
+    if (user.is_active === false) {
+      return sendError(res, 'Account is deactivated. Access has been revoked by administration.', 403);
+    }
+
+    const staffMember = user.staffMember;
+
+    if (staffMember) {
+      if (['suspended', 'terminated', 'resigned', 'inactive'].includes(staffMember.status)) {
+        return sendError(res, `Account is ${staffMember.status}. Access has been revoked by administration.`, 403);
+      }
+
+      const effectiveRole = staffMember.staffType?.slug || staffMember.role || user.role || 'staff';
+      const resolvedPermissions = resolveStaffPermissions(
+        effectiveRole,
+        staffMember.staffType?.code,
+        staffMember.staffType?.base_permissions,
+        staffMember.permissions
+      );
+
+      const academyData = effectiveRole === 'super_admin' ? null : await getAcademyDataForUser(user, staffMember);
+
+      return sendSuccess(res, {
+        user: {
+          id: user.id,
+          staffId: staffMember.staff_id,
+          staff_id: staffMember.staff_id,
+          fullName: staffMember.full_name || user.full_name,
+          name: staffMember.full_name || user.full_name,
+          email: staffMember.email || user.email,
+          phone: staffMember.phone || user.phone,
+          role: effectiveRole,
+          designation: staffMember.designation,
+          status: staffMember.status,
+          staffTypeId: staffMember.staff_type_id,
+          teacherId: staffMember.teacher_id,
+          academyId: user.academy_id || academyData?.id || null,
+          academy: academyData,
+          isPasswordChanged: staffMember.is_password_changed,
+          permissions: resolvedPermissions
+        }
+      });
+    }
+
+    if (user.role === 'student') {
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            { user_id: user.id },
+            req.user.studentId ? { id: req.user.studentId } : {}
+          ].filter((c) => Object.keys(c).length > 0)
+        }
+      });
+
+      if (student && ['suspended', 'terminated', 'left', 'inactive', 'alumni'].includes(student.status)) {
+        return sendError(res, `Student account status is ${student.status}. Access has been restricted.`, 403);
+      }
+
+      const resolvedPermissions = resolveStaffPermissions('student');
+      resolvedPermissions.students = 'view_only';
+      resolvedPermissions.homework = 'view_only';
+      resolvedPermissions.attendance = 'view_only';
+      resolvedPermissions.announcements = 'view_only';
+
+      const academyData = await getAcademyDataForUser(user);
+
+      return sendSuccess(res, {
+        user: {
+          id: user.id,
+          studentId: student?.id,
+          admissionNo: student?.admission_no,
+          fullName: student?.full_name || user.full_name,
+          name: student?.full_name || user.full_name,
+          email: student?.email || user.email,
+          phone: student?.phone || user.phone,
+          role: 'student',
+          status: student?.status || 'active',
+          academyId: user.academy_id || academyData?.id || null,
+          academy: academyData,
+          isPasswordChanged: true,
+          permissions: resolvedPermissions
+        }
+      });
+    }
+
+    // Super Admin or Standard Admin
+    const resolvedPermissions = resolveStaffPermissions(user.role);
+    const academyData = user.role === 'super_admin' ? null : await getAcademyDataForUser(user);
+
+    return sendSuccess(res, {
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        academyId: user.academy_id || academyData?.id || null,
+        academy: academyData,
+        isPasswordChanged: !user.must_change_password,
+        permissions: resolvedPermissions
+      }
+    });
+  } catch (err: any) {
+    return sendError(res, err.message || 'Session verification failed', 500);
   }
 }
 

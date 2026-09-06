@@ -178,7 +178,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
           phone: '+923000000001',
           academy_id: academyId,
           password_hash: adminHash,
-          is_active: true,
           must_change_password: false
         }
       });
@@ -236,7 +235,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
           phone: '+923000000001',
           role: 'admin',
           designation: 'Head of Academy',
-          status: 'active',
           staff_type_id: adminType?.id,
           password_hash: adminHash,
           temp_password_plain: 'admin',
@@ -266,7 +264,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
           phone: '+923011111111',
           academy_id: academyId,
           password_hash: teacherHash,
-          is_active: true,
           must_change_password: false
         }
       });
@@ -328,7 +325,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
           phone: '+923011111111',
           role: 'faculty',
           designation: 'Senior Faculty / Mathematics Specialist',
-          status: 'active',
           staff_type_id: facultyType?.id,
           password_hash: teacherHash,
           temp_password_plain: 'teacher123',
@@ -355,15 +351,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
         }
       });
     }
-
-    // Ensure Teacher has proper permissions (no 'hidden' for teachers, students, batches, etc.)
-    await prisma.staffPermission.deleteMany({
-      where: {
-        staff_member_id: teacherStaff.id,
-        module_key: { in: ['teachers', 'students', 'batches', 'subjects', 'attendance', 'homework', 'exams', 'timetable', 'announcements'] },
-        access_level: 'hidden'
-      }
-    });
 
     // 4. Shared Academic Structure: Class, Subject, Batch
     let demoClass = await prisma.class.findFirst({ where: { name: 'Grade 10' } });
@@ -479,7 +466,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
           phone: '+923001234567',
           academy_id: academyId,
           password_hash: studentHash,
-          is_active: true,
           must_change_password: false
         }
       });
@@ -520,7 +506,6 @@ export async function ensureSyncedDemoData(academyId: string = 'default-academy-
           phone: '+923001234567',
           email: 'demo.student@academiapro.edu',
           class_id: demoClass.id,
-          status: 'active',
           custom_fields: { parentName: 'Tariq Mahmood' }
         }
       });

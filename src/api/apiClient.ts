@@ -103,6 +103,17 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     if (!response.ok || !json.success) {
       if (response.status === 401) {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      } else if (response.status === 403 && (
+        String(json.error).toLowerCase().includes('suspend') ||
+        String(json.error).toLowerCase().includes('deactivat') ||
+        String(json.error).toLowerCase().includes('revok') ||
+        String(json.error).toLowerCase().includes('inactive')
+      )) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new CustomEvent('auth:session_revoked', { detail: json.error }));
       }
       if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) unmarkDeleted(entityId);
       throw new Error(json.error || 'API request failed');
@@ -134,6 +145,8 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 }
 
 export const api = {
+  getMe: () => fetchApi<{ user: any }>('/auth/me'),
+
   login: (credentials: { email?: string; phone?: string; password: string }) =>
     fetchApi<{ user: any; token: string }>('/auth/login', {
       method: 'POST',

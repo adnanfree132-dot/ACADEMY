@@ -29,6 +29,7 @@ import { api } from './api/apiClient';
 import { applyAcademySettings } from './lib/academySettings';
 import { readBootstrapSnapshot, writeBootstrapSnapshot, filterDeleted, removeIdFromCaches, cacheClear } from './lib/resourceCache';
 import { useEntityRemoved } from './lib/useEntityRemoved';
+import { showToast } from './lib/toast';
 
 import { WhatsAppCenterView } from './pages/WhatsAppCenterView';
 import { MobileTopBar } from './components/MobileTopBar';
@@ -120,6 +121,69 @@ export function App() {
     setStaffList(prev => prev.filter(s => !gone.has(s.id) && !gone.has(s.teacher_id) && !gone.has(s.teacherId)));
     setTeachers(prev => prev.filter(t => !gone.has(t.id)));
   });
+
+  // Handle session revocation (suspended or deactivated by administrator)
+  useEffect(() => {
+    const handleRevoked = (e: any) => {
+      setIsAuthenticated(false);
+      setCurrentUser({});
+      const msg = e.detail || 'Your account access has been suspended or revoked by administration.';
+      showToast(msg, 'error');
+    };
+
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setCurrentUser({});
+    };
+
+    window.addEventListener('auth:session_revoked', handleRevoked);
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+
+    return () => {
+      window.removeEventListener('auth:session_revoked', handleRevoked);
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, []);
+
+  // Sync user profile & dynamic permissions directly from DB on focus, mount, and visibility change
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let isMounted = true;
+    const syncSession = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const res = await api.getMe();
+        if (isMounted && res?.user) {
+          setCurrentUser((prev: any) => {
+            const updated = { ...prev, ...res.user };
+            localStorage.setItem('user', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      } catch {
+        // If 403 / revoked, the custom event will trigger logout
+      }
+    };
+
+    // Initial check
+    syncSession();
+
+    const onFocus = () => syncSession();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') syncSession();
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [isAuthenticated]);
 
   const refreshDataFromBackend = async () => {
     setIsLoadingStudents(true);

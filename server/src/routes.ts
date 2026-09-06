@@ -11,6 +11,7 @@ import {
   handleChangePassword,
   getQuickStaffList,
   quickStaffLogin,
+  handleGetMe,
   checkAcademySubscription
 } from './auth';
 import { requireModulePermission, requireAdmin, requireSuperAdmin } from './middleware/rbacMiddleware';
@@ -174,6 +175,7 @@ router.get('/auth/quick-staff', getQuickStaffList);
 router.post('/auth/staff-quick-login', quickStaffLogin);
 router.post('/auth/change-password', authenticateJwt, handleChangePassword);
 router.post('/staff/me/change-password', authenticateJwt, handleChangePassword);
+router.get('/auth/me', authenticateJwt, handleGetMe);
 
 // Feature: Super Admin Platform Oversight & Multi-Tenant Trial Control
 router.get('/super-admin/stats', authenticateJwt, requireSuperAdmin, getSuperAdminStats);

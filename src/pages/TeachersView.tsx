@@ -1116,13 +1116,26 @@ export const TeachersView: React.FC<TeachersViewProps> = ({
                   Assigned Batches
                 </span>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', minWidth: 0 }}>
-                  {staff.assignedBatches && staff.assignedBatches.length > 0 ? (
-                    staff.assignedBatches.map((b: string) => (
-                      <span key={b} className="badge badge-gray" style={{ fontSize: 10, padding: '2px 7px', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b}</span>
-                    ))
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>No active batches assigned</span>
-                  )}
+                  {(() => {
+                    const effectiveBatches: string[] = Array.from(new Set([
+                      ...(Array.isArray(staff.assignedBatches) ? staff.assignedBatches : []),
+                      ...(Array.isArray(staff.teacher?.batches) ? staff.teacher.batches.map((b: any) => typeof b === 'string' ? b : b.name) : []),
+                      ...batches.filter((b: any) =>
+                        (staff.teacher_id && b.teacherId === staff.teacher_id) ||
+                        (staff.teacherId && b.teacherId === staff.teacherId) ||
+                        (staff.teacher?.id && b.teacherId === staff.teacher?.id) ||
+                        (b.teacher?.name && (b.teacher.name === staff.fullName || b.teacher.name === staff.name))
+                      ).map((b: any) => b.name)
+                    ])).filter(Boolean);
+
+                    return effectiveBatches.length > 0 ? (
+                      effectiveBatches.map((b: string) => (
+                        <span key={b} className="badge badge-gray" style={{ fontSize: 10, padding: '2px 7px', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b}</span>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>No active batches assigned</span>
+                    );
+                  })()}
                 </div>
               </div>
 

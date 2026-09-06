@@ -116,7 +116,13 @@ export async function getStaffList(req: Request, res: Response) {
             select: {
               id: true,
               qualification: true,
-              batches: { where: { is_active: true }, select: { id: true, name: true } }
+              batches: { where: { is_active: true }, select: { id: true, name: true } },
+              batchSubjects: {
+                select: {
+                  batch: { select: { id: true, name: true } },
+                  subject: { select: { id: true, name: true } }
+                }
+              }
             }
           },
           user: {
@@ -133,9 +139,23 @@ export async function getStaffList(req: Request, res: Response) {
     // Sanitize sensitive credentials from output
     const sanitized = staffMembers.map((s) => {
       const { password_hash, temp_password_plain, ...safeStaff } = s;
+      const assignedBatches = Array.from(
+        new Set([
+          ...(s.teacher?.batches?.map((b: any) => b.name) || []),
+          ...(s.teacher?.batchSubjects?.map((bs: any) => bs.batch?.name) || [])
+        ])
+      ).filter(Boolean);
+
+      const assignedSubjects = Array.from(
+        new Set([
+          ...(s.teacher?.batchSubjects?.map((bs: any) => bs.subject?.name) || [])
+        ])
+      ).filter(Boolean);
+
       return {
         ...safeStaff,
         fullName: s.full_name,
+        name: s.full_name,
         staffId: s.staff_id,
         staffTypeId: s.staff_type_id,
         baseSalary: s.base_salary,
@@ -145,7 +165,9 @@ export async function getStaffList(req: Request, res: Response) {
         joiningDate: s.joining_date,
         photoUrl: s.photo_url,
         statusRemarks: s.status_remarks,
-        isPasswordChanged: s.is_password_changed
+        isPasswordChanged: s.is_password_changed,
+        assignedBatches,
+        assignedSubjects
       };
     });
 
@@ -581,9 +603,23 @@ export async function getStaffById(req: Request, res: Response) {
     // Omit sensitive bcrypt hashes
     const { password_hash, temp_password_plain, ...safeStaff } = staff;
 
+    const assignedBatches = Array.from(
+      new Set([
+        ...(staff.teacher?.batches?.map((b: any) => b.name) || []),
+        ...(staff.teacher?.batchSubjects?.map((bs: any) => bs.batch?.name) || [])
+      ])
+    ).filter(Boolean);
+
+    const assignedSubjects = Array.from(
+      new Set([
+        ...(staff.teacher?.batchSubjects?.map((bs: any) => bs.subject?.name) || [])
+      ])
+    ).filter(Boolean);
+
     const enrichedProfile = {
       ...safeStaff,
       fullName: staff.full_name,
+      name: staff.full_name,
       staffId: staff.staff_id,
       staffTypeId: staff.staff_type_id,
       baseSalary: staff.base_salary,
@@ -599,6 +635,8 @@ export async function getStaffById(req: Request, res: Response) {
       statusRemarks: staff.status_remarks,
       photoUrl: staff.photo_url,
       isPasswordChanged: staff.is_password_changed,
+      assignedBatches,
+      assignedSubjects,
       attendanceSummary: {
         totalDays: totalAttendanceDays,
         present: presentCount,

@@ -553,20 +553,27 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
           {activeTab === 'schedule' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>Assigned Academic Batches</div>
-              {staff.assignedBatches && staff.assignedBatches.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {staff.assignedBatches.map((b: string) => (
-                    <div key={b} style={{ padding: 12, borderRadius: 10, background: '#F8FAFC', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, color: '#0F172A', fontSize: 13 }}>{b}</span>
-                      <span className="badge badge-blue" style={{ fontSize: 10.5 }}>Active Batch</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: 24, textAlign: 'center', background: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: 12.5 }}>
-                  No academic batches assigned yet.
-                </div>
-              )}
+              {(() => {
+                const effectiveBatches: string[] = Array.from(new Set([
+                  ...(Array.isArray(staff.assignedBatches) ? staff.assignedBatches : []),
+                  ...(Array.isArray(staff.teacher?.batches) ? staff.teacher.batches.map((b: any) => typeof b === 'string' ? b : b.name) : [])
+                ])).filter(Boolean);
+
+                return effectiveBatches.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {effectiveBatches.map((b: string) => (
+                      <div key={b} style={{ padding: 12, borderRadius: 10, background: '#F8FAFC', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 700, color: '#0F172A', fontSize: 13 }}>{b}</span>
+                        <span className="badge badge-blue" style={{ fontSize: 10.5 }}>Active Batch</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: 24, textAlign: 'center', background: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: 12.5 }}>
+                    No academic batches assigned yet.
+                  </div>
+                );
+              })()}
             </div>
           )}
 
