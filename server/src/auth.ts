@@ -246,9 +246,15 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
     return sendError(res, 'Authentication required', 401);
   }
 
+  let decoded: JwtPayload;
   try {
-    const decoded = jwt.verify(token, JWT_ACCESS_SECRET) as JwtPayload;
+    decoded = jwt.verify(token, JWT_ACCESS_SECRET) as JwtPayload;
+  } catch (err: any) {
+    return sendError(res, 'Invalid or expired authentication token', 401);
+  }
 
+  // Database account activity checks (best-effort resilience)
+  try {
     // 1. Check user status in Prisma User table
     if (decoded.userId && decoded.userId !== 'admin-id') {
       const user = await prisma.user.findUnique({
@@ -282,12 +288,13 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
         }
       }
     }
-
-    req.user = decoded;
-    next();
-  } catch (err: any) {
-    return sendError(res, 'Invalid or expired authentication token', 401);
+  } catch (dbErr: any) {
+    // Transient database errors or timeouts must NEVER invalidate a valid JWT or cause 401 auto-logout
+    console.warn('⚠️ [authenticateJwt] DB check warning (proceeding with verified JWT):', dbErr?.message || dbErr);
   }
+
+  req.user = decoded;
+  next();
 }
 
 /**

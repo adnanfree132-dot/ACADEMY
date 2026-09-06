@@ -1,7 +1,7 @@
 name = "academy-api"
 main = "src/worker.ts"
 compatibility_date = "2026-09-04"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 account_id = "64ce0da1d6bde1c338aa1eed69626c73"
 workers_dev = true
 
@@ -9,6 +9,7 @@ workers_dev = true
 CLOUDFLARE_WORKER = "1"
 NODE_ENV = "production"
 PORT = "5000"
+DB_POOL_MAX = "4"
 
 [alias]
 "iconv-lite" = "./src/iconv-stub.js"

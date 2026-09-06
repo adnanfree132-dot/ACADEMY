@@ -334,22 +334,14 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
     // 3. Admin Full Institutional Dashboard
     const settings = await readSettingsMap();
 
+    // Chunk queries into 3 bounded batches to prevent database pool exhaustion in Cloudflare Workers
     const [
       totalStudents,
       totalTeachers,
       totalBatches,
       collectedAgg,
       monthCollectedAgg,
-      invoiceNetAgg,
-      todayAttendance,
-      overdueInvoices,
-      slots,
-      followUps,
-      activeBatches,
-      upcomingTests,
-      monthExpensesAgg,
-      recentAnnouncements,
-      recentInquiries
+      invoiceNetAgg
     ] = await Promise.all([
       prisma.student.count({ where: { status: 'active' } }),
       prisma.teacher.count(),
@@ -366,7 +358,16 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         },
         _sum: { amount: true }
       }),
-      prisma.feeInvoice.aggregate({ _sum: { net_amount: true } }),
+      prisma.feeInvoice.aggregate({ _sum: { net_amount: true } })
+    ]);
+
+    const [
+      todayAttendance,
+      overdueInvoices,
+      slots,
+      followUps,
+      activeBatches
+    ] = await Promise.all([
       prisma.attendance.findMany({ where: { date: todayStr }, select: { batch_id: true, status: true } }),
       prisma.feeInvoice.findMany({
         where: {
@@ -404,7 +405,15 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
           name: true,
           _count: { select: { enrollments: true } }
         }
-      }),
+      })
+    ]);
+
+    const [
+      upcomingTests,
+      monthExpensesAgg,
+      recentAnnouncements,
+      recentInquiries
+    ] = await Promise.all([
       prisma.test.findMany({
         where: { exam_date: { gte: todayStr } },
         include: {

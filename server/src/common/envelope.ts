@@ -46,9 +46,14 @@ export function sanitizeErrorMessage(rawError: any): string {
     str.includes('Connection terminated') ||
     str.includes('connection closed') ||
     str.includes('pool timeout') ||
-    str.includes('fetch failed')
+    str.includes('fetch failed') ||
+    str.includes('DatabaseConnectionError') ||
+    str.includes('socket hang up') ||
+    str.includes('ECONNRESET') ||
+    str.includes('EPIPE') ||
+    str.includes('Cannot use a pool')
   ) {
-    return 'The backend service is temporarily warming up. Please click again in a moment.';
+    return 'The database connection is temporarily unavailable or busy. Please retry in a few moments.';
   }
 
   return str;
@@ -56,10 +61,21 @@ export function sanitizeErrorMessage(rawError: any): string {
 
 export function sendError(res: Response, error: any, statusCode = 400) {
   const cleanMessage = sanitizeErrorMessage(error);
-  if (statusCode >= 500) {
+  let finalStatus = statusCode;
+  if (error && typeof error === 'object' && typeof error.status === 'number') {
+    finalStatus = error.status;
+  } else if (
+    (error?.name === 'DatabaseConnectionError' ||
+      cleanMessage === 'The database connection is temporarily unavailable or busy. Please retry in a few moments.') &&
+    finalStatus >= 500
+  ) {
+    finalStatus = 503;
+  }
+
+  if (finalStatus >= 500) {
     console.error('⚠️ [Server Error Log]:', error);
   }
-  return res.status(statusCode).json({
+  return res.status(finalStatus).json({
     success: false,
     error: cleanMessage
   });

@@ -56,6 +56,25 @@ type AppSnapshot = {
   notifications?: any[];
 };
 
+let activeFetchDataInstance: (() => Promise<any>) | null = null;
+
+/**
+ * Staged loader export for backward compatibility & external triggers.
+ * Invokes the active mounted App instance's staged loader if present,
+ * or safely executes the bounded Stage 1 queries if invoked standalone.
+ */
+export const fetchData = async (): Promise<any> => {
+  if (activeFetchDataInstance) {
+    return activeFetchDataInstance();
+  }
+  return Promise.all([
+    api.getMe().catch(() => null),
+    api.getDashboard().catch(() => null),
+    api.getStudents().catch(() => []),
+    api.getBatches().catch(() => []),
+  ]);
+};
+
 export function App() {
   const snap = readBootstrapSnapshot<AppSnapshot>() || {};
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'));
@@ -167,9 +186,8 @@ export function App() {
       }
     };
 
-    // Initial check
-    syncSession();
-
+    // Initial session sync is handled as part of Stage 1 in fetchData()
+    // syncSession is retained for window focus and document visibility events
     const onFocus = () => syncSession();
     const onVisibility = () => {
       if (document.visibilityState === 'visible') syncSession();
@@ -185,8 +203,12 @@ export function App() {
     };
   }, [isAuthenticated]);
 
-  const refreshDataFromBackend = async () => {
+  const fetchData = async () => {
+    const token = localStorage.getItem('token');
+    if (!token && !isAuthenticated) return;
+
     setIsLoadingStudents(true);
+
     const run = async (loader: () => Promise<any>, onData: (value: any) => void) => {
       try {
         const value = await loader();
@@ -196,16 +218,20 @@ export function App() {
       }
     };
 
-    const promises: Promise<any>[] = [
-      run(() => api.getDashboard(), (stats) => {
+    // --- STAGE 1: Core Data (Sequential to avoid Worker connection pool exhaustion) ---
+    // Login already provides user data, so getMe() is deferred to Stage 2.
+    // Each request completes before the next fires, preventing concurrent DB connections.
+    try {
+      await run(() => api.getDashboard(), (stats) => {
         if (stats?.overview) {
           setDashboardStats(stats.overview);
           setDashboardLive(stats);
         } else {
           setDashboardLive(stats);
         }
-      }),
-      run(() => api.getStudents(), (backendStudents) => {
+      });
+
+      await run(() => api.getStudents(), (backendStudents) => {
         if (!Array.isArray(backendStudents)) return;
         setStudents(filterDeleted(backendStudents).map((s: any) => {
           const totalFee = s.totalFee !== undefined ? s.totalFee : (s.feePlan?.monthly_amount || 0);
@@ -258,10 +284,9 @@ export function App() {
             isDefaulter: s.isDefaulter !== undefined ? s.isDefaulter : dueBalance > 0
           };
         }));
-      }).finally(() => {
-        setIsLoadingStudents(false);
-      }),
-      run(() => api.getBatches(), (backendBatches) => {
+      });
+
+      await run(() => api.getBatches(), (backendBatches) => {
         if (!Array.isArray(backendBatches)) return;
         setBatches(filterDeleted(backendBatches).map((b: any) => ({
           id: b.id,
@@ -279,113 +304,135 @@ export function App() {
           defaultInstallments: b.default_installments,
           sectionName: b.section_name
         })));
-      }),
-      run(() => api.getNotifications(), (backendNotifications) => {
-        if (!Array.isArray(backendNotifications)) return;
-        setNotifications(backendNotifications);
-        setUnreadNotifications(backendNotifications.filter((n: any) => !n.is_read).length);
-      }),
-      run(() => api.getSubjects(), (backendSubjects) => {
-        if (!Array.isArray(backendSubjects)) return;
-        setSubjects(filterDeleted(backendSubjects).map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          code: s.code,
-          batchCount: s._count?.batchSubjects || 0,
-          homeworkCount: s._count?.homeworks || 0,
-          testCount: s._count?.tests || 0,
-          slotCount: s._count?.timetableSlots || 0
-        })));
-      }),
-      run(() => api.getAnnouncements(), (backendAnn) => {
-        if (!Array.isArray(backendAnn)) return;
-        setAnnouncements(filterDeleted(backendAnn).map((a: any) => ({
-          id: a.id,
-          title: a.title,
-          content: a.content || a.body,
-          date: a.created_at ? String(a.created_at).split('T')[0] : '',
-          targetAudience: a.audience || a.targetAudience || a.target_audience || 'all',
-          urgent: Boolean(a.urgent),
-          pinned: Boolean(a.pinned),
-          scheduledFor: a.scheduled_for || a.scheduledFor || null,
-          author: a.created_by === 'admin' ? 'Administration' : undefined
-        })));
-      })
-    ];
+      });
+    } finally {
+      // Release student loading indicator immediately once Stage 1 completes
+      setIsLoadingStudents(false);
+    }
+
+    // --- YIELD MICRO-PAUSE (50ms) ---
+    // Yield execution to allow DOM painting and connection buffer drain
+    await new Promise(r => setTimeout(r, 50));
+
+    // --- STAGE 2: Secondary Modules (Sequential to avoid Worker crashes) ---
+    // getMe is deferred here since login already provides user data
+    await run(() => api.getMe(), (res) => {
+      if (res?.user) {
+        setCurrentUser((prev: any) => {
+          const updated = { ...prev, ...res.user };
+          localStorage.setItem('user', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    });
+
+    await run(() => api.getNotifications(), (backendNotifications) => {
+      if (!Array.isArray(backendNotifications)) return;
+      setNotifications(backendNotifications);
+      setUnreadNotifications(backendNotifications.filter((n: any) => !n.is_read).length);
+    });
+
+    await run(() => api.getSubjects(), (backendSubjects) => {
+      if (!Array.isArray(backendSubjects)) return;
+      setSubjects(filterDeleted(backendSubjects).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        code: s.code,
+        batchCount: s._count?.batchSubjects || 0,
+        homeworkCount: s._count?.homeworks || 0,
+        testCount: s._count?.tests || 0,
+        slotCount: s._count?.timetableSlots || 0
+      })));
+    });
+
+    await run(() => api.getAnnouncements(), (backendAnn) => {
+      if (!Array.isArray(backendAnn)) return;
+      setAnnouncements(filterDeleted(backendAnn).map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        content: a.content || a.body,
+        date: a.created_at ? String(a.created_at).split('T')[0] : '',
+        targetAudience: a.audience || a.targetAudience || a.target_audience || 'all',
+        urgent: Boolean(a.urgent),
+        pinned: Boolean(a.pinned),
+        scheduledFor: a.scheduled_for || a.scheduledFor || null,
+        author: a.created_by === 'admin' ? 'Administration' : undefined
+      })));
+    });
 
     if (isAdmin) {
-      promises.push(
-        run(() => api.getSettings(), (backendSettings) => {
-          applyAcademySettings(backendSettings);
-          if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
-        })
-      );
+      await run(() => api.getSettings(), (backendSettings) => {
+        applyAcademySettings(backendSettings);
+        if (backendSettings.academyName) setAcademyName(backendSettings.academyName);
+      });
     }
 
     if (isAdmin || isTeacher) {
-      promises.push(
-        run(() => api.getTeachers(), (backendTeachers) => {
-          if (!Array.isArray(backendTeachers)) return;
-          setTeachers(filterDeleted(backendTeachers).map((t: any) => ({
-            id: t.id,
-            name: t.user?.full_name || t.full_name || '',
-            qualification: t.qualification || '',
-            assignedSubjects: (t.batchSubjects || []).map((bs: any) => bs.subject?.name).filter(Boolean),
-            assignedBatches: [
-              ...(t.batches || []).map((b: any) => b.name),
-              ...(t.batchSubjects || []).map((bs: any) => bs.batch?.name)
-            ].filter(Boolean).filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i),
-            phone: t.user?.phone || t.phone || '',
-            email: t.user?.email || t.email || ''
-          })));
-        })
-      );
+      await run(() => api.getTeachers(), (backendTeachers) => {
+        if (!Array.isArray(backendTeachers)) return;
+        setTeachers(filterDeleted(backendTeachers).map((t: any) => ({
+          id: t.id,
+          name: t.user?.full_name || t.full_name || '',
+          qualification: t.qualification || '',
+          assignedSubjects: (t.batchSubjects || []).map((bs: any) => bs.subject?.name).filter(Boolean),
+          assignedBatches: [
+            ...(t.batches || []).map((b: any) => b.name),
+            ...(t.batchSubjects || []).map((bs: any) => bs.batch?.name)
+          ].filter(Boolean).filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i),
+          phone: t.user?.phone || t.phone || '',
+          email: t.user?.email || t.email || ''
+        })));
+      });
     }
 
     if (isAdmin) {
-      promises.push(
-        run(() => api.getStaffList(), (backendStaff) => {
-          if (Array.isArray(backendStaff)) setStaffList(filterDeleted(backendStaff));
-        }),
-        run(() => api.getInquiries(), (backendInq) => {
-          if (!Array.isArray(backendInq)) return;
-          setLeads(filterDeleted(backendInq).map((i: any) => ({
-            id: i.id,
-            studentName: i.student_name || i.name || '',
-            parentName: i.parent_name || '',
-            phone: i.phone,
-            gradeInterest: i.grade_interest || i.class_interest || '',
-            targetClass: i.grade_interest || i.class_interest || '',
-            source: i.source,
-            status: i.status === 'new' ? 'New' : i.status === 'contacted' ? 'Contacted' : i.status === 'admitted' || i.status === 'converted' ? 'Converted' : i.status,
-            followUpDate: i.follow_up_on || '',
-            date: i.created_at ? String(i.created_at).split('T')[0] : ''
-          })));
-        })
-      );
+      await run(() => api.getStaffList(), (backendStaff) => {
+        if (Array.isArray(backendStaff)) setStaffList(filterDeleted(backendStaff));
+      });
+      await run(() => api.getInquiries(), (backendInq) => {
+        if (!Array.isArray(backendInq)) return;
+        setLeads(filterDeleted(backendInq).map((i: any) => ({
+          id: i.id,
+          studentName: i.student_name || i.name || '',
+          parentName: i.parent_name || '',
+          phone: i.phone,
+          gradeInterest: i.grade_interest || i.class_interest || '',
+          targetClass: i.grade_interest || i.class_interest || '',
+          source: i.source,
+          status: i.status === 'new' ? 'New' : i.status === 'contacted' ? 'Contacted' : i.status === 'admitted' || i.status === 'converted' ? 'Converted' : i.status,
+          followUpDate: i.follow_up_on || '',
+          date: i.created_at ? String(i.created_at).split('T')[0] : ''
+        })));
+      });
     }
 
     if (isAdmin || isStudent) {
-      promises.push(
-        run(() => api.getPayments(), (backendPayments) => {
-          if (!Array.isArray(backendPayments)) return;
-          setTransactions(filterDeleted(backendPayments).map((p: any) => ({
-            id: p.id,
-            receiptNo: p.receipt_no,
-            studentId: p.student_id,
-            studentName: p.student?.full_name || '',
-            regNo: p.student?.admission_no || '',
-            amount: p.amount,
-            date: p.paid_at ? String(p.paid_at).split('T')[0] : '',
-            method: p.method,
-            notes: p.note || p.notes
-          })));
-        })
-      );
+      await run(() => api.getPayments(), (backendPayments) => {
+        if (!Array.isArray(backendPayments)) return;
+        setTransactions(filterDeleted(backendPayments).map((p: any) => ({
+          id: p.id,
+          receiptNo: p.receipt_no,
+          studentId: p.student_id,
+          studentName: p.student?.full_name || '',
+          regNo: p.student?.admission_no || '',
+          amount: p.amount,
+          date: p.paid_at ? String(p.paid_at).split('T')[0] : '',
+          method: p.method,
+          notes: p.note || p.notes
+        })));
+      });
     }
-
-    await Promise.all(promises);
   };
+
+  // Full backward compatibility: alias refreshDataFromBackend to staged fetchData
+  const refreshDataFromBackend = fetchData;
+  activeFetchDataInstance = fetchData;
+
+  useEffect(() => {
+    return () => {
+      activeFetchDataInstance = null;
+    };
+  }, []);
 
   useEffect(() => {
     setVisitedTabs(prev => {
@@ -399,8 +446,12 @@ export function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const quiet = (p: Promise<any>) => p.catch(() => null);
+    let idleHandle: any = null;
+
     void (async () => {
-      await refreshDataFromBackend();
+      // Execute staged loader (Stage 1 Core Data -> 50ms Yield -> Stage 2 Secondary Modules)
+      await fetchData();
+
       const today = new Date().toISOString().split('T')[0];
       const now = new Date();
       let y = now.getFullYear();
@@ -408,39 +459,66 @@ export function App() {
       if (m === 0) { m = 12; y -= 1; }
       const priorMonth = `${y}-${String(m).padStart(2, '0')}`;
 
-      const prefetchPromises: Promise<any>[] = [
-        quiet(api.getHomework()),
-        quiet(api.getStudyMaterials()),
-        quiet(api.getTests()),
-        quiet(api.getTimetableSlots()),
-        quiet(api.getLeaves()),
-        quiet(api.getClasses())
-      ];
+      // Stage 3: Lazy Auxiliary Prefetch (wrapped in requestIdleCallback with 1200ms fallback)
+      const runAuxiliaryPrefetch = async () => {
+        const prefetchFns: (() => Promise<any>)[] = [
+          () => api.getHomework(),
+          () => api.getStudyMaterials(),
+          () => api.getTests(),
+          () => api.getTimetableSlots(),
+          () => api.getLeaves(),
+          () => api.getClasses()
+        ];
 
-      if (isAdmin) {
-        prefetchPromises.push(
-          quiet(api.getInvoices()),
-          quiet(api.getExpenses()),
-          quiet(api.getConductDesk()),
-          quiet(api.getWhatsAppTemplates()),
-          quiet(api.getWhatsAppLogs()),
-          quiet(api.getStaffTypes()),
-          quiet(api.getLiveStaffPayrollRegister({ month_period: priorMonth })),
-          quiet(api.getStaffAttendanceRoster({ date: today }))
-        );
-      } else if (isTeacher) {
-        prefetchPromises.push(
-          quiet(api.getConductDesk()),
-          quiet(api.getStaffAttendanceRoster({ date: today }))
-        );
-      } else if (isStudent) {
-        prefetchPromises.push(
-          quiet(api.getInvoices())
-        );
+        if (isAdmin) {
+          prefetchFns.push(
+            () => api.getInvoices(),
+            () => api.getExpenses(),
+            () => api.getConductDesk(),
+            () => api.getWhatsAppTemplates(),
+            () => api.getWhatsAppLogs(),
+            () => api.getStaffTypes(),
+            () => api.getLiveStaffPayrollRegister({ month_period: priorMonth }),
+            () => api.getStaffAttendanceRoster({ date: today })
+          );
+        } else if (isTeacher) {
+          prefetchFns.push(
+            () => api.getConductDesk(),
+            () => api.getStaffAttendanceRoster({ date: today })
+          );
+        } else if (isStudent) {
+          prefetchFns.push(
+            () => api.getInvoices()
+          );
+        }
+
+        // Execute in gentle throttled batches of 2 so pool ceiling (max: 4) is never saturated
+        for (let i = 0; i < prefetchFns.length; i += 2) {
+          const batch = prefetchFns.slice(i, i + 2).map(fn => quiet(fn()));
+          await Promise.all(batch);
+        }
+      };
+
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        idleHandle = (window as any).requestIdleCallback(() => {
+          void runAuxiliaryPrefetch();
+        }, { timeout: 1200 });
+      } else {
+        idleHandle = setTimeout(() => {
+          void runAuxiliaryPrefetch();
+        }, 1200);
       }
-
-      await Promise.all(prefetchPromises);
     })();
+
+    return () => {
+      if (idleHandle) {
+        if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+          (window as any).cancelIdleCallback(idleHandle);
+        } else {
+          clearTimeout(idleHandle);
+        }
+      }
+    };
   }, [isAuthenticated, userRole]);
 
   useEffect(() => {

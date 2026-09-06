@@ -10,7 +10,19 @@ import {
   filterDeleted
 } from '../lib/resourceCache';
 
-const BASE_URL = '/api/v1';
+export const API_BASE_URL: string = (() => {
+  // 1. Explicit Vite Environment Variable Override
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any)?.env : undefined;
+  if (metaEnv?.VITE_API_URL) {
+    return metaEnv.VITE_API_URL;
+  }
+  // 2. Always use same-origin relative path — Cloudflare Pages Function at
+  //    functions/api/[[path]].js proxies /api/* to the Worker on the same domain,
+  //    eliminating all CORS preflight issues and cross-origin fetch failures.
+  return '/api/v1';
+})();
+
+const BASE_URL = API_BASE_URL;
 
 export { peekApiCache };
 
@@ -48,6 +60,8 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
   const method = (options.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
+  const isMutation = method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH';
+  const isAuthRoute = endpoint.startsWith('/auth/');
   const entityId = entityIdFromEndpoint(endpoint);
 
   if (!isGet) {
@@ -62,120 +76,132 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
   const epochAtStart = currentEpoch(endpoint);
 
+  // STRICT RULES:
+  // - Retries are strictly prohibited on mutations (POST, PUT, DELETE, PATCH)
+  // - Retries are strictly prohibited on /auth/ endpoints
+  // - At most ONE optional retry ONLY for idempotent GET requests on network transport failure (after 500ms)
+  const canRetryGetOnNetworkFailure = isGet && !isMutation && !isAuthRoute;
+
   const exec = (async () => {
-  const attempt = async (): Promise<Response> => {
-    return fetch(`${BASE_URL}${endpoint}`, {
-      cache: 'no-store',
-      ...options,
-      headers
-    });
-  };
-  const canAutoRetry = isGet || endpoint.startsWith('/auth/');
-  try {
-    let response: Response;
-    try {
-      response = await attempt();
-    } catch (first) {
-      if (!canAutoRetry) throw first;
-      await new Promise(r => setTimeout(r, 450));
-      response = await attempt();
-    }
+    const attempt = async (): Promise<Response> => {
+      return fetch(`${BASE_URL}${endpoint}`, {
+        cache: 'no-store',
+        ...options,
+        headers
+      });
+    };
 
-    // Auto-retry on ANY 5xx status (500, 502, 503, 504) or edge cold-start
-    if (response.status >= 500 && canAutoRetry) {
-      await new Promise(r => setTimeout(r, 500));
+    try {
+      let response: Response;
       try {
-        const retryResponse = await attempt();
-        if (retryResponse.ok || retryResponse.status < 500) {
-          response = retryResponse;
+        response = await attempt();
+      } catch (firstErr) {
+        if (!canRetryGetOnNetworkFailure) {
+          throw firstErr;
         }
-      } catch {}
-    }
+        // Exactly one retry on network transport failure for idempotent GET after 500ms
+        await new Promise((r) => setTimeout(r, 500));
+        response = await attempt();
+      }
 
-    const contentType = response.headers.get('content-type') || '';
-    let rawText = '';
-    try {
-      rawText = await response.text();
-    } catch {
-      rawText = '';
-    }
-
-    let json: any = null;
-    if (rawText && rawText.trim()) {
+      const contentType = response.headers.get('content-type') || '';
+      let rawText = '';
       try {
-        json = JSON.parse(rawText);
+        rawText = await response.text();
       } catch {
-        json = null;
+        rawText = '';
       }
-    }
 
-    // If body was empty during cold-start on a retryable endpoint, try once more
-    if (!json && canAutoRetry && response.status >= 500) {
-      await new Promise(r => setTimeout(r, 600));
-      try {
-        const retryRes = await attempt();
-        const retryText = await retryRes.text();
-        if (retryText && retryText.trim()) {
-          try {
-            json = JSON.parse(retryText);
-            response = retryRes;
-          } catch {}
+      let json: any = null;
+      if (rawText && rawText.trim()) {
+        try {
+          json = JSON.parse(rawText);
+        } catch {
+          json = null;
         }
-      } catch {}
-    }
-
-    if (!json) {
-      if (response.status >= 500) {
-        throw new Error('Service is temporarily warming up. Please click again in a moment.');
       }
-      throw new Error(`Server returned an unexpected response (${response.status}). Please retry.`);
-    }
 
-    if (!response.ok || !json.success) {
-      if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-      } else if (response.status === 403 && (
-        String(json.error).toLowerCase().includes('suspend') ||
-        String(json.error).toLowerCase().includes('deactivat') ||
-        String(json.error).toLowerCase().includes('revok') ||
-        String(json.error).toLowerCase().includes('inactive')
-      )) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.dispatchEvent(new CustomEvent('auth:session_revoked', { detail: json.error }));
+      if (!response.ok || !json || !json.success) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        } else if (
+          response.status === 403 &&
+          (String(json?.error).toLowerCase().includes('suspend') ||
+            String(json?.error).toLowerCase().includes('deactivat') ||
+            String(json?.error).toLowerCase().includes('revok') ||
+            String(json?.error).toLowerCase().includes('inactive'))
+        ) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.dispatchEvent(new CustomEvent('auth:session_revoked', { detail: json?.error }));
+        }
+
+        if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) {
+          unmarkDeleted(entityId);
+        }
+
+        // If genuine backend error is provided in JSON, surface it directly
+        if (json && typeof json.error === 'string' && json.error.trim()) {
+          throw new Error(json.error);
+        }
+
+        // Truthful, status-aware polite fallback messages when response body is not JSON or has no message
+        switch (response.status) {
+          case 400:
+            throw new Error('Invalid request parameters. Please verify your input.');
+          case 401:
+            throw new Error('Authentication required or session expired. Please sign in again.');
+          case 403:
+            throw new Error('Access denied: You do not have permission to perform this action.');
+          case 404:
+            throw new Error('The requested resource was not found.');
+          case 409:
+            throw new Error('A conflict occurred with an existing record. Please refresh.');
+          case 429:
+            throw new Error('Too many requests. Please slow down and try again shortly.');
+          case 500:
+            throw new Error('An internal server error occurred (HTTP 500). Please try again later.');
+          case 502:
+            throw new Error('Bad Gateway: The API service is currently unreachable (HTTP 502).');
+          case 503:
+            throw new Error('The database connection is temporarily unavailable or busy. Please retry in a few moments.');
+          case 504:
+            throw new Error('Gateway Timeout: The request took too long to complete (HTTP 504).');
+          default:
+            throw new Error(`Server returned an unexpected response (HTTP ${response.status}). Please retry.`);
+        }
       }
-      if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) unmarkDeleted(entityId);
-      throw new Error(json.error || 'API request failed');
-    }
 
-    if (isGet && json.data !== undefined) {
-      const stale = currentEpoch(endpoint) !== epochAtStart;
-      if (stale) {
-        const cached = peekApiCache<T>(endpoint);
-        return (cached !== undefined ? filterDeleted(cached) : filterDeleted(json.data)) as T;
+      if (isGet && json.data !== undefined) {
+        const stale = currentEpoch(endpoint) !== epochAtStart;
+        if (stale) {
+          const cached = peekApiCache<T>(endpoint);
+          return (cached !== undefined ? filterDeleted(cached) : filterDeleted(json.data)) as T;
+        }
+        const cleaned = filterDeleted(json.data);
+        writeApiCache(endpoint, cleaned);
+        return cleaned;
       }
-      const cleaned = filterDeleted(json.data);
-      writeApiCache(endpoint, cleaned);
-      return cleaned;
-    }
 
-    return json.data;
-  } catch (err: any) {
-    if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) unmarkDeleted(entityId);
-    const msg = String(err?.message || err || '');
-    if (
-      msg.includes('Unexpected end of JSON input') ||
-      msg.includes('unreachable') ||
-      msg.includes('Failed to fetch') ||
-      msg.includes('fetch failed') ||
-      msg.includes('NetworkError')
-    ) {
-      throw new Error('The backend service is temporarily warming up. Please click again in a moment.');
+      return json.data;
+    } catch (err: any) {
+      if (method === 'DELETE' && entityId && !/[?&]mode=soft\b/.test(endpoint)) {
+        unmarkDeleted(entityId);
+      }
+      const msg = String(err?.message || err || '');
+      if (
+        msg.includes('Unexpected end of JSON input') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('fetch failed') ||
+        msg.includes('NetworkError') ||
+        msg.includes('network error')
+      ) {
+        throw new Error('Unable to connect to the server. Please check your internet connection or verify the service status.');
+      }
+      throw err;
     }
-    throw err;
-  }
   })();
 
   if (isGet) {
@@ -184,6 +210,9 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
   }
   return exec;
 }
+
+export const request = fetchApi;
+
 
 export const api = {
   getMe: () => fetchApi<{ user: any }>('/auth/me'),
