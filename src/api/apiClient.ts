@@ -80,9 +80,9 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       response = await attempt();
     }
 
-    // Auto-retry on 502/503/504 edge cold-start or temporary isolate reload
-    if (response.status >= 502 && response.status <= 504) {
-      await new Promise(r => setTimeout(r, 500));
+    // Auto-retry on ANY 5xx status (500, 502, 503, 504) or edge cold-start
+    if (response.status >= 500) {
+      await new Promise(r => setTimeout(r, 450));
       try {
         const retryResponse = await attempt();
         if (retryResponse.ok || retryResponse.status < 500) {
@@ -93,10 +93,10 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      if (response.status >= 502 && response.status <= 504) {
-        throw new Error('Service is temporarily warming up or reconnecting. Please click again in a moment.');
+      if (response.status >= 500) {
+        throw new Error('Service is temporarily reconnecting. Please click again in a moment.');
       }
-      throw new Error(`Server returned non-JSON response (${response.status})`);
+      throw new Error(`Server returned an unexpected response (${response.status}). Please retry.`);
     }
 
     const json = await response.json();

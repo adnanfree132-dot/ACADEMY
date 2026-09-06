@@ -36,14 +36,35 @@ export async function onRequest(context) {
 
   try {
     let res = await doFetch();
-    // If backend returns 502/503 during cold-start or isolate recycling, perform one fast retry
-    if (res.status === 502 || res.status === 503) {
-      await new Promise(r => setTimeout(r, 400));
+    let contentType = res.headers.get('content-type') || '';
+
+    // If backend returns ANY 5xx status (500, 502, 503, 504) or non-JSON during cold-start, auto-retry once
+    if (res.status >= 500 || (res.status >= 400 && !contentType.includes('application/json'))) {
+      await new Promise(r => setTimeout(r, 450));
       try {
         const retryRes = await doFetch();
-        if (retryRes.ok || retryRes.status < 500) return retryRes;
+        const retryType = retryRes.headers.get('content-type') || '';
+        if (retryRes.ok || retryType.includes('application/json')) {
+          res = retryRes;
+          contentType = retryType;
+        }
       } catch {}
     }
+
+    // If the response is still non-JSON or a 5xx error, sanitize it to valid JSON so the UI never receives HTML
+    if (!contentType.includes('application/json') && res.status >= 400) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'The backend service is temporarily reconnecting. Please click again.'
+      }), {
+        status: 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
     return res;
   } catch (err) {
     return new Response(JSON.stringify({
