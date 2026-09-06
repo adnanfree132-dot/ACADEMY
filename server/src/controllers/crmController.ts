@@ -20,7 +20,42 @@ function mapInquiry(row: any) {
 
 export async function listInquiries(_req: AuthenticatedRequest, res: Response) {
   try {
+    const isSuperAdmin = _req.user?.role === 'super_admin';
+    const academyId = _req.user?.academyId || 'default-academy-id';
+
+    let whereClause: any = {};
+    if (!isSuperAdmin) {
+      const inqLogs = await prisma.auditLog.findMany({
+        where: {
+          action: 'CREATE_INQUIRY',
+          entity: 'Inquiry',
+          user: { academy_id: academyId }
+        },
+        select: { entity_id: true }
+      }).catch(() => []);
+      const createdInqIds = inqLogs.map(l => l.entity_id);
+
+      if (academyId === 'default-academy-id') {
+        const defaultStudents = await prisma.student.findMany({
+          where: { user: { academy_id: 'default-academy-id' } },
+          select: { id: true }
+        });
+        whereClause = {
+          OR: [
+            { id: { in: createdInqIds } },
+            { student_id: null },
+            { student_id: { in: defaultStudents.map(s => s.id) } }
+          ]
+        };
+      } else {
+        whereClause = {
+          id: { in: createdInqIds }
+        };
+      }
+    }
+
     const rows = await prisma.inquiry.findMany({
+      where: whereClause,
       include: { followUps: { orderBy: { created_at: 'desc' } } },
       orderBy: { created_at: 'desc' }
     });

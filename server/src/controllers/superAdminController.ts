@@ -911,6 +911,31 @@ export async function getSuperAdminAcademies(req: AuthenticatedRequest, res: Res
 
     const now = new Date();
 
+    const academyIds = academies.map(ac => ac.id);
+    const users = await prisma.user.findMany({
+      where: { academy_id: { in: academyIds } },
+      select: {
+        id: true,
+        academy_id: true,
+        students: { select: { id: true } },
+        staffMember: { select: { id: true } }
+      }
+    });
+
+    const statsMap: Record<string, { studentsCount: number; staffCount: number; usersCount: number }> = {};
+    for (const ac of academies) {
+      statsMap[ac.id] = { studentsCount: 0, staffCount: 0, usersCount: 0 };
+    }
+    for (const u of users) {
+      if (u.academy_id && statsMap[u.academy_id]) {
+        statsMap[u.academy_id].usersCount += 1;
+        statsMap[u.academy_id].studentsCount += u.students.length;
+        if (u.staffMember) {
+          statsMap[u.academy_id].staffCount += 1;
+        }
+      }
+    }
+
     const formatted = academies.map((ac) => {
       const daysRemaining = getDaysRemaining(ac.trial_ends_at);
       const isTrialOver = ac.subscription_status === 'trial' && new Date(ac.trial_ends_at) < now;
@@ -921,12 +946,22 @@ export async function getSuperAdminAcademies(req: AuthenticatedRequest, res: Res
         : ac.subscription_status;
 
       const adminUser = ac.users[0] || null;
+      const academyStats = statsMap[ac.id] || { studentsCount: 0, staffCount: 0, usersCount: 0 };
+      const ownerObj = adminUser ? {
+        id: adminUser.id,
+        full_name: adminUser.full_name,
+        fullName: adminUser.full_name,
+        username: adminUser.full_name,
+        email: adminUser.email || '',
+        phone: adminUser.phone || ''
+      } : null;
 
       return {
         id: ac.id,
         name: ac.name,
         slug: ac.slug,
         logoUrl: ac.logo_url,
+        logo_url: ac.logo_url,
         phone: ac.phone,
         email: ac.email,
         address: ac.address,
@@ -937,15 +972,14 @@ export async function getSuperAdminAcademies(req: AuthenticatedRequest, res: Res
         trialEndsAt: ac.trial_ends_at,
         trial_ends_at: ac.trial_ends_at,
         daysRemaining: effectiveStatus === 'active' ? 999 : daysRemaining,
+        days_remaining: effectiveStatus === 'active' ? 999 : daysRemaining,
         isActive: ac.is_active,
+        is_active: ac.is_active,
         createdAt: ac.created_at,
         created_at: ac.created_at,
-        adminUser: adminUser ? {
-          id: adminUser.id,
-          fullName: adminUser.full_name,
-          email: adminUser.email,
-          phone: adminUser.phone
-        } : null
+        adminUser: ownerObj,
+        owner: ownerObj,
+        stats: academyStats
       };
     });
 
@@ -1007,7 +1041,9 @@ export async function extendAcademyTrial(req: AuthenticatedRequest, res: Respons
       trialEndsAt: updated.trial_ends_at,
       trial_ends_at: updated.trial_ends_at,
       daysRemaining,
+      days_remaining: daysRemaining,
       isActive: updated.is_active,
+      is_active: updated.is_active,
       message: `Trial successfully extended until ${updated.trial_ends_at.toISOString().split('T')[0]}`
     });
   } catch (err: any) {
@@ -1073,7 +1109,9 @@ export async function revokeAcademyAccess(req: AuthenticatedRequest, res: Respon
       subscriptionStatus: updated.subscription_status,
       subscription_status: updated.subscription_status,
       daysRemaining,
+      days_remaining: daysRemaining,
       isActive: updated.is_active,
+      is_active: updated.is_active,
       message: shouldRevoke ? 'Academy access has been revoked.' : 'Academy access has been restored.'
     });
   } catch (err: any) {

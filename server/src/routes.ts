@@ -389,28 +389,37 @@ router.get('/students', authenticateJwt, requireModulePermission('students', 'vi
       return sendSuccess(res, []);
     }
 
-    const students = await prisma.student.findMany({
-      where: {
-        status: status ? (status as string) : undefined,
-        class_id: classId ? (classId as string) : undefined,
-        ...(teacherBatchIds !== null
-          ? {
-              enrollments: {
-                some: {
-                  batch_id: { in: teacherBatchIds },
-                  status: 'active'
-                }
+    const isSuperAdmin = req.user?.role === 'super_admin';
+    const academyId = req.user?.academyId || 'default-academy-id';
+
+    const whereClause: any = {
+      status: status ? (status as string) : undefined,
+      class_id: classId ? (classId as string) : undefined,
+      ...(teacherBatchIds !== null
+        ? {
+            enrollments: {
+              some: {
+                batch_id: { in: teacherBatchIds },
+                status: 'active'
               }
             }
-          : {}),
-        OR: q
-          ? [
-              { full_name: { contains: q as string, mode: 'insensitive' as const } },
-              { admission_no: { contains: q as string, mode: 'insensitive' as const } },
-              { phone: { contains: q as string, mode: 'insensitive' as const } }
-            ]
-          : undefined
-      },
+          }
+        : {}),
+      OR: q
+        ? [
+            { full_name: { contains: q as string, mode: 'insensitive' as const } },
+            { admission_no: { contains: q as string, mode: 'insensitive' as const } },
+            { phone: { contains: q as string, mode: 'insensitive' as const } }
+          ]
+        : undefined
+    };
+
+    if (!isSuperAdmin) {
+      whereClause.user = { academy_id: academyId };
+    }
+
+    const students = await prisma.student.findMany({
+      where: whereClause,
       include: {
         class: true,
         feePlan: true,
@@ -519,12 +528,30 @@ router.post('/students', authenticateJwt, requireModulePermission('students', 'e
       ...(parentName ? { parentName } : {})
     };
 
+    const targetAcademyId = req.user?.academyId || 'default-academy-id';
+    const studentEmail = email || `${name.toLowerCase().replace(/\s+/g, '.')}.${Date.now()}@academiapro.edu`;
+    const defaultStudentPassword = await bcrypt.hash('student123', 10);
+
+    const studentUser = await prisma.user.create({
+      data: {
+        academy_id: targetAcademyId,
+        role: 'student',
+        full_name: name,
+        email: studentEmail,
+        phone: phone || null,
+        password_hash: defaultStudentPassword,
+        must_change_password: true,
+        is_active: true
+      }
+    });
+
     const student = await prisma.student.create({
       data: {
+        user_id: studentUser.id,
         admission_no: admissionNo,
         full_name: name,
         phone,
-        email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+        email: studentEmail,
         gender: gender || 'Male',
         admitted_on: parseDateIso(admittedDateStr),
         photo_url: photoUrl || photo_url || null,
@@ -1344,9 +1371,17 @@ router.get('/teachers', authenticateJwt, (req: AuthenticatedRequest, res, next) 
   const isTeacherRole = req.user?.role === 'teacher' || req.user?.role === 'faculty';
   if (isTeacherRole) return next();
   return requireModulePermission('teachers', 'view_only')(req, res, next);
-}, async (req, res) => {
+}, async (req: AuthenticatedRequest, res) => {
   try {
+    const isSuperAdmin = req.user?.role === 'super_admin';
+    const academyId = req.user?.academyId || 'default-academy-id';
+    const where: any = {};
+    if (!isSuperAdmin) {
+      where.user = { academy_id: academyId };
+    }
+
     const teachers = await prisma.teacher.findMany({
+      where,
       include: {
         user: true,
         batches: { select: { id: true, name: true } },
@@ -1363,6 +1398,7 @@ router.post('/teachers', authenticateJwt, requireModulePermission('teachers', 'e
   try {
     const { fullName, email, phone, qualification } = req.body;
     const defaultPassword = await bcrypt.hash('teacher123', 10);
+    const academyId = req.user?.academyId || 'default-academy-id';
 
     const user = await prisma.user.create({
       data: {
@@ -1370,6 +1406,7 @@ router.post('/teachers', authenticateJwt, requireModulePermission('teachers', 'e
         full_name: fullName,
         email,
         phone,
+        academy_id: academyId,
         password_hash: defaultPassword
       }
     });
@@ -1567,6 +1604,25 @@ router.get('/batches', authenticateJwt, requireModulePermission('batches', 'view
           tId ? { teacher_id: tId } : {},
           tId ? { batchSubjects: { some: { teacher_id: tId } } } : {}
         ].filter(c => Object.keys(c).length > 0)
+      };
+    } else if (req.user?.role !== 'super_admin') {
+      const academyId = req.user?.academyId || 'default-academy-id';
+      const batchLogs = await prisma.auditLog.findMany({
+        where: {
+          action: 'CREATE_BATCH',
+          entity: 'Batch',
+          user: { academy_id: academyId }
+        },
+        select: { entity_id: true }
+      }).catch(() => []);
+      const createdBatchIds = batchLogs.map(l => l.entity_id);
+      whereCondition = {
+        is_active: true,
+        OR: [
+          ...(createdBatchIds.length > 0 ? [{ id: { in: createdBatchIds } }] : []),
+          { teacher: { user: { academy_id: academyId } } },
+          { enrollments: { some: { student: { user: { academy_id: academyId } } } } }
+        ]
       };
     }
 

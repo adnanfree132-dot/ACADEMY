@@ -332,7 +332,50 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
     }
 
     // 3. Admin Full Institutional Dashboard
+    const isSuperAdmin = _req.user?.role === 'super_admin';
+    const academyId = _req.user?.academyId || 'default-academy-id';
+
     const settings = await readSettingsMap();
+
+    // Determine tenant batches & user IDs
+    let createdBatchIds: string[] = [];
+    let academyUserIds: string[] = [];
+    if (!isSuperAdmin) {
+      const [batchLogs, academyUsers] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: {
+            action: 'CREATE_BATCH',
+            entity: 'Batch',
+            user: { academy_id: academyId }
+          },
+          select: { entity_id: true }
+        }).catch(() => []),
+        prisma.user.findMany({
+          where: { academy_id: academyId },
+          select: { id: true }
+        }).catch(() => [])
+      ]);
+      createdBatchIds = batchLogs.map(l => l.entity_id);
+      academyUserIds = academyUsers.map(u => u.id);
+    }
+
+    const tenantBatchWhere: any = isSuperAdmin ? { is_active: true } : {
+      is_active: true,
+      OR: [
+        ...(createdBatchIds.length > 0 ? [{ id: { in: createdBatchIds } }] : []),
+        { teacher: { user: { academy_id: academyId } } },
+        { enrollments: { some: { student: { user: { academy_id: academyId } } } } }
+      ]
+    };
+
+    const tenantStudentWhere: any = isSuperAdmin ? { status: 'active' } : {
+      status: 'active',
+      user: { academy_id: academyId }
+    };
+
+    const tenantTeacherWhere: any = isSuperAdmin ? {} : {
+      user: { academy_id: academyId }
+    };
 
     // Chunk queries into 3 bounded batches to prevent database pool exhaustion in Cloudflare Workers
     const [
@@ -343,22 +386,30 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
       monthCollectedAgg,
       invoiceNetAgg
     ] = await Promise.all([
-      prisma.student.count({ where: { status: 'active' } }),
-      prisma.teacher.count(),
-      prisma.batch.count({ where: { is_active: true } }),
+      prisma.student.count({ where: tenantStudentWhere }),
+      prisma.teacher.count({ where: tenantTeacherWhere }),
+      prisma.batch.count({ where: tenantBatchWhere }),
       prisma.feePayment.aggregate({
-        where: { voided_at: null, cleared_status: 'cleared' },
+        where: {
+          voided_at: null,
+          cleared_status: 'cleared',
+          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
+        },
         _sum: { amount: true }
       }),
       prisma.feePayment.aggregate({
         where: {
           voided_at: null,
           cleared_status: 'cleared',
-          paid_at: { gte: monthStart, lt: monthEnd }
+          paid_at: { gte: monthStart, lt: monthEnd },
+          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
         },
         _sum: { amount: true }
       }),
-      prisma.feeInvoice.aggregate({ _sum: { net_amount: true } })
+      prisma.feeInvoice.aggregate({
+        where: isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } },
+        _sum: { net_amount: true }
+      })
     ]);
 
     const [
@@ -368,17 +419,27 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
       followUps,
       activeBatches
     ] = await Promise.all([
-      prisma.attendance.findMany({ where: { date: todayStr }, select: { batch_id: true, status: true } }),
+      prisma.attendance.findMany({
+        where: {
+          date: todayStr,
+          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
+        },
+        select: { batch_id: true, status: true }
+      }),
       prisma.feeInvoice.findMany({
         where: {
           status: { in: ['unpaid', 'partial', 'overdue'] },
-          due_date: { lt: todayStr }
+          due_date: { lt: todayStr },
+          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
         },
         distinct: ['student_id'],
         select: { student_id: true }
       }),
       prisma.timetableSlot.findMany({
-        where: { day: weekday },
+        where: {
+          day: weekday,
+          ...(isSuperAdmin ? {} : { batch: tenantBatchWhere })
+        },
         include: {
           batch: { select: { id: true, name: true } },
           subject: { select: { name: true } },
@@ -393,13 +454,18 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
             { follow_up_on: { not: null } },
             { follow_up_on: { not: '' } },
             { follow_up_on: { lte: todayStr } }
-          ]
+          ],
+          ...(isSuperAdmin ? {} : (
+            academyId === 'default-academy-id'
+              ? {}
+              : { student_id: { in: (await prisma.student.findMany({ where: { user: { academy_id: academyId } }, select: { id: true } })).map(s => s.id) } }
+          ))
         },
         orderBy: { follow_up_on: 'asc' },
         take: 12
       }),
       prisma.batch.findMany({
-        where: { is_active: true },
+        where: tenantBatchWhere,
         select: {
           id: true,
           name: true,
@@ -415,7 +481,10 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
       recentInquiries
     ] = await Promise.all([
       prisma.test.findMany({
-        where: { exam_date: { gte: todayStr } },
+        where: {
+          exam_date: { gte: todayStr },
+          ...(isSuperAdmin ? {} : { batch: tenantBatchWhere })
+        },
         include: {
           batch: { select: { name: true, _count: { select: { enrollments: true } } } },
           subject: { select: { name: true } },
@@ -425,15 +494,31 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         take: 20
       }),
       prisma.expense.aggregate({
-        where: { month_period: period },
+        where: {
+          month_period: period,
+          ...(isSuperAdmin ? {} : { staffMember: { user: { academy_id: academyId } } })
+        },
         _sum: { amount: true }
       }),
       prisma.announcement.findMany({
+        where: isSuperAdmin ? {} : {
+          OR: [
+            { created_by: { in: academyUserIds } },
+            ...(academyId === 'default-academy-id' ? [{ created_by: 'admin-id' }] : [])
+          ]
+        },
         orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }],
         take: 4
       }),
       prisma.inquiry.findMany({
-        where: { status: { notIn: ['converted', 'lost'] } },
+        where: {
+          status: { notIn: ['converted', 'lost'] },
+          ...(isSuperAdmin ? {} : (
+            academyId === 'default-academy-id'
+              ? {}
+              : { student_id: { in: (await prisma.student.findMany({ where: { user: { academy_id: academyId } }, select: { id: true } })).map(s => s.id) } }
+          ))
+        },
         orderBy: { created_at: 'desc' },
         take: 8
       })

@@ -76,18 +76,23 @@ export function canonicalizeModuleKey(rawKey: string): string {
  */
 export async function getAcademyDataForUser(user: any, staffMember?: any) {
   try {
-    const targetAcademyId = user?.academy_id || staffMember?.user?.academy_id || 'default-academy-id';
-    let academy = await prisma.academy.findFirst({
-      where: {
-        OR: [
-          { id: targetAcademyId },
-          { slug: 'apex-academy' }
-        ]
-      }
-    });
+    const targetAcademyId = user?.academy_id || staffMember?.user?.academy_id;
+    let academy = null;
 
-    if (!academy) {
-      academy = await prisma.academy.findFirst();
+    if (targetAcademyId) {
+      academy = await prisma.academy.findUnique({
+        where: { id: targetAcademyId }
+      });
+    }
+
+    // Only fall back if user has no assigned academy_id
+    if (!academy && !targetAcademyId) {
+      academy = await prisma.academy.findFirst({
+        where: { slug: 'apex-academy' }
+      });
+      if (!academy) {
+        academy = await prisma.academy.findFirst();
+      }
     }
 
     if (!academy) return null;
@@ -111,7 +116,8 @@ export async function getAcademyDataForUser(user: any, staffMember?: any) {
       trial_ends_at: academy.trial_ends_at,
       daysLeft: effectiveStatus === 'active' ? 999 : daysLeft,
       daysRemaining: effectiveStatus === 'active' ? 999 : daysLeft,
-      isActive: academy.is_active
+      isActive: academy.is_active,
+      is_active: academy.is_active
     };
   } catch {
     return null;

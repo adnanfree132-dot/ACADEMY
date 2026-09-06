@@ -83,7 +83,19 @@ export const SuperAdminDashboardView: React.FC = () => {
         api.getSuperAdminAcademies().catch(() => [])
       ]);
       if (statsData) setStats(statsData);
-      if (academiesData) setAcademies(academiesData);
+      if (academiesData) {
+        const normalized = academiesData.map((a: any) => ({
+          ...a,
+          is_active: a.is_active !== undefined ? a.is_active : (a.isActive ?? true),
+          isActive: a.isActive !== undefined ? a.isActive : (a.is_active ?? true),
+          days_remaining: a.days_remaining !== undefined ? a.days_remaining : (a.daysRemaining ?? 0),
+          daysRemaining: a.daysRemaining !== undefined ? a.daysRemaining : (a.days_remaining ?? 0),
+          subscription_status: a.subscription_status || a.subscriptionStatus || 'trial',
+          owner: a.owner || a.adminUser || null,
+          stats: a.stats || { studentsCount: 0, staffCount: 0, usersCount: 0 }
+        }));
+        setAcademies(normalized);
+      }
     } catch (err) {
       console.error('Failed to load super admin data:', err);
     } finally {
@@ -165,8 +177,10 @@ export const SuperAdminDashboardView: React.FC = () => {
   };
 
   const handleToggleRevoke = async (academy: AcademyRecord) => {
-    const isCurrentlyRevoked = academy.subscription_status === 'revoked' || !academy.is_active;
+    const isActive = academy.is_active !== undefined ? academy.is_active : ((academy as any).isActive ?? true);
+    const isCurrentlyRevoked = academy.subscription_status === 'revoked' || !isActive;
     const willRevoke = !isCurrentlyRevoked;
+    const daysRemaining = academy.days_remaining ?? (academy as any).daysRemaining ?? 0;
 
     // 1. Instant 0ms Optimistic UI Reflection
     setAcademies(prev => prev.map(a => {
@@ -174,7 +188,8 @@ export const SuperAdminDashboardView: React.FC = () => {
         return {
           ...a,
           is_active: !willRevoke,
-          subscription_status: willRevoke ? 'revoked' : (a.days_remaining > 0 ? 'trial' : 'expired')
+          isActive: !willRevoke,
+          subscription_status: willRevoke ? 'revoked' : (daysRemaining > 0 ? 'trial' : 'expired')
         };
       }
       return a;
@@ -186,7 +201,7 @@ export const SuperAdminDashboardView: React.FC = () => {
         revokedAcademies: willRevoke ? stats.revokedAcademies + 1 : Math.max(0, stats.revokedAcademies - 1),
         activeTrials: willRevoke 
           ? (academy.subscription_status === 'trial' ? Math.max(0, stats.activeTrials - 1) : stats.activeTrials)
-          : (academy.days_remaining > 0 ? stats.activeTrials + 1 : stats.activeTrials)
+          : (daysRemaining > 0 ? stats.activeTrials + 1 : stats.activeTrials)
       });
     }
 
@@ -209,7 +224,7 @@ export const SuperAdminDashboardView: React.FC = () => {
       `"${a.owner?.email || ''}"`,
       `"${a.owner?.phone || a.phone || ''}"`,
       `"${a.subscription_status}"`,
-      a.days_remaining,
+      a.days_remaining ?? (a as any).daysRemaining ?? 0,
       `"${a.trial_started_at ? a.trial_started_at.split('T')[0] : ''}"`,
       `"${a.trial_ends_at ? a.trial_ends_at.split('T')[0] : ''}"`,
       a.stats?.studentsCount ?? 0,
@@ -236,11 +251,15 @@ export const SuperAdminDashboardView: React.FC = () => {
 
     if (!matchesSearch) return false;
 
+    const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+    const daysRemaining = a.days_remaining ?? (a as any).daysRemaining ?? 0;
+    const isRevoked = a.subscription_status === 'revoked' || !isActive;
+
     if (statusFilter === 'all') return true;
-    if (statusFilter === 'active') return a.subscription_status === 'active';
-    if (statusFilter === 'trial') return a.subscription_status === 'trial' && a.days_remaining > 0;
-    if (statusFilter === 'expired') return a.subscription_status === 'expired' || a.days_remaining <= 0;
-    if (statusFilter === 'revoked') return a.subscription_status === 'revoked' || !a.is_active;
+    if (statusFilter === 'active') return !isRevoked && a.subscription_status === 'active';
+    if (statusFilter === 'trial') return !isRevoked && a.subscription_status === 'trial' && daysRemaining > 0;
+    if (statusFilter === 'expired') return !isRevoked && (a.subscription_status === 'expired' || daysRemaining <= 0);
+    if (statusFilter === 'revoked') return isRevoked;
 
     return true;
   });
@@ -368,7 +387,11 @@ export const SuperAdminDashboardView: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>
-            {stats?.activeTrials ?? academies.filter(a => a.subscription_status === 'trial' && a.days_remaining > 0).length}
+            {stats?.activeTrials ?? academies.filter(a => {
+              const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+              const days = a.days_remaining ?? (a as any).daysRemaining ?? 0;
+              return isActive && a.subscription_status === 'trial' && days > 0;
+            }).length}
           </div>
           <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
             In evaluation window
@@ -383,7 +406,11 @@ export const SuperAdminDashboardView: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: 26, fontWeight: 800, color: '#DC2626' }}>
-            {stats?.expiredTrials ?? academies.filter(a => a.subscription_status === 'expired' || a.days_remaining <= 0).length}
+            {stats?.expiredTrials ?? academies.filter(a => {
+              const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+              const days = a.days_remaining ?? (a as any).daysRemaining ?? 0;
+              return isActive && (a.subscription_status === 'expired' || days <= 0);
+            }).length}
           </div>
           <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
             Requires trial extension
@@ -398,7 +425,10 @@ export const SuperAdminDashboardView: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: 26, fontWeight: 800, color: '#E11D48' }}>
-            {stats?.revokedAcademies ?? academies.filter(a => a.subscription_status === 'revoked' || !a.is_active).length}
+            {stats?.revokedAcademies ?? academies.filter(a => {
+              const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+              return a.subscription_status === 'revoked' || !isActive;
+            }).length}
           </div>
           <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 4 }}>
             Suspended or blocked
@@ -524,10 +554,12 @@ export const SuperAdminDashboardView: React.FC = () => {
                 </tr>
               ) : (
                 filteredAcademies.map(a => {
-                  const isRevoked = a.subscription_status === 'revoked' || !a.is_active;
-                  const isExpired = a.subscription_status === 'expired' || a.days_remaining <= 0;
-                  const isActiveSub = a.subscription_status === 'active';
-                  const isTrial = a.subscription_status === 'trial' && a.days_remaining > 0;
+                  const isActive = a.is_active !== undefined ? a.is_active : ((a as any).isActive ?? true);
+                  const daysRemaining = a.days_remaining ?? (a as any).daysRemaining ?? 0;
+                  const isRevoked = a.subscription_status === 'revoked' || !isActive;
+                  const isExpired = !isRevoked && (a.subscription_status === 'expired' || daysRemaining <= 0);
+                  const isActiveSub = !isRevoked && a.subscription_status === 'active';
+                  const isTrial = !isRevoked && a.subscription_status === 'trial' && daysRemaining > 0;
 
                   return (
                     <tr 
@@ -636,12 +668,12 @@ export const SuperAdminDashboardView: React.FC = () => {
                               borderRadius: 9999,
                               fontSize: 11.5,
                               fontWeight: 700,
-                              background: a.days_remaining <= 7 ? '#FFFBEB' : '#ECFDF5',
-                              color: a.days_remaining <= 7 ? '#B45309' : '#047857',
-                              border: a.days_remaining <= 7 ? '1px solid #FDE68A' : '1px solid #A7F3D0'
+                              background: daysRemaining <= 7 ? '#FFFBEB' : '#ECFDF5',
+                              color: daysRemaining <= 7 ? '#B45309' : '#047857',
+                              border: daysRemaining <= 7 ? '1px solid #FDE68A' : '1px solid #A7F3D0'
                             }}
                           >
-                            <Clock size={12} /> {a.days_remaining} Days Remaining
+                            <Clock size={12} /> {daysRemaining} Days Remaining
                           </span>
                         ) : (
                           <span 

@@ -103,6 +103,12 @@ export async function getStaffList(req: Request, res: Response) {
       })
     };
 
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'super_admin') {
+      const academyId = (req as any).user?.academyId || 'default-academy-id';
+      where.user = { academy_id: academyId };
+    }
+
     const take = Math.min(Math.max(1, parseInt(limit as string, 10) || 50), 200);
     const skip = (Math.max(1, parseInt(page as string, 10) || 1) - 1) * take;
 
@@ -296,17 +302,21 @@ export async function registerStaff(req: AuthenticatedRequest, res: Response) {
           throw new Error('User already has an active staff profile.');
         }
 
+        const academyId = req.user?.academyId || 'default-academy-id';
         user = await tx.user.update({
           where: { id: user.id },
           data: {
             role: userRole === 'admin' ? 'admin' : user.role,
             full_name: data.fullName,
+            ...(!user.academy_id ? { academy_id: academyId } : {}),
             is_active: data.status === 'active' || data.status === 'probation'
           }
         });
       } else {
+        const academyId = req.user?.academyId || 'default-academy-id';
         user = await tx.user.create({
           data: {
+            academy_id: academyId,
             role: userRole,
             full_name: data.fullName,
             email: data.email || null,
