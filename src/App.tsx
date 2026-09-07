@@ -217,6 +217,16 @@ export function App() {
     }
     setIsLoadingSecondary(true);
 
+    // SKELETON SAFETY NET: Force-clear all loading states after 4 seconds.
+    // On Cloudflare Worker cold starts the backend can take 12-25s to respond.
+    // Rather than showing infinite skeleton shimmer, we show the empty dashboard
+    // with zeros — then the real data fills in silently when it finally arrives.
+    const skeletonSafetyTimer = setTimeout(() => {
+      setIsLoadingCore(false);
+      setIsLoadingStudents(false);
+      setIsLoadingSecondary(false);
+    }, 4000);
+
     const run = async (loader: () => Promise<any>, onData: (value: any) => void) => {
       try {
         const value = await loader();
@@ -320,6 +330,7 @@ export function App() {
       await Promise.all([loadDashboard, loadStudents, loadBatches]);
     } finally {
       // Ensure all loading states are cleanly turned off
+      clearTimeout(skeletonSafetyTimer);
       setIsLoadingStudents(false);
       setIsLoadingCore(false);
     }

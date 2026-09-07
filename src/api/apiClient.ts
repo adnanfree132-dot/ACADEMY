@@ -114,6 +114,13 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
         response = await attempt();
       }
 
+      // Auto-retry once on 503 (DB busy) or 504 (timeout) for idempotent GETs.
+      // This handles Cloudflare Worker cold-start timeouts transparently.
+      if (canRetryGetOnNetworkFailure && (response.status === 503 || response.status === 504)) {
+        await new Promise((r) => setTimeout(r, 1500));
+        response = await attempt();
+      }
+
       const contentType = response.headers.get('content-type') || '';
       let rawText = '';
       try {

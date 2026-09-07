@@ -34,6 +34,26 @@ async function getHandler(): Promise<{ fetch: (request: Request, env?: unknown, 
 }
 
 export default {
+  // Cron keepalive: runs every 4 minutes to prevent cold starts.
+  // Fires a lightweight DB ping so the Worker isolate stays warm and
+  // subsequent user requests avoid the 12-25s TCP+TLS handshake.
+  async scheduled(_event: unknown, env: unknown, _ctx: unknown): Promise<void> {
+    try {
+      if (env && typeof env === 'object') {
+        Object.assign(process.env, env);
+      }
+      forceCloudflarePg();
+      // Import prisma lazily and run a trivial query to warm the connection pool
+      const { getPrismaInstance, ensureCleanPoolState } = await import('./prisma');
+      ensureCleanPoolState();
+      const instance = getPrismaInstance();
+      await instance.client.$queryRawUnsafe('SELECT 1');
+      console.log('✅ [Cron Keepalive] Pool warmed successfully');
+    } catch (err: any) {
+      console.warn('⚠️ [Cron Keepalive] Warmup query failed:', err?.message || err);
+    }
+  },
+
   async fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> {
     if (env && typeof env === 'object') {
       Object.assign(process.env, env);
@@ -58,11 +78,11 @@ export default {
       let timer: any;
       const timeoutPromise = new Promise<Response>((_, reject) => {
         timer = setTimeout(() => {
-          const timeoutErr: any = new Error('The request timed out after 25s waiting for the backend service.');
+          const timeoutErr: any = new Error('The request timed out after 45s waiting for the backend service.');
           timeoutErr.name = 'TimeoutError';
           timeoutErr.status = 504;
           reject(timeoutErr);
-        }, 25000);
+        }, 45000);
       });
 
       return await Promise.race([h.fetch(request, env, ctx), timeoutPromise]).finally(() => clearTimeout(timer));
