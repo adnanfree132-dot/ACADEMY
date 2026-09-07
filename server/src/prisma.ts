@@ -82,9 +82,9 @@ let lastActiveTimestamp = Date.now();
 
 export function ensureCleanPoolState(): void {
   const now = Date.now();
-  // If more than 1000ms elapsed since the last query/request, the Cloudflare Worker isolate was likely frozen.
+  // If more than 30s elapsed since the last query/request, the Cloudflare Worker isolate was likely frozen.
   // Any idle sockets created before the freeze are dead on the wire and must be discarded.
-  if (now - lastActiveTimestamp > 1000 && cachedInstance?.pool) {
+  if (now - lastActiveTimestamp > 30000 && cachedInstance?.pool) {
     drainIdleClients(cachedInstance.pool);
   }
   lastActiveTimestamp = now;
@@ -110,6 +110,12 @@ export function resolveDatabaseConfig(): { connectionString: string; maxConnecti
   let url = process.env.DATABASE_URL || process.env.DIRECT_URL || '';
   if (!url) {
     throw new DatabaseConnectionError('Database configuration missing. DATABASE_URL is not set.');
+  }
+
+  // Mandatory for Supabase serverless/edge: port 6543 is transaction mode with PgBouncer.
+  // Port 5432 is session mode which exhausts connections and causes 15s-25s connection queue hangs.
+  if (url.includes('pooler.supabase.com:5432')) {
+    url = url.replace('pooler.supabase.com:5432', 'pooler.supabase.com:6543');
   }
 
   const isPgBouncer = url.includes(':6543') || url.includes('pgbouncer=true') || process.env.USE_PGBOUNCER === 'true';
@@ -141,7 +147,7 @@ export function createPrismaInstance(): PrismaInstance {
     const poolConfig: PoolConfig = {
       connectionString,
       max: maxConnections,
-      idleTimeoutMillis: 1000, // Close idle connections within 1s so isolate freezes don't trap dead sockets
+      idleTimeoutMillis: 20000, // Keep connection alive for 20s so subsequent queries reuse warm socket
       connectionTimeoutMillis: 6000,
       allowExitOnIdle: true,
       ssl: useSsl ? { rejectUnauthorized: false } : false
@@ -207,8 +213,15 @@ export async function executeWithResilience<T>(fn: (client: PrismaClient) => Pro
 }
 
 // Request-scoped pool health validation: ensures no stale isolate-freeze sockets are reused
-export function attachRequestPrisma(_req: Request, _res: Response, next: NextFunction) {
-  ensureCleanPoolState();
+export function attachRequestPrisma(_req: Request, res: Response, next: NextFunction) {
+  if (cachedInstance?.pool) {
+    drainIdleClients(cachedInstance.pool);
+  }
+  res.on('finish', () => {
+    if (cachedInstance?.pool) {
+      drainIdleClients(cachedInstance.pool);
+    }
+  });
   next();
 }
 

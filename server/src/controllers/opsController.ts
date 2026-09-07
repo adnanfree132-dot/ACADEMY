@@ -33,10 +33,16 @@ function parseSettingValue(raw: string) {
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
+let cachedSettings: { map: Record<string, any>; expiry: number } | null = null;
+
 async function readSettingsMap(): Promise<Record<string, any>> {
-  const rows = await prisma.appSetting.findMany();
+  if (cachedSettings && cachedSettings.expiry > Date.now()) {
+    return cachedSettings.map;
+  }
+  const rows = await prisma.appSetting.findMany().catch(() => []);
   const map: Record<string, any> = {};
   rows.forEach(s => { map[s.key] = parseSettingValue(s.value); });
+  cachedSettings = { map, expiry: Date.now() + 600000 }; // 10 minutes cache
   return map;
 }
 
@@ -222,7 +228,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
           createdAt: a.created_at
         }))
       };
-      dashboardCache.set(cacheKey, { data: studentPayload, expiry: Date.now() + 15000 });
+      dashboardCache.set(cacheKey, { data: studentPayload, expiry: Date.now() + 120000 });
       return sendSuccess(res, studentPayload);
     }
 
@@ -343,7 +349,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
           createdAt: a.created_at
         }))
       };
-      dashboardCache.set(cacheKey, { data: teacherPayload, expiry: Date.now() + 15000 });
+      dashboardCache.set(cacheKey, { data: teacherPayload, expiry: Date.now() + 120000 });
       return sendSuccess(res, teacherPayload);
     }
 
@@ -396,96 +402,22 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
 
     const hasStudents = isDefaultOrSuper || academyStudentIds.length > 0;
 
-    // Chunk queries into bounded batches (max 3 concurrent) to prevent database pool exhaustion in Cloudflare Workers
-    const [totalStudents, totalTeachers, totalBatches] = await Promise.all([
-      isDefaultOrSuper
-        ? prisma.student.count({ where: { status: 'active' } })
-        : Promise.resolve(academyStudentIds.length),
+    // BATCH 1: Students (with fee records for instant in-memory summary) + Teachers count + Batches
+    const studentWhere = hasStudents ? (isDefaultOrSuper ? { status: 'active' } : { status: 'active', id: { in: academyStudentIds } }) : null;
+    const [studentsWithFees, totalTeachers, batches] = await Promise.all([
+      studentWhere
+        ? prisma.student.findMany({
+            where: studentWhere,
+            select: {
+              id: true,
+              feeInvoices: { select: { net_amount: true, status: true, due_date: true } },
+              feePayments: { where: { voided_at: null, cleared_status: 'cleared' }, select: { amount: true, paid_at: true } }
+            }
+          }).catch(() => [])
+        : Promise.resolve([]),
       prisma.teacher.count({
         where: isDefaultOrSuper ? {} : { user_id: { in: academyUserIds } }
-      }),
-      prisma.batch.count({ where: tenantBatchWhere })
-    ]);
-
-    const [collectedAgg, monthCollectedAgg, invoiceNetAgg] = await Promise.all([
-      hasStudents
-        ? prisma.feePayment.aggregate({
-            where: {
-              voided_at: null,
-              cleared_status: 'cleared',
-              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
-            },
-            _sum: { amount: true }
-          })
-        : Promise.resolve({ _sum: { amount: 0 } }),
-      hasStudents
-        ? prisma.feePayment.aggregate({
-            where: {
-              voided_at: null,
-              cleared_status: 'cleared',
-              paid_at: { gte: monthStart, lt: monthEnd },
-              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
-            },
-            _sum: { amount: true }
-          })
-        : Promise.resolve({ _sum: { amount: 0 } }),
-      hasStudents
-        ? prisma.feeInvoice.aggregate({
-            where: isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } },
-            _sum: { net_amount: true }
-          })
-        : Promise.resolve({ _sum: { net_amount: 0 } })
-    ]);
-
-    const [todayAttendance, overdueInvoices] = await Promise.all([
-      hasStudents
-        ? prisma.attendance.findMany({
-            where: {
-              date: todayStr,
-              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
-            },
-            select: { batch_id: true, status: true }
-          })
-        : Promise.resolve([]),
-      hasStudents
-        ? prisma.feeInvoice.findMany({
-            where: {
-              status: { in: ['unpaid', 'partial', 'overdue'] },
-              due_date: { lt: todayStr },
-              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
-            },
-            distinct: ['student_id'],
-            select: { student_id: true }
-          })
-        : Promise.resolve([])
-    ]);
-
-    const [slots, followUps, activeBatches] = await Promise.all([
-      prisma.timetableSlot.findMany({
-        where: {
-          day: weekday,
-          ...(isDefaultOrSuper ? {} : { batch: tenantBatchWhere })
-        },
-        include: {
-          batch: { select: { id: true, name: true } },
-          subject: { select: { name: true } },
-          teacher: { include: { user: { select: { full_name: true } } } },
-          exceptions: { where: { date: todayStr }, select: { type: true } }
-        }
-      }),
-      prisma.inquiry.findMany({
-        where: {
-          status: { notIn: ['converted', 'lost'] },
-          AND: [
-            { follow_up_on: { not: null } },
-            { follow_up_on: { not: '' } },
-            { follow_up_on: { lte: todayStr } }
-          ],
-          ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
-        },
-        orderBy: { follow_up_on: 'asc' },
-        take: 12
-      }),
+      }).catch(() => 0),
       prisma.batch.findMany({
         where: tenantBatchWhere,
         select: {
@@ -493,59 +425,123 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
           name: true,
           _count: { select: { enrollments: true } }
         }
-      })
+      }).catch(() => [])
     ]);
 
-    const [
-      upcomingTests,
-      monthExpensesAgg,
-      recentAnnouncements,
-      recentInquiries
-    ] = await Promise.all([
-      prisma.test.findMany({
-        where: {
-          exam_date: { gte: todayStr },
-          ...(isDefaultOrSuper ? {} : { batch: tenantBatchWhere })
-        },
-        include: {
-          batch: { select: { name: true, _count: { select: { enrollments: true } } } },
-          subject: { select: { name: true } },
-          testMarks: { where: { status: 'scored' }, select: { student_id: true } }
-        },
-        orderBy: { exam_date: 'asc' },
-        take: 20
-      }),
-      prisma.expense.aggregate({
-        where: {
-          month_period: period,
-          ...(isDefaultOrSuper ? {} : { staffMember: { user_id: { in: academyUserIds } } })
-        },
-        _sum: { amount: true }
-      }),
-      prisma.announcement.findMany({
-        where: isDefaultOrSuper ? {} : {
-          OR: [
-            { created_by: { in: academyUserIds } },
-            ...(academyId === 'default-academy-id' ? [{ created_by: 'admin-id' }] : [])
-          ]
-        },
-        orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }],
-        take: 4
-      }),
-      prisma.inquiry.findMany({
-        where: {
-          status: { notIn: ['converted', 'lost'] },
-          ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
-        },
-        orderBy: { created_at: 'desc' },
-        take: 8
-      })
+    const totalStudents = isDefaultOrSuper ? studentsWithFees.length : academyStudentIds.length;
+    const totalBatches = batches.length;
+    const activeBatches = batches;
+
+    let totalCollected = 0;
+    let monthCollected = 0;
+    let totalInvoiced = 0;
+    let defaultersCount = 0;
+
+    for (const s of studentsWithFees) {
+      let hasOverdue = false;
+      for (const inv of s.feeInvoices) {
+        totalInvoiced += inv.net_amount || 0;
+        if ((inv.status === 'unpaid' || inv.status === 'partial' || inv.status === 'overdue') && inv.due_date && inv.due_date < todayStr) {
+          hasOverdue = true;
+        }
+      }
+      if (hasOverdue) defaultersCount++;
+      for (const p of s.feePayments) {
+        totalCollected += p.amount;
+        if (p.paid_at && p.paid_at >= monthStart && p.paid_at < monthEnd) {
+          monthCollected += p.amount;
+        }
+      }
+    }
+    const totalPending = Math.max(0, totalInvoiced - totalCollected);
+
+    const batchIds = batches.map(b => b.id);
+
+    // BATCH 2: Attendance + Timetable + Tests (Direct indexed lookups, skip if tenant has 0 items)
+    const canQueryBatches = isDefaultOrSuper || batchIds.length > 0;
+    const canQueryStudents = isDefaultOrSuper || academyStudentIds.length > 0;
+
+    const [todayAttendance, slots, upcomingTests] = await Promise.all([
+      canQueryStudents
+        ? prisma.attendance.findMany({
+            where: {
+              date: todayStr,
+              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
+            },
+            select: { batch_id: true, status: true }
+          }).catch(() => [])
+        : Promise.resolve([]),
+      canQueryBatches
+        ? prisma.timetableSlot.findMany({
+            where: {
+              day: weekday,
+              ...(isDefaultOrSuper ? { batch: tenantBatchWhere } : { batch_id: { in: batchIds } })
+            },
+            include: {
+              batch: { select: { id: true, name: true } },
+              subject: { select: { name: true } },
+              teacher: { include: { user: { select: { full_name: true } } } },
+              exceptions: { where: { date: todayStr }, select: { type: true } }
+            }
+          }).catch(() => [])
+        : Promise.resolve([]),
+      canQueryBatches
+        ? prisma.test.findMany({
+            where: {
+              exam_date: { gte: todayStr },
+              ...(isDefaultOrSuper ? { batch: tenantBatchWhere } : { batch_id: { in: batchIds } })
+            },
+            include: {
+              batch: { select: { name: true, _count: { select: { enrollments: true } } } },
+              subject: { select: { name: true } },
+              testMarks: { where: { status: 'scored' }, select: { student_id: true } }
+            },
+            orderBy: { exam_date: 'asc' },
+            take: 20
+          }).catch(() => [])
+        : Promise.resolve([])
     ]);
 
-    const totalCollected = collectedAgg._sum.amount || 0;
-    const monthCollected = monthCollectedAgg._sum.amount || 0;
-    const monthExpenses = monthExpensesAgg._sum.amount || 0;
-    const totalPending = Math.max(0, (invoiceNetAgg._sum.net_amount || 0) - totalCollected);
+    // BATCH 3: Expenses + Announcements + Inquiries (Skip if tenant has 0 users/students)
+    const canQueryUsers = isDefaultOrSuper || academyUserIds.length > 0;
+
+    const [monthExpensesAgg, recentAnnouncements, inquiries] = await Promise.all([
+      canQueryUsers
+        ? prisma.expense.aggregate({
+            where: {
+              month_period: period,
+              ...(isDefaultOrSuper ? {} : { staffMember: { user_id: { in: academyUserIds } } })
+            },
+            _sum: { amount: true }
+          }).catch(() => ({ _sum: { amount: 0 } }))
+        : Promise.resolve({ _sum: { amount: 0 } }),
+      canQueryUsers || academyId === 'default-academy-id'
+        ? prisma.announcement.findMany({
+            where: isDefaultOrSuper ? {} : {
+              OR: [
+                ...(academyUserIds.length > 0 ? [{ created_by: { in: academyUserIds } }] : []),
+                ...(academyId === 'default-academy-id' ? [{ created_by: 'admin-id' }] : [])
+              ]
+            },
+            orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }],
+            take: 4
+          }).catch(() => [])
+        : Promise.resolve([]),
+      canQueryStudents
+        ? prisma.inquiry.findMany({
+            where: {
+              status: { notIn: ['converted', 'lost'] },
+              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
+            },
+            orderBy: { created_at: 'desc' },
+            take: 12
+          }).catch(() => [])
+        : Promise.resolve([])
+    ]);
+
+    const followUps = inquiries.filter(i => i.follow_up_on && i.follow_up_on <= todayStr);
+    const recentInquiries = inquiries.slice(0, 8);
+    const monthExpenses = monthExpensesAgg._sum?.amount || 0;
 
     const presentish = todayAttendance.filter(r => r.status === 'present' || r.status === 'late').length;
     const todayAttendancePct = todayAttendance.length > 0
@@ -611,7 +607,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         todayPresent: presentish,
         totalCollected,
         totalPending,
-        defaultersCount: overdueInvoices.length,
+        defaultersCount,
         monthCollected,
         monthExpenses,
         monthPnL: monthCollected - monthExpenses,
@@ -653,11 +649,11 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         unmarkedCount: unmarkedAttendance.length,
         followUpsDue: followUps.length,
         testsWithoutMarks: testsWithoutMarks.length,
-        defaulters: overdueInvoices.length
+        defaulters: defaultersCount
       }
     };
 
-    dashboardCache.set(cacheKey, { data: payload, expiry: Date.now() + 15000 });
+    dashboardCache.set(cacheKey, { data: payload, expiry: Date.now() + 120000 });
     return sendSuccess(res, payload);
   } catch (err: any) {
     return sendError(res, err.message, 500);

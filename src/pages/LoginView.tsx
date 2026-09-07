@@ -49,10 +49,23 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     try {
       const result = await api.login({ email, password });
       
-      // Wipe stale cached data from previous sessions
-      cacheClear();
+      // Wipe stale cached data ONLY if switching user account or switching academy
+      const lastActiveRaw = localStorage.getItem('last_active_user') || localStorage.getItem('user');
+      let lastUser: any = null;
+      try { lastUser = lastActiveRaw ? JSON.parse(lastActiveRaw) : null; } catch {}
+
+      const isSameUser = Boolean(
+        lastUser &&
+        result.user &&
+        (lastUser.id === result.user.id || lastUser.email === result.user.email) &&
+        (lastUser.academyId === result.user.academyId)
+      );
+      if (!isSameUser) {
+        cacheClear();
+      }
       localStorage.setItem('token', result.token);
       localStorage.setItem('user', JSON.stringify(result.user));
+      localStorage.setItem('last_active_user', JSON.stringify(result.user));
       
       onLoginSuccess();
     } catch (err: any) {
@@ -84,10 +97,23 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     try {
       const result = await api.demoLogin(role);
       
-      // Wipe stale cached data from previous sessions
-      cacheClear();
+      // Wipe stale cached data ONLY if switching user account or switching academy
+      const lastActiveRaw = localStorage.getItem('last_active_user') || localStorage.getItem('user');
+      let lastUser: any = null;
+      try { lastUser = lastActiveRaw ? JSON.parse(lastActiveRaw) : null; } catch {}
+
+      const isSameUser = Boolean(
+        lastUser &&
+        result.user &&
+        (lastUser.id === result.user.id || lastUser.email === result.user.email) &&
+        (lastUser.academyId === result.user.academyId)
+      );
+      if (!isSameUser) {
+        cacheClear();
+      }
       localStorage.setItem('token', result.token);
       localStorage.setItem('user', JSON.stringify(result.user));
+      localStorage.setItem('last_active_user', JSON.stringify(result.user));
       
       onLoginSuccess();
     } catch (err: any) {
@@ -117,6 +143,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
       cacheClear();
       localStorage.setItem('token', result.token);
       localStorage.setItem('user', JSON.stringify(result.user));
+      localStorage.setItem('last_active_user', JSON.stringify(result.user));
 
       setTimeout(() => {
         onLoginSuccess();

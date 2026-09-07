@@ -209,8 +209,12 @@ export function App() {
     const token = localStorage.getItem('token');
     if (!token && !isAuthenticated) return;
 
-    setIsLoadingStudents(true);
-    setIsLoadingCore(true);
+    if (students.length === 0) {
+      setIsLoadingStudents(true);
+    }
+    if (!dashboardStats) {
+      setIsLoadingCore(true);
+    }
     setIsLoadingSecondary(true);
 
     const run = async (loader: () => Promise<any>, onData: (value: any) => void) => {
@@ -222,20 +226,21 @@ export function App() {
       }
     };
 
-    // --- STAGE 1: Core Data (Sequential to avoid Worker connection pool exhaustion) ---
-    // Login already provides user data, so getMe() is deferred to Stage 2.
-    // Each request completes before the next fires, preventing concurrent DB connections.
+    // --- STAGE 1: Core Data (Parallel fetch with independent loading release) ---
+    // Dashboard, Students, and Batches run concurrently. Loading states release as each arrives.
     try {
-      await run(() => api.getDashboard(), (stats) => {
+      const loadDashboard = run(() => api.getDashboard(), (stats) => {
         if (stats?.overview) {
           setDashboardStats(stats.overview);
           setDashboardLive(stats);
         } else {
           setDashboardLive(stats);
         }
+      }).finally(() => {
+        setIsLoadingCore(false);
       });
 
-      await run(() => api.getStudents(), (backendStudents) => {
+      const loadStudents = run(() => api.getStudents(), (backendStudents) => {
         if (!Array.isArray(backendStudents)) return;
         setStudents(filterDeleted(backendStudents).map((s: any) => {
           const totalFee = s.totalFee !== undefined ? s.totalFee : (s.feePlan?.monthly_amount || 0);
@@ -288,9 +293,11 @@ export function App() {
             isDefaulter: s.isDefaulter !== undefined ? s.isDefaulter : dueBalance > 0
           };
         }));
+      }).finally(() => {
+        setIsLoadingStudents(false);
       });
 
-      await run(() => api.getBatches(), (backendBatches) => {
+      const loadBatches = run(() => api.getBatches(), (backendBatches) => {
         if (!Array.isArray(backendBatches)) return;
         setBatches(filterDeleted(backendBatches).map((b: any) => ({
           id: b.id,
@@ -309,8 +316,10 @@ export function App() {
           sectionName: b.section_name
         })));
       });
+
+      await Promise.all([loadDashboard, loadStudents, loadBatches]);
     } finally {
-      // Release student loading indicator immediately once Stage 1 completes
+      // Ensure all loading states are cleanly turned off
       setIsLoadingStudents(false);
       setIsLoadingCore(false);
     }
@@ -894,7 +903,6 @@ export function App() {
   };
 
   const handleLogout = () => {
-    cacheClear();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setCurrentUser({});

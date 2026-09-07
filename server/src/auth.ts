@@ -71,12 +71,24 @@ export function canonicalizeModuleKey(rawKey: string): string {
   return map[normalized] || normalized;
 }
 
+const academyCache = new Map<string, { data: any; expiry: number }>();
+
+export function clearAcademyCache(): void {
+  academyCache.clear();
+}
+
 /**
  * Retrieves the academy status and days remaining for the active user's academy
  */
 export async function getAcademyDataForUser(user: any, staffMember?: any) {
   try {
     const targetAcademyId = user?.academy_id || staffMember?.user?.academy_id;
+    const cacheKey = targetAcademyId || 'default-fallback';
+    const cached = academyCache.get(cacheKey);
+    if (cached && cached.expiry > Date.now()) {
+      return cached.data;
+    }
+
     let academy = null;
 
     if (targetAcademyId) {
@@ -106,7 +118,7 @@ export async function getAcademyDataForUser(user: any, staffMember?: any) {
       ? 'expired'
       : academy.subscription_status;
 
-    return {
+    const resData = {
       id: academy.id,
       name: academy.name,
       slug: academy.slug,
@@ -119,6 +131,9 @@ export async function getAcademyDataForUser(user: any, staffMember?: any) {
       isActive: academy.is_active,
       is_active: academy.is_active
     };
+
+    academyCache.set(cacheKey, { data: resData, expiry: Date.now() + 300000 }); // 5 minutes cache
+    return resData;
   } catch {
     return null;
   }
@@ -341,33 +356,29 @@ export async function handleLogin(req: Request, res: Response) {
       return sendError(res, 'Identifier and password are required', 400);
     }
 
-    // 1. Single unified StaffMember lookup by staff_id, email, or phone
-    let staffMember = await prisma.staffMember.findFirst({
-      where: {
-        OR: [
-          { staff_id: { equals: rawId, mode: 'insensitive' as const } },
-          { email: { equals: rawId, mode: 'insensitive' as const } },
-          { phone: rawId }
-        ]
-      },
-      include: {
-        user: true,
-        staffType: { include: { defaultPermissions: true } },
-        permissions: true,
-        teacher: true
-      }
-    });
-
-    let user = staffMember?.user || null;
-
-    // 3. If not found via StaffMember, lookup core User
-    if (!user) {
-      user = await prisma.user.findFirst({
+    // 1. Parallel staffMember and core user lookup (cuts login query time in half)
+    const [staffLookup, userLookup] = await Promise.all([
+      prisma.staffMember.findFirst({
         where: {
           OR: [
+            { staff_id: { equals: rawId, mode: 'insensitive' as const } },
+            { email: { equals: rawId, mode: 'insensitive' as const } },
+            { phone: rawId }
+          ]
+        },
+        include: {
+          user: true,
+          staffType: { include: { defaultPermissions: true } },
+          permissions: true,
+          teacher: true
+        }
+      }).catch(() => null),
+      prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: { equals: rawId, mode: 'insensitive' as const } },
             { email: { equals: rawId, mode: 'insensitive' as const } },
             { phone: rawId },
-            { username: { equals: rawId, mode: 'insensitive' as const } },
             { id: rawId }
           ]
         },
@@ -380,12 +391,11 @@ export async function handleLogin(req: Request, res: Response) {
             }
           }
         }
-      });
+      }).catch(() => null)
+    ]);
 
-      if (user && (user as any).staffMember) {
-        staffMember = (user as any).staffMember;
-      }
-    }
+    let staffMember = staffLookup || userLookup?.staffMember || null;
+    let user = userLookup || staffLookup?.user || null;
 
     // 4. If still not found, check Student admission number linked to Parent
     if (!user && !staffMember) {
