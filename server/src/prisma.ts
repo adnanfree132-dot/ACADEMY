@@ -148,7 +148,7 @@ export function createPrismaInstance(): PrismaInstance {
       connectionString,
       max: maxConnections,
       idleTimeoutMillis: 20000, // Keep connection alive for 20s so subsequent queries reuse warm socket
-      connectionTimeoutMillis: 6000,
+      connectionTimeoutMillis: 20000,
       allowExitOnIdle: true,
       ssl: useSsl ? { rejectUnauthorized: false } : false
     };
@@ -183,7 +183,7 @@ export function getActiveClient(): PrismaClient {
 export async function executeWithResilience<T>(fn: (client: PrismaClient) => Promise<T>): Promise<T> {
   let client = getActiveClient();
   try {
-    return await withTimeout(fn(client), 14000);
+    return await withTimeout(fn(client), 30000);
   } catch (err: any) {
     if (isWasmTrapOrSocketDrop(err)) {
       console.warn('⚠️ [Prisma Wasm Boundary] Caught socket drop or trap, draining idle connections and retrying...', err?.message || err);
