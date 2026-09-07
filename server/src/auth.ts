@@ -5,7 +5,7 @@ import { prisma } from './prisma';
 import { sendSuccess, sendError } from './common/envelope';
 import { AccessLevelString, CANONICAL_MODULE_KEYS, normalizeAccessLevel } from './types/staff';
 import { ensureSyncedDemoData, PRECOMPUTED_HASHES } from './controllers/superAdminController';
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'academiapro_access_secret_key_2026';
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'academiapro_access_secret_key_2026';
 
 export interface JwtPayload {
   userId: string;
@@ -238,6 +238,13 @@ export function resolveStaffPermissions(
   return map;
 }
 
+const userStatusCache = new Map<string, { isValid: boolean; expiry: number; errorReason?: string }>();
+
+export function clearUserStatusCache(userId?: string): void {
+  if (userId) userStatusCache.delete(userId);
+  else userStatusCache.clear();
+}
+
 /**
  * Authentication Middleware with 0-second revocation for suspended/inactive accounts
  */
@@ -259,6 +266,17 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
     return sendError(res, 'Invalid or expired authentication token', 401);
   }
 
+  // Fast path: in-memory cache for user account status check (30-second TTL per isolate)
+  const cacheKey = decoded.userId || decoded.staffId || '';
+  const cachedStatus = cacheKey ? userStatusCache.get(cacheKey) : null;
+  if (cachedStatus && cachedStatus.expiry > Date.now()) {
+    if (!cachedStatus.isValid) {
+      return sendError(res, cachedStatus.errorReason || 'Account is suspended or deactivated', 403);
+    }
+    req.user = decoded;
+    return next();
+  }
+
   // Database account activity checks (best-effort resilience)
   try {
     // 1. Check user status in Prisma User table
@@ -268,11 +286,12 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
         select: { is_active: true }
       });
       if (user && user.is_active === false) {
+        if (cacheKey) userStatusCache.set(cacheKey, { isValid: false, expiry: Date.now() + 30000, errorReason: 'Account is suspended or deactivated' });
         return sendError(res, 'Account is suspended or deactivated', 403);
       }
     }
 
-    // 2. Real-time 0-second session revocation check for staff accounts
+    // 2. Real-time session revocation check for staff accounts
     const isStaffRole = decoded.staffId || (decoded.role && !['admin', 'super_admin', 'student', 'parent'].includes(decoded.role));
     if (isStaffRole) {
       const staff = await prisma.staffMember.findFirst({
@@ -287,12 +306,18 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
 
       if (staff) {
         if (['suspended', 'terminated', 'resigned'].includes(staff.status)) {
+          if (cacheKey) userStatusCache.set(cacheKey, { isValid: false, expiry: Date.now() + 30000, errorReason: 'Account is suspended or deactivated' });
           return sendError(res, 'Account is suspended or deactivated', 403);
         }
         if (staff.user && staff.user.is_active === false) {
+          if (cacheKey) userStatusCache.set(cacheKey, { isValid: false, expiry: Date.now() + 30000, errorReason: 'Account is suspended or deactivated' });
           return sendError(res, 'Account is suspended or deactivated', 403);
         }
       }
+    }
+
+    if (cacheKey) {
+      userStatusCache.set(cacheKey, { isValid: true, expiry: Date.now() + 30000 });
     }
   } catch (dbErr: any) {
     // Transient database errors or timeouts must NEVER invalidate a valid JWT or cause 401 auto-logout
@@ -316,9 +341,15 @@ export async function handleLogin(req: Request, res: Response) {
       return sendError(res, 'Identifier and password are required', 400);
     }
 
-    // 1. Check StaffMember by staff_id (case-insensitive)
+    // 1. Single unified StaffMember lookup by staff_id, email, or phone
     let staffMember = await prisma.staffMember.findFirst({
-      where: { staff_id: { equals: rawId, mode: 'insensitive' as const } },
+      where: {
+        OR: [
+          { staff_id: { equals: rawId, mode: 'insensitive' as const } },
+          { email: { equals: rawId, mode: 'insensitive' as const } },
+          { phone: rawId }
+        ]
+      },
       include: {
         user: true,
         staffType: { include: { defaultPermissions: true } },
@@ -326,24 +357,6 @@ export async function handleLogin(req: Request, res: Response) {
         teacher: true
       }
     });
-
-    // 2. Check StaffMember by email or phone
-    if (!staffMember) {
-      staffMember = await prisma.staffMember.findFirst({
-        where: {
-          OR: [
-            { email: { equals: rawId, mode: 'insensitive' as const } },
-            { phone: rawId }
-          ]
-        },
-        include: {
-          user: true,
-          staffType: { include: { defaultPermissions: true } },
-          permissions: true,
-          teacher: true
-        }
-      });
-    }
 
     let user = staffMember?.user || null;
 

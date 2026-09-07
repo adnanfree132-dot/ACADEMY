@@ -58,11 +58,11 @@ export default {
       let timer: any;
       const timeoutPromise = new Promise<Response>((_, reject) => {
         timer = setTimeout(() => {
-          const timeoutErr: any = new Error('The request timed out after 12s waiting for the backend service.');
+          const timeoutErr: any = new Error('The request timed out after 25s waiting for the backend service.');
           timeoutErr.name = 'TimeoutError';
           timeoutErr.status = 504;
           reject(timeoutErr);
-        }, 12000);
+        }, 25000);
       });
 
       return await Promise.race([h.fetch(request, env, ctx), timeoutPromise]).finally(() => clearTimeout(timer));

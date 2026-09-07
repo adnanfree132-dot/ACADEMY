@@ -501,21 +501,21 @@ export function App() {
           );
         }
 
-        // Execute in gentle throttled batches of 2 so pool ceiling (max: 4) is never saturated
-        for (let i = 0; i < prefetchFns.length; i += 2) {
-          const batch = prefetchFns.slice(i, i + 2).map(fn => quiet(fn()));
-          await Promise.all(batch);
+        // Execute sequentially one-by-one with 150ms pauses so connection pool is never crowded
+        for (const fn of prefetchFns) {
+          await quiet(fn());
+          await new Promise(r => setTimeout(r, 150));
         }
       };
 
       if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
         idleHandle = (window as any).requestIdleCallback(() => {
           void runAuxiliaryPrefetch();
-        }, { timeout: 1200 });
+        }, { timeout: 4000 });
       } else {
         idleHandle = setTimeout(() => {
           void runAuxiliaryPrefetch();
-        }, 1200);
+        }, 4000);
       }
     })();
 

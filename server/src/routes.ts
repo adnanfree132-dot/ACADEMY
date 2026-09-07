@@ -1376,7 +1376,7 @@ router.get('/teachers', authenticateJwt, (req: AuthenticatedRequest, res, next) 
     const isSuperAdmin = req.user?.role === 'super_admin';
     const academyId = req.user?.academyId || 'default-academy-id';
     const where: any = {};
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && academyId !== 'default-academy-id') {
       where.user = { academy_id: academyId };
     }
 
@@ -1607,23 +1607,25 @@ router.get('/batches', authenticateJwt, requireModulePermission('batches', 'view
       };
     } else if (req.user?.role !== 'super_admin') {
       const academyId = req.user?.academyId || 'default-academy-id';
-      const batchLogs = await prisma.auditLog.findMany({
-        where: {
-          action: 'CREATE_BATCH',
-          entity: 'Batch',
-          user: { academy_id: academyId }
-        },
-        select: { entity_id: true }
-      }).catch(() => []);
-      const createdBatchIds = batchLogs.map(l => l.entity_id);
-      whereCondition = {
-        is_active: true,
-        OR: [
-          ...(createdBatchIds.length > 0 ? [{ id: { in: createdBatchIds } }] : []),
-          { teacher: { user: { academy_id: academyId } } },
-          { enrollments: { some: { student: { user: { academy_id: academyId } } } } }
-        ]
-      };
+      if (academyId !== 'default-academy-id') {
+        const batchLogs = await prisma.auditLog.findMany({
+          where: {
+            action: 'CREATE_BATCH',
+            entity: 'Batch',
+            user: { academy_id: academyId }
+          },
+          select: { entity_id: true }
+        }).catch(() => []);
+        const createdBatchIds = batchLogs.map(l => l.entity_id);
+        whereCondition = {
+          is_active: true,
+          OR: [
+            ...(createdBatchIds.length > 0 ? [{ id: { in: createdBatchIds } }] : []),
+            { teacher: { user: { academy_id: academyId } } },
+            { enrollments: { some: { student: { user: { academy_id: academyId } } } } }
+          ]
+        };
+      }
     }
 
     const batches = await prisma.batch.findMany({

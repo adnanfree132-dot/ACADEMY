@@ -64,8 +64,20 @@ function parentFromStudent(student: any) {
   };
 }
 
+const dashboardCache = new Map<string, { data: any; expiry: number }>();
+
+export function clearDashboardCache(): void {
+  dashboardCache.clear();
+}
+
 export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
   try {
+    const cacheKey = `${_req.user?.role || 'user'}_${_req.user?.userId || ''}_${_req.user?.academyId || 'default'}`;
+    const cached = dashboardCache.get(cacheKey);
+    if (cached && cached.expiry > Date.now()) {
+      return sendSuccess(res, cached.data);
+    }
+
     const todayStr = formatDateIso(new Date());
     const weekday = WEEKDAYS[new Date().getDay()];
     const { period, start: monthStart, end: monthEnd } = monthBounds(todayStr);
@@ -157,7 +169,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         take: 5
       });
 
-      return sendSuccess(res, {
+      const studentPayload = {
         role: 'student',
         overview: {
           attendanceRate,
@@ -209,7 +221,9 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
           pinned: a.pinned,
           createdAt: a.created_at
         }))
-      });
+      };
+      dashboardCache.set(cacheKey, { data: studentPayload, expiry: Date.now() + 15000 });
+      return sendSuccess(res, studentPayload);
     }
 
     // 2. Faculty / Teacher Dashboard Scoping
@@ -278,7 +292,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         take: 5
       });
 
-      return sendSuccess(res, {
+      const teacherPayload = {
         role: 'teacher',
         overview: {
           totalBatches: batches.length,
@@ -328,117 +342,129 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
           pinned: a.pinned,
           createdAt: a.created_at
         }))
-      });
+      };
+      dashboardCache.set(cacheKey, { data: teacherPayload, expiry: Date.now() + 15000 });
+      return sendSuccess(res, teacherPayload);
     }
 
     // 3. Admin Full Institutional Dashboard
     const isSuperAdmin = _req.user?.role === 'super_admin';
     const academyId = _req.user?.academyId || 'default-academy-id';
+    const isDefaultOrSuper = isSuperAdmin || academyId === 'default-academy-id';
 
-    const settings = await readSettingsMap();
+    const settings: Record<string, any> = await readSettingsMap().catch(() => ({} as Record<string, any>));
 
     // Determine tenant batches & user IDs
     let createdBatchIds: string[] = [];
     let academyUserIds: string[] = [];
-    if (!isSuperAdmin) {
-      const [batchLogs, academyUsers] = await Promise.all([
-        prisma.auditLog.findMany({
-          where: {
-            action: 'CREATE_BATCH',
-            entity: 'Batch',
-            user: { academy_id: academyId }
-          },
-          select: { entity_id: true }
-        }).catch(() => []),
+    let academyStudentIds: string[] = [];
+    if (!isDefaultOrSuper) {
+      const [academyUsers, academyStudents] = await Promise.all([
         prisma.user.findMany({
           where: { academy_id: academyId },
           select: { id: true }
+        }).catch(() => []),
+        prisma.student.findMany({
+          where: { user: { academy_id: academyId } },
+          select: { id: true }
         }).catch(() => [])
       ]);
-      createdBatchIds = batchLogs.map(l => l.entity_id);
       academyUserIds = academyUsers.map(u => u.id);
+      academyStudentIds = academyStudents.map(s => s.id);
+
+      if (academyUserIds.length > 0) {
+        const batchLogs = await prisma.auditLog.findMany({
+          where: {
+            action: 'CREATE_BATCH',
+            entity: 'Batch',
+            user_id: { in: academyUserIds }
+          },
+          select: { entity_id: true }
+        }).catch(() => []);
+        createdBatchIds = batchLogs.map(l => l.entity_id);
+      }
     }
 
-    const tenantBatchWhere: any = isSuperAdmin ? { is_active: true } : {
+    const tenantBatchWhere: any = isDefaultOrSuper ? { is_active: true } : {
       is_active: true,
       OR: [
         ...(createdBatchIds.length > 0 ? [{ id: { in: createdBatchIds } }] : []),
-        { teacher: { user: { academy_id: academyId } } },
-        { enrollments: { some: { student: { user: { academy_id: academyId } } } } }
+        ...(academyUserIds.length > 0 ? [{ teacher: { user_id: { in: academyUserIds } } }] : []),
+        ...(academyStudentIds.length > 0 ? [{ enrollments: { some: { student_id: { in: academyStudentIds } } } }] : [])
       ]
     };
 
-    const tenantStudentWhere: any = isSuperAdmin ? { status: 'active' } : {
-      status: 'active',
-      user: { academy_id: academyId }
-    };
+    const hasStudents = isDefaultOrSuper || academyStudentIds.length > 0;
 
-    const tenantTeacherWhere: any = isSuperAdmin ? {} : {
-      user: { academy_id: academyId }
-    };
-
-    // Chunk queries into 3 bounded batches to prevent database pool exhaustion in Cloudflare Workers
-    const [
-      totalStudents,
-      totalTeachers,
-      totalBatches,
-      collectedAgg,
-      monthCollectedAgg,
-      invoiceNetAgg
-    ] = await Promise.all([
-      prisma.student.count({ where: tenantStudentWhere }),
-      prisma.teacher.count({ where: tenantTeacherWhere }),
-      prisma.batch.count({ where: tenantBatchWhere }),
-      prisma.feePayment.aggregate({
-        where: {
-          voided_at: null,
-          cleared_status: 'cleared',
-          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
-        },
-        _sum: { amount: true }
+    // Chunk queries into bounded batches (max 3 concurrent) to prevent database pool exhaustion in Cloudflare Workers
+    const [totalStudents, totalTeachers, totalBatches] = await Promise.all([
+      isDefaultOrSuper
+        ? prisma.student.count({ where: { status: 'active' } })
+        : Promise.resolve(academyStudentIds.length),
+      prisma.teacher.count({
+        where: isDefaultOrSuper ? {} : { user_id: { in: academyUserIds } }
       }),
-      prisma.feePayment.aggregate({
-        where: {
-          voided_at: null,
-          cleared_status: 'cleared',
-          paid_at: { gte: monthStart, lt: monthEnd },
-          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
-        },
-        _sum: { amount: true }
-      }),
-      prisma.feeInvoice.aggregate({
-        where: isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } },
-        _sum: { net_amount: true }
-      })
+      prisma.batch.count({ where: tenantBatchWhere })
     ]);
 
-    const [
-      todayAttendance,
-      overdueInvoices,
-      slots,
-      followUps,
-      activeBatches
-    ] = await Promise.all([
-      prisma.attendance.findMany({
-        where: {
-          date: todayStr,
-          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
-        },
-        select: { batch_id: true, status: true }
-      }),
-      prisma.feeInvoice.findMany({
-        where: {
-          status: { in: ['unpaid', 'partial', 'overdue'] },
-          due_date: { lt: todayStr },
-          ...(isSuperAdmin ? {} : { student: { user: { academy_id: academyId } } })
-        },
-        distinct: ['student_id'],
-        select: { student_id: true }
-      }),
+    const [collectedAgg, monthCollectedAgg, invoiceNetAgg] = await Promise.all([
+      hasStudents
+        ? prisma.feePayment.aggregate({
+            where: {
+              voided_at: null,
+              cleared_status: 'cleared',
+              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
+            },
+            _sum: { amount: true }
+          })
+        : Promise.resolve({ _sum: { amount: 0 } }),
+      hasStudents
+        ? prisma.feePayment.aggregate({
+            where: {
+              voided_at: null,
+              cleared_status: 'cleared',
+              paid_at: { gte: monthStart, lt: monthEnd },
+              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
+            },
+            _sum: { amount: true }
+          })
+        : Promise.resolve({ _sum: { amount: 0 } }),
+      hasStudents
+        ? prisma.feeInvoice.aggregate({
+            where: isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } },
+            _sum: { net_amount: true }
+          })
+        : Promise.resolve({ _sum: { net_amount: 0 } })
+    ]);
+
+    const [todayAttendance, overdueInvoices] = await Promise.all([
+      hasStudents
+        ? prisma.attendance.findMany({
+            where: {
+              date: todayStr,
+              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
+            },
+            select: { batch_id: true, status: true }
+          })
+        : Promise.resolve([]),
+      hasStudents
+        ? prisma.feeInvoice.findMany({
+            where: {
+              status: { in: ['unpaid', 'partial', 'overdue'] },
+              due_date: { lt: todayStr },
+              ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
+            },
+            distinct: ['student_id'],
+            select: { student_id: true }
+          })
+        : Promise.resolve([])
+    ]);
+
+    const [slots, followUps, activeBatches] = await Promise.all([
       prisma.timetableSlot.findMany({
         where: {
           day: weekday,
-          ...(isSuperAdmin ? {} : { batch: tenantBatchWhere })
+          ...(isDefaultOrSuper ? {} : { batch: tenantBatchWhere })
         },
         include: {
           batch: { select: { id: true, name: true } },
@@ -455,11 +481,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
             { follow_up_on: { not: '' } },
             { follow_up_on: { lte: todayStr } }
           ],
-          ...(isSuperAdmin ? {} : (
-            academyId === 'default-academy-id'
-              ? {}
-              : { student_id: { in: (await prisma.student.findMany({ where: { user: { academy_id: academyId } }, select: { id: true } })).map(s => s.id) } }
-          ))
+          ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
         },
         orderBy: { follow_up_on: 'asc' },
         take: 12
@@ -483,7 +505,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
       prisma.test.findMany({
         where: {
           exam_date: { gte: todayStr },
-          ...(isSuperAdmin ? {} : { batch: tenantBatchWhere })
+          ...(isDefaultOrSuper ? {} : { batch: tenantBatchWhere })
         },
         include: {
           batch: { select: { name: true, _count: { select: { enrollments: true } } } },
@@ -496,12 +518,12 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
       prisma.expense.aggregate({
         where: {
           month_period: period,
-          ...(isSuperAdmin ? {} : { staffMember: { user: { academy_id: academyId } } })
+          ...(isDefaultOrSuper ? {} : { staffMember: { user_id: { in: academyUserIds } } })
         },
         _sum: { amount: true }
       }),
       prisma.announcement.findMany({
-        where: isSuperAdmin ? {} : {
+        where: isDefaultOrSuper ? {} : {
           OR: [
             { created_by: { in: academyUserIds } },
             ...(academyId === 'default-academy-id' ? [{ created_by: 'admin-id' }] : [])
@@ -513,11 +535,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
       prisma.inquiry.findMany({
         where: {
           status: { notIn: ['converted', 'lost'] },
-          ...(isSuperAdmin ? {} : (
-            academyId === 'default-academy-id'
-              ? {}
-              : { student_id: { in: (await prisma.student.findMany({ where: { user: { academy_id: academyId } }, select: { id: true } })).map(s => s.id) } }
-          ))
+          ...(isDefaultOrSuper ? {} : { student_id: { in: academyStudentIds } })
         },
         orderBy: { created_at: 'desc' },
         take: 8
@@ -583,7 +601,7 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
 
     const monthLabel = new Date(`${period}-01T00:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-    return sendSuccess(res, {
+    const payload = {
       overview: {
         totalStudents,
         totalTeachers,
@@ -637,7 +655,10 @@ export async function getDashboard(_req: AuthenticatedRequest, res: Response) {
         testsWithoutMarks: testsWithoutMarks.length,
         defaulters: overdueInvoices.length
       }
-    });
+    };
+
+    dashboardCache.set(cacheKey, { data: payload, expiry: Date.now() + 15000 });
+    return sendSuccess(res, payload);
   } catch (err: any) {
     return sendError(res, err.message, 500);
   }

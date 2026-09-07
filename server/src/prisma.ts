@@ -23,7 +23,7 @@ export const prismaAls = new AsyncLocalStorage<PrismaClient>();
 
 let cachedInstance: PrismaInstance | null = null;
 
-export function withTimeout<T>(promise: Promise<T>, ms = 6000, opName = 'Database query'): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms = 20000, opName = 'Database query'): Promise<T> {
   let timer: any;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timer = setTimeout(() => {
@@ -39,11 +39,10 @@ export function isWasmTrapOrSocketDrop(err: any): boolean {
   if (!err) return false;
   const msg = String(err.message || err);
   const name = String(err.name || '');
+  // IMPORTANT: Timeouts are transient queuing delays and must NEVER destroy the shared pool.
+  // Only actual socket closures, network resets, or Wasm traps should recycle the pool.
   return (
     name === 'RuntimeError' ||
-    name === 'DatabaseConnectionError' ||
-    name === 'DatabaseTimeoutError' ||
-    msg.includes('timed out') ||
     msg.includes('unreachable') ||
     msg.includes('Query engine') ||
     msg.includes('Connection terminated') ||
@@ -51,12 +50,44 @@ export function isWasmTrapOrSocketDrop(err: any): boolean {
     msg.includes('socket hang up') ||
     msg.includes('ECONNRESET') ||
     msg.includes('EPIPE') ||
-    msg.includes('pool timeout') ||
     msg.includes("Can't reach database") ||
-    msg.includes('connection limit exceeded') ||
     msg.includes('terminating connection') ||
-    msg.includes('Cannot use a pool')
+    msg.includes('Cannot use a pool') ||
+    msg.includes('Connection closed unexpectedly') ||
+    msg.includes('timeout exceeded when trying to connect')
   );
+}
+
+export function drainIdleClients(pool: Pool): void {
+  try {
+    const p = pool as any;
+    if (Array.isArray(p._idle)) {
+      while (p._idle.length > 0) {
+        const item = p._idle.pop();
+        if (item && item.client) {
+          try {
+            clearTimeout(item.timeoutId);
+          } catch {}
+          p._remove(item.client);
+          try {
+            item.client.end();
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+}
+
+let lastActiveTimestamp = Date.now();
+
+export function ensureCleanPoolState(): void {
+  const now = Date.now();
+  // If more than 1000ms elapsed since the last query/request, the Cloudflare Worker isolate was likely frozen.
+  // Any idle sockets created before the freeze are dead on the wire and must be discarded.
+  if (now - lastActiveTimestamp > 1000 && cachedInstance?.pool) {
+    drainIdleClients(cachedInstance.pool);
+  }
+  lastActiveTimestamp = now;
 }
 
 export function resetPrismaInstance(): void {
@@ -81,53 +112,24 @@ export function resolveDatabaseConfig(): { connectionString: string; maxConnecti
     throw new DatabaseConnectionError('Database configuration missing. DATABASE_URL is not set.');
   }
 
-  const isPgBouncer = url.includes(':6543') || process.env.USE_PGBOUNCER === 'true';
+  const isPgBouncer = url.includes(':6543') || url.includes('pgbouncer=true') || process.env.USE_PGBOUNCER === 'true';
   if (isPgBouncer && !url.includes('pgbouncer=true')) {
     const sep = url.includes('?') ? '&' : '?';
     url = `${url}${sep}pgbouncer=true`;
   }
 
-  let parsedLimit = 4;
   try {
-    const urlObj = new URL(url);
-    const limitParam = urlObj.searchParams.get('connection_limit');
-    if (limitParam) {
-      const parsed = parseInt(limitParam, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        parsedLimit = Math.min(parsed, 10);
-      }
-    }
+    const parsedUrl = new URL(url);
+    parsedUrl.searchParams.delete('connection_limit');
+    parsedUrl.searchParams.delete('pool_timeout');
+    url = parsedUrl.toString();
   } catch {}
 
+  const isCloudflare = process.env.CLOUDFLARE_WORKER === '1';
   const envMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : undefined;
-  const maxConnections =
-    envMax && !isNaN(envMax)
-      ? envMax
-      : process.env.CLOUDFLARE_WORKER === '1'
-        ? Math.min(parsedLimit, 4)
-        : 10;
+  const maxConnections = envMax && !isNaN(envMax) ? envMax : isCloudflare ? 4 : 10;
 
   return { connectionString: url, maxConnections, isPgBouncer };
-}
-
-export function drainIdleClients(pool: Pool): void {
-  try {
-    const p = pool as any;
-    if (Array.isArray(p._idle)) {
-      while (p._idle.length > 0) {
-        const item = p._idle.pop();
-        if (item && item.client) {
-          try {
-            clearTimeout(item.timeoutId);
-          } catch {}
-          p._remove(item.client);
-          try {
-            item.client.end();
-          } catch {}
-        }
-      }
-    }
-  } catch {}
 }
 
 export function createPrismaInstance(): PrismaInstance {
@@ -138,8 +140,8 @@ export function createPrismaInstance(): PrismaInstance {
 
     const poolConfig: PoolConfig = {
       connectionString,
-      max: Math.min(maxConnections, 2),
-      idleTimeoutMillis: 1000,
+      max: maxConnections,
+      idleTimeoutMillis: 1000, // Close idle connections within 1s so isolate freezes don't trap dead sockets
       connectionTimeoutMillis: 6000,
       allowExitOnIdle: true,
       ssl: useSsl ? { rejectUnauthorized: false } : false
@@ -147,7 +149,8 @@ export function createPrismaInstance(): PrismaInstance {
 
     const pool = new Pool(poolConfig);
     pool.on('error', (err) => {
-      console.warn('⚠️ [pg pool error]:', err?.message || err);
+      console.warn('⚠️ [pg pool background error]:', err?.message || err);
+      // Stale or closed socket purged by pg-pool; do NOT reset cachedInstance as it disrupts other active requests
     });
 
     const adapter = new PrismaPg(pool);
@@ -167,51 +170,49 @@ export function getPrismaInstance(): PrismaInstance {
 }
 
 export function getActiveClient(): PrismaClient {
+  ensureCleanPoolState();
   return prismaAls.getStore() || getPrismaInstance().client;
 }
 
 export async function executeWithResilience<T>(fn: (client: PrismaClient) => Promise<T>): Promise<T> {
-  const client = getActiveClient();
+  let client = getActiveClient();
   try {
-    return await fn(client);
+    return await withTimeout(fn(client), 14000);
   } catch (err: any) {
     if (isWasmTrapOrSocketDrop(err)) {
-      console.warn('⚠️ [Prisma Wasm Boundary] Caught trap / socket reset:', err?.message || err);
+      console.warn('⚠️ [Prisma Wasm Boundary] Caught socket drop or trap, draining idle connections and retrying...', err?.message || err);
+      if (cachedInstance?.pool) {
+        drainIdleClients(cachedInstance.pool);
+      }
+      client = getActiveClient();
+      try {
+        return await withTimeout(fn(client), 14000, 'Database retry query');
+      } catch (retryErr: any) {
+        console.error('❌ [Prisma Wasm Boundary] Second attempt failed:', retryErr?.message || retryErr);
+        if (String(retryErr?.name || '') === 'RuntimeError' || String(retryErr?.message || '').includes('unreachable')) {
+          resetPrismaInstance();
+        }
+        throw new DatabaseConnectionError(
+          'The database connection is temporarily unavailable or busy. Please retry in a few moments.'
+        );
+      }
+    }
+    if (err?.name === 'DatabaseTimeoutError' || String(err?.message || '').includes('timed out')) {
       throw new DatabaseConnectionError(
-        'The database connection is temporarily unavailable or busy. Please retry in a few moments.'
+        'The database connection is temporarily busy. Please retry in a few moments.'
       );
     }
     throw err;
   }
 }
 
-// Request-scoped Prisma instance with guaranteed isolate cleanup on response completion
-export function attachRequestPrisma(req: Request, res: Response, next: NextFunction) {
-  if (req.method === 'OPTIONS' || req.path === '/health' || req.path === '/api/v1/health') {
-    next();
-    return;
-  }
-
-  const instance = createPrismaInstance();
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    try {
-      instance.client.$disconnect().catch(() => {});
-      if (instance.pool) {
-        instance.pool.end().catch(() => {});
-      }
-    } catch {}
-  };
-
-  res.once('finish', release);
-  res.once('close', release);
-
-  prismaAls.run(instance.client, () => next());
+// Request-scoped pool health validation: ensures no stale isolate-freeze sockets are reused
+export function attachRequestPrisma(_req: Request, _res: Response, next: NextFunction) {
+  ensureCleanPoolState();
+  next();
 }
 
-// Resilient Request-Aware Prisma Client Proxy
+// Resilient Request-Aware Prisma Client Proxy with transparent retry on all operations
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target, prop: string | symbol) {
     const client = getActiveClient();
@@ -221,13 +222,14 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
 
     if (prop === '$transaction') {
       return async (arg: unknown, options?: unknown) => {
-        const c = getActiveClient();
-        if (typeof arg === 'function') {
-          return (c as any).$transaction(async (tx: PrismaClient) => {
-            return (arg as (tx: PrismaClient) => Promise<unknown>)(tx);
-          }, options);
-        }
-        return (c as any).$transaction(arg, options);
+        return executeWithResilience(async (c) => {
+          if (typeof arg === 'function') {
+            return (c as any).$transaction(async (tx: PrismaClient) => {
+              return (arg as (tx: PrismaClient) => Promise<unknown>)(tx);
+            }, options);
+          }
+          return (c as any).$transaction(arg, options);
+        });
       };
     }
 
@@ -235,8 +237,7 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
       const method = (client as any)[prop];
       if (typeof method === 'function') {
         return (...args: any[]) => {
-          const c = getActiveClient();
-          return (c as any)[prop](...args);
+          return executeWithResilience((c) => (c as any)[prop](...args));
         };
       }
       return method;
@@ -249,9 +250,10 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
           const originalMethod = modelTarget[modelProp];
           if (typeof originalMethod === 'function') {
             return (...args: any[]) => {
-              const c = getActiveClient();
-              const activeDelegate = (c as any)[prop];
-              return activeDelegate[modelProp](...args);
+              return executeWithResilience((c) => {
+                const activeDelegate = (c as any)[prop];
+                return activeDelegate[modelProp](...args);
+              });
             };
           }
           return originalMethod;
@@ -261,8 +263,7 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
 
     if (typeof delegate === 'function') {
       return (...args: any[]) => {
-        const c = getActiveClient();
-        return (c as any)[prop](...args);
+        return executeWithResilience((c) => (c as any)[prop](...args));
       };
     }
 

@@ -16,11 +16,21 @@ export const API_BASE_URL: string = (() => {
   if (metaEnv?.VITE_API_URL) {
     return metaEnv.VITE_API_URL;
   }
-  // 2. Always use same-origin relative path — Cloudflare Pages Function at
-  //    functions/api/[[path]].js proxies /api/* to the Worker on the same domain,
-  //    eliminating all CORS preflight issues and cross-origin fetch failures.
-  return '/api/v1';
+  // 2. Local environment fallback (Vite proxy to local Express)
+  const isLocal =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '0.0.0.0');
+  if (isLocal) {
+    return '/api/v1';
+  }
+  // 3. Direct Edge Routing in Production:
+  //    Directly targets Cloudflare Worker backend via standard CORS,
+  //    eliminating Cloudflare Pages Function proxy latency, subrequest limits, and 502 stream drops.
+  return 'https://academy-api.adnanfree132.workers.dev/api/v1';
 })();
+
 
 const BASE_URL = API_BASE_URL;
 
@@ -122,7 +132,11 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       }
 
       if (!response.ok || !json || !json.success) {
-        if (response.status === 401) {
+        if (
+          response.status === 401 &&
+          !endpoint.startsWith('/auth/login') &&
+          !endpoint.startsWith('/auth/demo-login')
+        ) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.dispatchEvent(new CustomEvent('auth:unauthorized'));
